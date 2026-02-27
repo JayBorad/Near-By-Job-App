@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirm your email</title>
+  </head>
+  <body style="margin:0;padding:0;background:#F5F7FB;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F5F7FB;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#FFFFFF;border:1px solid #D1D5DB;border-radius:18px;overflow:hidden;">
+            <tr>
+              <td style="background:linear-gradient(135deg,#0F766E 0%,#115E59 100%);padding:28px 24px;text-align:center;">
+                <div style="display:inline-block;background:#ffffff1f;border:1px solid #ffffff3d;color:#fff;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:700;letter-spacing:.2px;">Near By Job</div>
+                <h1 style="margin:14px 0 0;color:#fff;font-size:26px;line-height:1.25;">Verify Your Email</h1>
+                <p style="margin:8px 0 0;color:#D1FAE5;font-size:14px;line-height:1.5;">One quick step before you start using your dashboard.</p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:26px 24px 10px;">
+                <p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#111827;">Hi {{ .Email }},</p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+                  Thanks for signing up. Please confirm your email address to activate your account and continue to the app.
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:4px 24px 18px;text-align:center;">
+                <a href="{{ .ConfirmationURL }}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#0F766E;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:15px;padding:13px 24px;border-radius:12px;">
+                  Confirm Email
+                </a>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:0 24px 18px;">
+                <p style="margin:0;font-size:13px;line-height:1.7;color:#6B7280;">
+                  If the button does not work, copy and paste this link into your browser:
+                </p>
+                <p style="margin:8px 0 0;font-size:12px;line-height:1.7;word-break:break-all;color:#0F766E;">
+                  {{ .ConfirmationURL }}
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="border-top:1px solid #E5E7EB;padding:16px 24px 22px;text-align:center;">
+                <p style="margin:0;font-size:12px;line-height:1.6;color:#6B7280;">If you did not create this account, you can safely ignore this email.</p>
+                <p style="margin:8px 0 0;font-size:12px;color:#9CA3AF;">© {{ .SiteURL }} · Near By Job</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
