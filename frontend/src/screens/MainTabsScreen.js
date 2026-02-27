@@ -491,6 +491,7 @@ function CategoryStatusBadge({ status, styles }) {
 function CategoryPage({
   onBack,
   isLoading,
+  hasFetchedOnce,
   categoriesTab,
   setCategoriesTab,
   categorySearch,
@@ -516,9 +517,11 @@ function CategoryPage({
           <Text style={styles.settingsBackText}>Settings</Text>
         </Pressable>
         <Text style={styles.settingsNavTitle}>Categories</Text>
-        <Pressable onPress={onRefresh}>
-          <Ionicons name="refresh-outline" size={20} color={colors.primary} />
-        </Pressable>
+        <View style={styles.settingsNavRight}>
+          <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
+            <Ionicons name="refresh-outline" size={20} color={colors.primary} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.categoryTabWrap}>
@@ -573,12 +576,12 @@ function CategoryPage({
               <Text style={styles.categoryDescription}>{item.description || 'No description provided.'}</Text>
             </Pressable>
           ))
-        ) : (
+        ) : hasFetchedOnce ? (
           <View style={styles.categoryEmptyCard}>
             <Ionicons name="layers-outline" size={24} color={colors.textSecondary} />
             <Text style={styles.categoryEmptyText}>No categories found</Text>
           </View>
-        )}
+        ) : null}
       </ScrollView>
 
       <Modal visible={showFilterModal} transparent animationType="fade" onRequestClose={() => setShowFilterModal(false)}>
@@ -761,6 +764,7 @@ function PageContent({
   allCategories,
   myCategories,
   isCategoryLoading,
+  hasFetchedCategoriesOnce,
   onRefreshCategories,
   isUploadingAvatar,
   styles,
@@ -846,6 +850,7 @@ function PageContent({
         allCategories={allCategories}
         myCategories={myCategories}
         isLoading={isCategoryLoading}
+        hasFetchedOnce={hasFetchedCategoriesOnce}
         onBack={onBackFromCategories}
         onRefresh={onRefreshCategories}
         styles={styles}
@@ -888,6 +893,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isCategoryLoading, setIsCategoryLoading] = useState(false);
+  const [hasFetchedCategoriesOnce, setHasFetchedCategoriesOnce] = useState(false);
   const [isCategorySubmitting, setIsCategorySubmitting] = useState(false);
   const [categoriesTab, setCategoriesTab] = useState('all');
   const [categorySearch, setCategorySearch] = useState('');
@@ -1176,29 +1182,35 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
-  const fetchCategories = async () => {
+  const fetchCategories = async ({ forceLoader = false } = {}) => {
     if (!token) return;
+    const searchText = categorySearch.trim();
+    const hasCurrentTabData = categoriesTab === 'all' ? allCategories.length > 0 : myCategories.length > 0;
+    const shouldShowLoader = forceLoader || (!hasFetchedCategoriesOnce && !hasCurrentTabData);
+
     try {
-      setIsCategoryLoading(true);
-      const searchText = categorySearch.trim();
-      const [approvedRes, myRes] = await Promise.all([
-        getApprovedCategories({ token, q: searchText || undefined }),
-        getMyCategories({
+      if (shouldShowLoader) {
+        setIsCategoryLoading(true);
+      }
+
+      if (categoriesTab === 'all') {
+        const approvedRes = await getApprovedCategories({ token, q: searchText || undefined });
+        setAllCategories(approvedRes?.data || []);
+      } else {
+        const myRes = await getMyCategories({
           token,
           q: searchText || undefined,
-          status: categoriesTab === 'mine' && categoryFilter !== 'ALL' ? categoryFilter : undefined
-        })
-      ]);
-
-      const approvedData = approvedRes?.data || [];
-      const myData = myRes?.data || [];
-
-      setAllCategories(approvedData);
-      setMyCategories(myData);
+          status: categoryFilter !== 'ALL' ? categoryFilter : undefined
+        });
+        setMyCategories(myRes?.data || []);
+      }
+      setHasFetchedCategoriesOnce(true);
     } catch (error) {
       showPopup('Categories Failed', error?.message || 'Unable to load categories.', 'error');
     } finally {
-      setIsCategoryLoading(false);
+      if (shouldShowLoader) {
+        setIsCategoryLoading(false);
+      }
     }
   };
 
@@ -1221,7 +1233,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       setNewCategoryName('');
       setNewCategoryDescription('');
       showPopup('Category Added', 'Category submitted with pending status.', 'success');
-      await fetchCategories();
+      await fetchCategories({ forceLoader: true });
     } catch (error) {
       showPopup('Create Failed', error?.message || 'Unable to create category.', 'error');
     } finally {
@@ -1231,10 +1243,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
 
   useEffect(() => {
     if (activeTab !== 'settings' || settingsPage !== 'categories') return;
-    const timer = setTimeout(() => {
-      fetchCategories();
-    }, 220);
-    return () => clearTimeout(timer);
+    fetchCategories();
   }, [activeTab, settingsPage, categorySearch, categoryFilter, categoriesTab, token]);
 
   const animateIcon = (key) => {
@@ -1334,7 +1343,8 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           allCategories={allCategories}
           myCategories={myCategories}
           isCategoryLoading={isCategoryLoading}
-          onRefreshCategories={fetchCategories}
+          hasFetchedCategoriesOnce={hasFetchedCategoriesOnce}
+          onRefreshCategories={() => fetchCategories({ forceLoader: true })}
           isUploadingAvatar={isUploadingAvatar}
           styles={styles}
           colors={colors}
@@ -1728,6 +1738,14 @@ const createStyles = (colors) =>
     },
     settingsNavRight: {
       width: 74
+    },
+    settingsNavIconBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      alignSelf: 'flex-end'
     },
     settingsBackBtn: {
       width: 74,

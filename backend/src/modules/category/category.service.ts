@@ -3,8 +3,11 @@ import ApiError from '../../utils/ApiError.js';
 import { CategoryStatus } from '@prisma/client';
 
 const isMissingDescriptionColumnError = (error) => {
-  const message = String(error?.message || '');
-  return message.includes('Category.description') && message.includes('does not exist');
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes('does not exist') &&
+    (message.includes('category.description') || message.includes('column `description`'))
+  );
 };
 
 export const createCategory = async (userId, payload) => {
