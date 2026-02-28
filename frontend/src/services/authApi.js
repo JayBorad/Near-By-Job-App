@@ -126,6 +126,33 @@ export async function createCategory({ token, payload }) {
   });
 }
 
+export async function getAllUsers({ token, page = 1, limit = 20, role, status, q }) {
+  const query = new URLSearchParams({
+    page: String(page),
+    limit: String(limit)
+  });
+  if (role) query.set('role', role);
+  if (status) query.set('status', status);
+  if (q) query.set('q', q);
+
+  return apiRequest(`/users?${query.toString()}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function updateUserAccess({ token, userId, payload }) {
+  return apiRequest(`/users/${userId}/access`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: payload
+  });
+}
+
 export async function updatePassword({ token, password }) {
   return apiRequest('/auth/update-password', {
     method: 'POST',

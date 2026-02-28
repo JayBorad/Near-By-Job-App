@@ -29,6 +29,7 @@ export function SignUpScreen({ onSwitch, onSignUpSuccess }) {
   const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('JOB_PICKER');
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [codeSearch, setCodeSearch] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -176,6 +177,7 @@ export function SignUpScreen({ onSwitch, onSignUpSuccess }) {
         email: email.trim().toLowerCase(),
         phone: `${countryCode}${phone.trim()}`,
         password: password.trim(),
+        role,
         ...(redirectTo ? { redirectTo } : {})
       });
       setLoading(false);
@@ -272,6 +274,25 @@ export function SignUpScreen({ onSwitch, onSignUpSuccess }) {
               rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
               onRightPress={() => setShowPassword((prev) => !prev)}
             />
+            <Text style={styles.roleLabel}>I want to join as</Text>
+            <View style={styles.roleRow}>
+              <Pressable
+                style={[styles.roleChip, role === 'JOB_PICKER' && styles.roleChipActive]}
+                onPress={() => setRole('JOB_PICKER')}
+              >
+                <Text style={[styles.roleChipText, role === 'JOB_PICKER' && styles.roleChipTextActive]}>
+                  Job Picker
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.roleChip, role === 'JOB_POSTER' && styles.roleChipActive]}
+                onPress={() => setRole('JOB_POSTER')}
+              >
+                <Text style={[styles.roleChipText, role === 'JOB_POSTER' && styles.roleChipTextActive]}>
+                  Job Poster
+                </Text>
+              </Pressable>
+            </View>
 
             <Text style={styles.note}>By continuing, you agree to our terms and privacy policy.</Text>
             <PrimaryButton title="Sign Up" loading={loading} onPress={handleSignUp} />
@@ -367,6 +388,40 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
     fontSize: 12,
     lineHeight: 18
+  },
+  roleLabel: {
+    marginTop: 8,
+    marginBottom: 8,
+    fontSize: 13,
+    color: palette.textSecondary,
+    fontWeight: '600'
+  },
+  roleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12
+  },
+  roleChip: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB'
+  },
+  roleChipActive: {
+    borderColor: palette.accent,
+    backgroundColor: '#ECFEFF'
+  },
+  roleChipText: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  roleChipTextActive: {
+    color: palette.accent
   },
   phoneLabel: {
     fontSize: 13,

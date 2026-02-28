@@ -21,8 +21,10 @@ import { AnimatedPopup } from '../components/AnimatedPopup';
 import { LottieLoader } from '../components/LottieLoader';
 import {
   createCategory,
+  getAllUsers,
   getApprovedCategories,
   getMyCategories,
+  updateUserAccess,
   updateProfile,
   updateProfileAvatar
 } from '../services/authApi';
@@ -134,13 +136,33 @@ const darkTheme = {
   sheet: '#17233A'
 };
 
-const TABS = [
-  { key: 'dashboard', label: 'Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
-  { key: 'explore', label: 'Explore', icon: 'compass-outline', activeIcon: 'compass' },
-  { key: 'create', label: '', icon: 'add', activeIcon: 'add' },
-  { key: 'messages', label: 'Messages', icon: 'chatbubble-ellipses-outline', activeIcon: 'chatbubble-ellipses' },
-  { key: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' }
-];
+const BASE_TABS_BY_ROLE = {
+  JOB_PICKER: [
+    { key: 'dashboard', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
+    { key: 'explore', label: 'Jobs', icon: 'briefcase-outline', activeIcon: 'briefcase' },
+    { key: 'create', label: '', icon: 'paper-plane-outline', activeIcon: 'paper-plane' },
+    { key: 'messages', label: 'Chats', icon: 'chatbubble-ellipses-outline', activeIcon: 'chatbubble-ellipses' },
+    { key: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' }
+  ],
+  JOB_POSTER: [
+    { key: 'dashboard', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
+    { key: 'explore', label: 'My Jobs', icon: 'briefcase-outline', activeIcon: 'briefcase' },
+    { key: 'create', label: '', icon: 'add', activeIcon: 'add' },
+    { key: 'messages', label: 'Applicants', icon: 'people-outline', activeIcon: 'people' },
+    { key: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' }
+  ],
+  ADMIN: [
+    { key: 'dashboard', label: 'Overview', icon: 'grid-outline', activeIcon: 'grid' },
+    { key: 'users', label: 'Users', icon: 'people-outline', activeIcon: 'people' },
+    { key: 'create', label: '', icon: 'shield-checkmark-outline', activeIcon: 'shield-checkmark' },
+    { key: 'messages', label: 'Reports', icon: 'alert-circle-outline', activeIcon: 'alert-circle' },
+    { key: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' }
+  ]
+};
+
+const getTabsByRole = (role) => BASE_TABS_BY_ROLE[role] || BASE_TABS_BY_ROLE.JOB_PICKER;
+const getRoleLabel = (role) =>
+  role === 'ADMIN' ? 'Administrator' : role === 'JOB_POSTER' ? 'Job Poster' : 'Job Picker';
 
 function AvatarFallback({ size }) {
   const outerSize = size;
@@ -644,6 +666,76 @@ function CategoryPage({
   );
 }
 
+function AdminUsersPage({ users, isLoading, onRefresh, onUpdateAccess, styles, colors }) {
+  return (
+    <View style={styles.settingsScreen}>
+      <View style={styles.settingsNav}>
+        <View style={styles.settingsNavRight} />
+        <Text style={styles.settingsNavTitle}>User Access</Text>
+        <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
+          <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        {isLoading ? (
+          <View style={styles.centerLoaderWrap}>
+            <LottieLoader size={90} />
+            <Text style={styles.pageSubtitle}>Loading users...</Text>
+          </View>
+        ) : users.length ? (
+          users.map((item) => (
+            <View key={item.id} style={styles.adminUserCard}>
+              <View style={styles.adminUserHead}>
+                <Text style={styles.adminUserName}>{item.name}</Text>
+                <Text style={styles.adminUserMeta}>{item.email}</Text>
+              </View>
+
+              <View style={styles.adminControlRow}>
+                {['JOB_PICKER', 'JOB_POSTER', 'ADMIN'].map((roleOption) => (
+                  <Pressable
+                    key={`${item.id}-${roleOption}`}
+                    style={[styles.adminChip, item.role === roleOption && styles.adminChipActive]}
+                    onPress={() => onUpdateAccess(item.id, { role: roleOption })}
+                  >
+                    <Text style={[styles.adminChipText, item.role === roleOption && styles.adminChipTextActive]}>
+                      {roleOption === 'JOB_PICKER' ? 'Picker' : roleOption === 'JOB_POSTER' ? 'Poster' : 'Admin'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={styles.adminStatusRow}>
+                <Pressable
+                  style={[styles.adminStatusBtn, item.status === 'ACTIVE' && styles.adminStatusBtnActive]}
+                  onPress={() => onUpdateAccess(item.id, { status: 'ACTIVE' })}
+                >
+                  <Text style={[styles.adminStatusText, item.status === 'ACTIVE' && styles.adminStatusTextActive]}>
+                    Active
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.adminStatusBtn, item.status === 'DELETED' && styles.adminStatusBtnDanger]}
+                  onPress={() => onUpdateAccess(item.id, { status: 'DELETED' })}
+                >
+                  <Text style={[styles.adminStatusText, item.status === 'DELETED' && styles.adminStatusTextDanger]}>
+                    Disable
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View style={styles.centerLoaderWrap}>
+            <Ionicons name="people-outline" size={36} color={colors.iconInactive} />
+            <Text style={styles.pageSubtitle}>No users found.</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
 function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenCategories, onRequestLogout, styles, colors }) {
   return (
     <View style={styles.settingsScreen}>
@@ -659,6 +751,7 @@ function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenCate
           <View style={styles.settingsHeaderInfo}>
             <Text style={styles.settingsHeaderName}>{user?.name || 'User'}</Text>
             <Text style={styles.settingsHeaderEmail}>{user?.email || 'No email available'}</Text>
+            <Text style={styles.settingsRolePill}>{getRoleLabel(user?.role)}</Text>
           </View>
         </View>
 
@@ -692,7 +785,7 @@ function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenCate
         <SettingsOption
           icon="layers-outline"
           title="Categories"
-          subtitle="Browse and create job categories"
+          subtitle={user?.role === 'ADMIN' ? 'Review and approve categories' : 'Browse and create job categories'}
           onPress={onOpenCategories}
           styles={styles}
           colors={colors}
@@ -743,6 +836,7 @@ function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenCate
 function PageContent({
   tabKey,
   user,
+  userRole,
   settingsPage,
   themeMode,
   setThemeMode,
@@ -766,16 +860,27 @@ function PageContent({
   isCategoryLoading,
   hasFetchedCategoriesOnce,
   onRefreshCategories,
+  adminUsers,
+  isAdminUsersLoading,
+  onRefreshAdminUsers,
+  onUpdateUserAccess,
   isUploadingAvatar,
   styles,
   colors
 }) {
   if (tabKey === 'dashboard') {
+    const dashboardSubtitle =
+      userRole === 'ADMIN'
+        ? 'Control users, categories, and platform operations from one place.'
+        : userRole === 'JOB_POSTER'
+          ? 'Track your posted jobs and manage applicants faster.'
+          : 'Browse jobs near you and manage your applications.';
+
     return (
       <View style={styles.centerPage}>
         <PageCard
           title="Dashboard"
-          subtitle="Welcome to your dashboard. Stats and cards will appear here soon."
+          subtitle={dashboardSubtitle}
           icon="grid"
           styles={styles}
           colors={colors}
@@ -783,12 +888,30 @@ function PageContent({
       </View>
     );
   }
+  if (tabKey === 'users' && userRole === 'ADMIN') {
+    return (
+      <AdminUsersPage
+        users={adminUsers}
+        isLoading={isAdminUsersLoading}
+        onRefresh={onRefreshAdminUsers}
+        onUpdateAccess={onUpdateUserAccess}
+        styles={styles}
+        colors={colors}
+      />
+    );
+  }
   if (tabKey === 'explore') {
+    const title = userRole === 'JOB_POSTER' ? 'My Jobs' : 'Explore Jobs';
+    const subtitle =
+      userRole === 'JOB_POSTER'
+        ? 'Review, edit, and track the jobs you have posted.'
+        : 'Discover jobs, requirements, and opportunities.';
+
     return (
       <View style={styles.centerPage}>
         <PageCard
-          title="Explore"
-          subtitle="Discover content, recommendations, and latest updates in this section."
+          title={title}
+          subtitle={subtitle}
           icon="compass"
           styles={styles}
           colors={colors}
@@ -797,11 +920,19 @@ function PageContent({
     );
   }
   if (tabKey === 'create') {
+    const title = userRole === 'ADMIN' ? 'Moderation' : userRole === 'JOB_POSTER' ? 'Post Job' : 'Apply Fast';
+    const subtitle =
+      userRole === 'ADMIN'
+        ? 'Review important approvals and critical actions.'
+        : userRole === 'JOB_POSTER'
+          ? 'Create a new job post and publish it quickly.'
+          : 'Use quick actions for applications and saved jobs.';
+
     return (
       <View style={styles.centerPage}>
         <PageCard
-          title="Create"
-          subtitle="Create a new job post quickly from this action tab."
+          title={title}
+          subtitle={subtitle}
           icon="add-circle"
           styles={styles}
           colors={colors}
@@ -810,11 +941,19 @@ function PageContent({
     );
   }
   if (tabKey === 'messages') {
+    const title = userRole === 'ADMIN' ? 'Reports' : userRole === 'JOB_POSTER' ? 'Applicants' : 'Messages';
+    const subtitle =
+      userRole === 'ADMIN'
+        ? 'Review system reports and escalations.'
+        : userRole === 'JOB_POSTER'
+          ? 'Review applicants and communication from pickers.'
+          : 'Check your chats, interview updates, and job communication.';
+
     return (
       <View style={styles.centerPage}>
         <PageCard
-          title="Messages"
-          subtitle="Check your chats, conversations, and team communications here."
+          title={title}
+          subtitle={subtitle}
           icon="chatbubble-ellipses"
           styles={styles}
           colors={colors}
@@ -874,7 +1013,9 @@ function PageContent({
 }
 
 export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const initialRole = user?.role || 'JOB_PICKER';
+  const initialTabs = getTabsByRole(initialRole);
+  const [activeTab, setActiveTab] = useState(initialTabs[0]?.key || 'dashboard');
   const [themeMode, setThemeMode] = useState('light');
   const [settingsPage, setSettingsPage] = useState('main');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -900,6 +1041,8 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [allCategories, setAllCategories] = useState([]);
   const [myCategories, setMyCategories] = useState([]);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [isAdminUsersLoading, setIsAdminUsersLoading] = useState(false);
   const [localUser, setLocalUser] = useState(user || null);
   const [popup, setPopup] = useState({ visible: false, title: '', message: '', type: 'error' });
   const contentFade = useRef(new Animated.Value(1)).current;
@@ -908,6 +1051,15 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   useEffect(() => {
     setLocalUser(user || null);
   }, [user]);
+
+  const userRole = localUser?.role || 'JOB_PICKER';
+  const visibleTabs = useMemo(() => getTabsByRole(userRole), [userRole]);
+
+  useEffect(() => {
+    if (!visibleTabs.find((tab) => tab.key === activeTab)) {
+      setActiveTab(visibleTabs[0]?.key || 'dashboard');
+    }
+  }, [activeTab, visibleTabs]);
 
   useEffect(() => {
     const loadThemeMode = async () => {
@@ -953,19 +1105,19 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
 
   const iconScales = useMemo(() => {
     const values = {};
-    TABS.forEach((tab) => {
+    visibleTabs.forEach((tab) => {
       values[tab.key] = new Animated.Value(1);
     });
     return values;
-  }, []);
+  }, [visibleTabs]);
 
   const iconLift = useMemo(() => {
     const values = {};
-    TABS.forEach((tab) => {
+    visibleTabs.forEach((tab) => {
       values[tab.key] = new Animated.Value(0);
     });
     return values;
-  }, []);
+  }, [visibleTabs]);
 
   const showPopup = (title, message, type = 'error') => {
     setPopup({
@@ -1241,10 +1393,52 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
+  const fetchAdminUsers = async ({ forceLoader = false } = {}) => {
+    if (!token || userRole !== 'ADMIN') return;
+    try {
+      if (forceLoader || !adminUsers.length) {
+        setIsAdminUsersLoading(true);
+      }
+      const response = await getAllUsers({ token, page: 1, limit: 40 });
+      const users = response?.data?.users || [];
+      setAdminUsers(users.filter((item) => item.id !== localUser?.id));
+    } catch (error) {
+      showPopup('Users Failed', error?.message || 'Unable to load users.', 'error');
+    } finally {
+      setIsAdminUsersLoading(false);
+    }
+  };
+
+  const handleUpdateUserAccess = async (userId, payload) => {
+    if (!token || userRole !== 'ADMIN') return;
+    try {
+      await updateUserAccess({ token, userId, payload });
+      setAdminUsers((prev) =>
+        prev.map((item) =>
+          item.id === userId
+            ? {
+                ...item,
+                ...(payload.role ? { role: payload.role } : {}),
+                ...(payload.status ? { status: payload.status } : {})
+              }
+            : item
+        )
+      );
+      showPopup('User Updated', 'Access updated successfully.', 'success');
+    } catch (error) {
+      showPopup('Update Failed', error?.message || 'Unable to update user access.', 'error');
+    }
+  };
+
   useEffect(() => {
     if (activeTab !== 'settings' || settingsPage !== 'categories') return;
     fetchCategories();
   }, [activeTab, settingsPage, categorySearch, categoryFilter, categoriesTab, token]);
+
+  useEffect(() => {
+    if (userRole !== 'ADMIN' || activeTab !== 'users') return;
+    fetchAdminUsers();
+  }, [activeTab, userRole, token]);
 
   const animateIcon = (key) => {
     iconLift[key].setValue(0);
@@ -1314,7 +1508,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     });
   };
 
-  const centerTab = TABS.find((tab) => tab.key === 'create') || TABS[2];
+  const centerTab = visibleTabs[2] || visibleTabs[0];
 
   return (
     <View style={styles.container}>
@@ -1322,6 +1516,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         <PageContent
           tabKey={activeTab}
           user={localUser}
+          userRole={userRole}
           settingsPage={settingsPage}
           themeMode={themeMode}
           setThemeMode={setThemeMode}
@@ -1345,6 +1540,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           isCategoryLoading={isCategoryLoading}
           hasFetchedCategoriesOnce={hasFetchedCategoriesOnce}
           onRefreshCategories={() => fetchCategories({ forceLoader: true })}
+          adminUsers={adminUsers}
+          isAdminUsersLoading={isAdminUsersLoading}
+          onRefreshAdminUsers={() => fetchAdminUsers({ forceLoader: true })}
+          onUpdateUserAccess={handleUpdateUserAccess}
           isUploadingAvatar={isUploadingAvatar}
           styles={styles}
           colors={colors}
@@ -1426,7 +1625,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
 
       <View style={styles.tabBarOuter}>
         <View style={styles.tabBar}>
-          {TABS.map((tab) => {
+          {visibleTabs.map((tab) => {
             const isCenter = tab.key === 'create';
             const active = activeTab === tab.key;
 
@@ -1780,6 +1979,18 @@ const createStyles = (colors) =>
       color: colors.textSecondary,
       fontSize: 12,
       marginTop: 2
+    },
+    settingsRolePill: {
+      marginTop: 6,
+      alignSelf: 'flex-start',
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800',
+      paddingHorizontal: 8,
+      paddingVertical: 2
     },
     themeSwitchWrap: {
       flexDirection: 'row',
@@ -2295,6 +2506,93 @@ const createStyles = (colors) =>
       color: colors.textSecondary,
       fontSize: 13,
       fontWeight: '700'
+    },
+    centerLoaderWrap: {
+      minHeight: 180,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 20
+    },
+    adminUserCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      padding: 12,
+      marginBottom: 10
+    },
+    adminUserHead: {
+      marginBottom: 10
+    },
+    adminUserName: {
+      color: colors.textMain,
+      fontWeight: '800',
+      fontSize: 15
+    },
+    adminUserMeta: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    adminControlRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 10
+    },
+    adminChip: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      backgroundColor: colors.sheet
+    },
+    adminChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    adminChipText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    adminChipTextActive: {
+      color: colors.primary
+    },
+    adminStatusRow: {
+      flexDirection: 'row',
+      gap: 8
+    },
+    adminStatusBtn: {
+      flex: 1,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      backgroundColor: colors.sheet
+    },
+    adminStatusBtnActive: {
+      borderColor: '#059669',
+      backgroundColor: '#D1FAE5'
+    },
+    adminStatusBtnDanger: {
+      borderColor: '#DC2626',
+      backgroundColor: '#FEE2E2'
+    },
+    adminStatusText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    adminStatusTextActive: {
+      color: '#047857'
+    },
+    adminStatusTextDanger: {
+      color: '#B91C1C'
     },
     categorySkeletonCard: {
       borderWidth: 1,
