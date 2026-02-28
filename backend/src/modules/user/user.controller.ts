@@ -25,3 +25,8 @@ export const getAllUsers = asyncHandler(async (req, res) => {
   const result = await service.getAllUsers(req.query);
   return res.status(200).json({ success: true, data: result });
 });
+
+export const updateUserAccess = asyncHandler(async (req, res) => {
+  const result = await service.updateUserAccess(req.user.id, req.params.id, req.body);
+  return res.status(200).json({ success: true, message: 'User access updated', data: result });
+});

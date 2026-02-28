@@ -7,17 +7,17 @@ export const applyJob = asyncHandler(async (req, res) => {
 });
 
 export const acceptApplication = asyncHandler(async (req, res) => {
-  const result = await service.updateApplicationStatus(req.user.id, req.params.id, 'ACCEPTED');
+  const result = await service.updateApplicationStatus(req.user.id, req.user.role, req.params.id, 'ACCEPTED');
   return res.status(200).json({ success: true, message: 'Application accepted', data: result });
 });
 
 export const rejectApplication = asyncHandler(async (req, res) => {
-  const result = await service.updateApplicationStatus(req.user.id, req.params.id, 'REJECTED');
+  const result = await service.updateApplicationStatus(req.user.id, req.user.role, req.params.id, 'REJECTED');
   return res.status(200).json({ success: true, message: 'Application rejected', data: result });
 });
 
 export const getApplicationsByJob = asyncHandler(async (req, res) => {
-  const result = await service.getApplicationsByJob(req.user.id, req.params.jobId);
+  const result = await service.getApplicationsByJob(req.user.id, req.user.role, req.params.jobId);
   return res.status(200).json({ success: true, data: result });
 });
 

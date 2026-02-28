@@ -19,7 +19,8 @@ export const ensureJobOwner = async (req, _res, next) => {
       return next(new ApiError(404, 'Job not found'));
     }
 
-    if (job.createdBy !== req.user.id) {
+    const isAdmin = req.user?.role === 'ADMIN';
+    if (!isAdmin && job.createdBy !== req.user.id) {
       return next(new ApiError(403, 'Only job owner can perform this action'));
     }
 

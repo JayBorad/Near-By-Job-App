@@ -9,7 +9,8 @@ datasource db {
 }
 
 enum Role {
-  USER
+  JOB_POSTER
+  JOB_PICKER
   ADMIN
 }
 
@@ -61,7 +62,7 @@ model User {
   address        String?
   avatar         String?
   bio            String?
-  role           Role              @default(USER)
+  role           Role              @default(JOB_PICKER)
   status         UserStatus        @default(ACTIVE)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt

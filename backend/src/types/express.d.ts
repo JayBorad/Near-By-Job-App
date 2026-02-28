@@ -4,7 +4,7 @@ declare global {
   namespace Express {
     interface UserContext {
       id: string;
-      role: 'USER' | 'ADMIN';
+      role: 'JOB_POSTER' | 'JOB_PICKER' | 'ADMIN';
       supabaseAuthId: string;
       email: string;
     }

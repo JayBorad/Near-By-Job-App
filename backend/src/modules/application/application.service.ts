@@ -39,7 +39,7 @@ export const applyJob = async (userId, jobId) => {
   });
 };
 
-export const updateApplicationStatus = async (ownerId, applicationId, status) => {
+export const updateApplicationStatus = async (ownerId, ownerRole, applicationId, status) => {
   const application = await prisma.jobApplication.findUnique({
     where: { id: applicationId },
     include: { job: true }
@@ -49,7 +49,7 @@ export const updateApplicationStatus = async (ownerId, applicationId, status) =>
     throw new ApiError(404, 'Application not found');
   }
 
-  if (application.job.createdBy !== ownerId) {
+  if (ownerRole !== 'ADMIN' && application.job.createdBy !== ownerId) {
     throw new ApiError(403, 'Only job owner can update application status');
   }
 
@@ -79,13 +79,13 @@ export const updateApplicationStatus = async (ownerId, applicationId, status) =>
   });
 };
 
-export const getApplicationsByJob = async (ownerId, jobId) => {
+export const getApplicationsByJob = async (ownerId, ownerRole, jobId) => {
   const job = await prisma.job.findFirst({ where: { id: jobId, deletedAt: null } });
   if (!job) {
     throw new ApiError(404, 'Job not found');
   }
 
-  if (job.createdBy !== ownerId) {
+  if (ownerRole !== 'ADMIN' && job.createdBy !== ownerId) {
     throw new ApiError(403, 'Only job owner can view applications');
   }
 

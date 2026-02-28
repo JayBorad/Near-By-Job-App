@@ -1,7 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { supabase, supabaseAdmin } from '../../config/supabase.js';
 import ApiError from '../../utils/ApiError.js';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 
 const normalizeUsername = (input) =>
   String(input || '')
@@ -32,6 +32,8 @@ const makeUniqueUsername = async (requested, email) => {
 
 export const signUp = async (payload) => {
   const { name, username, email, password, phone, redirectTo } = payload;
+  const requestedRole = String(payload?.role || 'JOB_PICKER').toUpperCase();
+  const normalizedRole = requestedRole === Role.JOB_POSTER ? Role.JOB_POSTER : Role.JOB_PICKER;
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const normalizedName = String(name || '').trim();
   const normalizedPhone = String(phone || '').trim();
@@ -65,7 +67,7 @@ export const signUp = async (payload) => {
     email: normalizedEmail,
     password,
     options: {
-      data: { name: normalizedName, phone: normalizedPhone, username: finalUsername },
+      data: { name: normalizedName, phone: normalizedPhone, username: finalUsername, role: normalizedRole },
       ...(redirectTo ? { emailRedirectTo: redirectTo } : {})
     }
   });
@@ -94,10 +96,24 @@ export const signUp = async (payload) => {
         username: finalUsername,
         email: normalizedEmail,
         phone: normalizedPhone,
-        role: 'USER'
+        role: normalizedRole
       }
     });
   } catch (err) {
+    // Supabase auth user is created first; if DB write fails, remove auth user to avoid partial signup state.
+    await supabaseAdmin.auth.admin.deleteUser(data.user.id).catch(() => null);
+
+    const rawMessage = String((err as any)?.message || '').toLowerCase();
+    if (
+      rawMessage.includes('invalid input value for enum') &&
+      rawMessage.includes('role')
+    ) {
+      throw new ApiError(
+        500,
+        'Signup failed because database role migration is pending. Run Prisma migration and try again.'
+      );
+    }
+
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       throw new ApiError(409, 'Email or phone already exists');
     }
@@ -269,7 +285,7 @@ export const syncUserFromToken = async (payload) => {
         email: data.user.email,
         phone: data.user.phone || 'N/A',
         avatar: data.user.user_metadata?.avatar_url || null,
-        role: 'USER'
+        role: Role.JOB_PICKER
       }
     });
   }

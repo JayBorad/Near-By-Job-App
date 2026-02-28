@@ -2,7 +2,10 @@ import prisma from '../../config/prisma.js';
 import { supabaseAdmin } from '../../config/supabase.js';
 import ApiError from '../../utils/ApiError.js';
 import { parsePagination } from '../../utils/pagination.js';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role, UserStatus } from '@prisma/client';
+
+const ALLOWED_ROLES = new Set([Role.JOB_POSTER, Role.JOB_PICKER, Role.ADMIN]);
+const ALLOWED_USER_STATUS = new Set([UserStatus.ACTIVE, UserStatus.DELETED]);
 
 const AVATAR_BUCKET = 'avatars';
 let isAvatarBucketChecked = false;
@@ -231,9 +234,28 @@ export const softDeleteAccount = async (userId) => {
 
 export const getAllUsers = async (query) => {
   const { page, limit, skip } = parsePagination(query);
+  const searchText = String(query?.q || '').trim();
+  const roleFilter = String(query?.role || '').trim().toUpperCase();
+  const statusFilter = String(query?.status || '').trim().toUpperCase();
+  const where: Prisma.UserWhereInput = {};
+
+  if (ALLOWED_ROLES.has(roleFilter as Role)) {
+    where.role = roleFilter as Role;
+  }
+  if (ALLOWED_USER_STATUS.has(statusFilter as UserStatus)) {
+    where.status = statusFilter as UserStatus;
+  }
+  if (searchText) {
+    where.OR = [
+      { name: { contains: searchText, mode: Prisma.QueryMode.insensitive } },
+      { username: { contains: searchText, mode: Prisma.QueryMode.insensitive } },
+      { email: { contains: searchText, mode: Prisma.QueryMode.insensitive } }
+    ];
+  }
+
   const [users, total] = await Promise.all([
     prisma.user.findMany({
-      where: {},
+      where,
       skip,
       take: limit,
       orderBy: { createdAt: 'desc' },
@@ -252,7 +274,7 @@ export const getAllUsers = async (query) => {
         updatedAt: true
       }
     }),
-    prisma.user.count()
+    prisma.user.count({ where })
   ]);
 
   return {
@@ -264,4 +286,32 @@ export const getAllUsers = async (query) => {
       totalPages: Math.ceil(total / limit)
     }
   };
+};
+
+export const updateUserAccess = async (adminId, userId, payload) => {
+  if (adminId === userId) {
+    throw new ApiError(400, 'Admin cannot modify own role or status from this endpoint');
+  }
+
+  const data: Prisma.UserUpdateInput = {};
+  if (payload.role) data.role = payload.role;
+  if (payload.status) data.status = payload.status;
+
+  if (!Object.keys(data).length) {
+    throw new ApiError(400, 'At least one of role or status is required');
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, status: true }
+  });
+  if (!user || user.status === 'DELETED') {
+    throw new ApiError(404, 'User not found');
+  }
+
+  return prisma.user.update({
+    where: { id: userId },
+    data,
+    select: userSelect
+  });
 };

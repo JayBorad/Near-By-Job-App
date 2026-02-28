@@ -1,4 +1,4 @@
-import { body } from 'express-validator';
+import { body, param } from 'express-validator';
 
 export const updateProfileValidator = [
   body('name').optional().trim().notEmpty().withMessage('Name cannot be empty'),
@@ -37,4 +37,18 @@ export const updateAvatarValidator = [
     .optional()
     .isBoolean()
     .withMessage('resetAvatar must be boolean')
+];
+
+export const userIdParamValidator = [param('id').isUUID().withMessage('Valid user id is required')];
+
+export const updateUserAccessValidator = [
+  ...userIdParamValidator,
+  body('role')
+    .optional()
+    .isIn(['JOB_POSTER', 'JOB_PICKER', 'ADMIN'])
+    .withMessage('role must be JOB_POSTER, JOB_PICKER, or ADMIN'),
+  body('status')
+    .optional()
+    .isIn(['ACTIVE', 'DELETED'])
+    .withMessage('status must be ACTIVE or DELETED')
 ];

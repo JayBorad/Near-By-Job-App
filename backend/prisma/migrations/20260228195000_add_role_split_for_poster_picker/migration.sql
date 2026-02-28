@@ -1,0 +1,17 @@
+CREATE TYPE "Role_new" AS ENUM ('JOB_POSTER', 'JOB_PICKER', 'ADMIN');
+
+ALTER TABLE "User" ALTER COLUMN "role" DROP DEFAULT;
+
+ALTER TABLE "User"
+ALTER COLUMN "role" TYPE "Role_new"
+USING (
+  CASE
+    WHEN "role"::text = 'USER' THEN 'JOB_PICKER'
+    ELSE "role"::text
+  END
+)::"Role_new";
+
+DROP TYPE "Role";
+ALTER TYPE "Role_new" RENAME TO "Role";
+
+ALTER TABLE "User" ALTER COLUMN "role" SET DEFAULT 'JOB_PICKER';
