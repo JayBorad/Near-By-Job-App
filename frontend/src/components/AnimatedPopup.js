@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Modal, Platform, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { palette } from '../theme/colors';
 
@@ -55,38 +55,46 @@ export function AnimatedPopup({ visible, title, message, type = 'error', onClose
   const variant = TYPE_STYLES[type] || TYPE_STYLES.info;
 
   return (
-    <View pointerEvents="box-none" style={styles.container}>
-      <Animated.View
-        style={[
-          styles.toast,
-          {
-            backgroundColor: variant.backgroundColor,
-            borderColor: variant.borderColor,
-            opacity: toastOpacity,
-            transform: [{ translateY: toastTranslateY }]
-          }
-        ]}
-      >
-        <Ionicons name={variant.icon} size={20} color={variant.iconColor} />
-        <View style={styles.content}>
-          <Text style={styles.title}>{title}</Text>
-          {!!message ? <Text style={styles.message}>{message}</Text> : null}
+    <Modal transparent visible={visible} animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <SafeAreaView pointerEvents="box-none" style={styles.safeArea}>
+        <View pointerEvents="box-none" style={styles.container}>
+          <Animated.View
+            style={[
+              styles.toast,
+              {
+                backgroundColor: variant.backgroundColor,
+                borderColor: variant.borderColor,
+                opacity: toastOpacity,
+                transform: [{ translateY: toastTranslateY }]
+              }
+            ]}
+          >
+            <Ionicons name={variant.icon} size={20} color={variant.iconColor} />
+            <View style={styles.content}>
+              <Text style={styles.title}>{title}</Text>
+              {!!message ? <Text style={styles.message}>{message}</Text> : null}
+            </View>
+            <Pressable style={styles.closeBtn} onPress={onClose}>
+              <Ionicons name="close" size={16} color={palette.textSecondary} />
+            </Pressable>
+          </Animated.View>
         </View>
-        <Pressable style={styles.closeBtn} onPress={onClose}>
-          <Ionicons name="close" size={16} color={palette.textSecondary} />
-        </Pressable>
-      </Animated.View>
-    </View>
+      </SafeAreaView>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     position: 'absolute',
-    top: 14,
+    top: 0,
     left: 0,
     right: 0,
     zIndex: 9999,
+    ...(Platform.OS === 'android' ? { paddingTop: (StatusBar.currentHeight || 0) + 8 } : {})
+  },
+  container: {
+    marginTop: 6,
     paddingHorizontal: 14
   },
   toast: {

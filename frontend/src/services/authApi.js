@@ -126,6 +126,54 @@ export async function createCategory({ token, payload }) {
   });
 }
 
+export async function createJob({ token, payload }) {
+  return apiRequest('/jobs', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: payload
+  });
+}
+
+export async function getAllJobs({ token, page = 1, limit = 20, status = 'ALL' }) {
+  const query = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    status
+  });
+  return apiRequest(`/jobs?${query.toString()}`, {
+    method: 'GET',
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`
+        }
+      : {}
+  });
+}
+
+export async function getAllCategoriesAdmin({ token, status = 'ALL', q }) {
+  const query = new URLSearchParams();
+  if (status) query.set('status', status);
+  if (q) query.set('q', q);
+  return apiRequest(`/categories${query.toString() ? `?${query.toString()}` : ''}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function updateCategoryStatus({ token, categoryId, status }) {
+  return apiRequest(`/categories/${categoryId}/status`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: { status }
+  });
+}
+
 export async function getAllUsers({ token, page = 1, limit = 20, role, status, q }) {
   const query = new URLSearchParams({
     page: String(page),

@@ -2,26 +2,53 @@ import React from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import LottieView from 'lottie-react-native';
 
-const LOTTIE_URI = 'https://assets10.lottiefiles.com/packages/lf20_usmfx6bp.json';
+const DEFAULT_LOTTIE_URI = 'https://assets2.lottiefiles.com/packages/lf20_lnk9yxp7.json';
 
-export function LottieLoader({ visible, text = 'Loading...' }) {
+export function LottieLoader({
+  visible,
+  text = 'Loading...',
+  size = 86,
+  inline = false,
+  sourceUri = DEFAULT_LOTTIE_URI,
+  showFallback = true,
+  cardStyle,
+  textStyle
+}) {
+  if (inline) {
+    return (
+      <View style={[styles.inlineCard, cardStyle]}>
+        <View style={[styles.lottieWrap, { width: size, height: size }]}>
+          <LottieView
+            autoPlay
+            loop
+            source={{ uri: sourceUri }}
+            style={{ width: size, height: size }}
+            renderMode="AUTOMATIC"
+          />
+          {showFallback ? <ActivityIndicator style={styles.fallback} size="large" color="#0F766E" /> : null}
+        </View>
+        {!!text ? <Text style={[styles.text, textStyle]}>{text}</Text> : null}
+      </View>
+    );
+  }
+
   if (!visible) return null;
 
   return (
     <Modal transparent animationType="fade" visible={visible}>
       <View style={styles.backdrop}>
-        <View style={styles.card}>
+        <View style={[styles.card, cardStyle]}>
           <View style={styles.lottieWrap}>
             <LottieView
               autoPlay
               loop
-              source={{ uri: LOTTIE_URI }}
+              source={{ uri: sourceUri }}
               style={styles.lottie}
               renderMode="AUTOMATIC"
             />
-            <ActivityIndicator style={styles.fallback} size="large" color="#0F766E" />
+            {showFallback ? <ActivityIndicator style={styles.fallback} size="large" color="#0F766E" /> : null}
           </View>
-          <Text style={styles.text}>{text}</Text>
+          {!!text ? <Text style={[styles.text, textStyle]}>{text}</Text> : null}
         </View>
       </View>
     </Modal>
@@ -46,6 +73,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     alignItems: 'center'
+  },
+  inlineCard: {
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   lottieWrap: {
     width: 86,

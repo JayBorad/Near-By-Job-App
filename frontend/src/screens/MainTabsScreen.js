@@ -16,14 +16,20 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPopup } from '../components/AnimatedPopup';
+import { AdminListState } from '../components/AdminListState';
 import { LottieLoader } from '../components/LottieLoader';
 import {
   createCategory,
+  createJob,
+  getAllCategoriesAdmin,
+  getAllJobs,
   getAllUsers,
   getApprovedCategories,
   getMyCategories,
+  updateCategoryStatus,
   updateUserAccess,
   updateProfile,
   updateProfileAvatar
@@ -36,6 +42,8 @@ const TAB_BAR_SHADOW_SPACE = 8;
 const TOP_SAFE_PADDING = Platform.OS === 'ios' ? 56 : (StatusBar.currentHeight || 0) + 10;
 const THEME_MODE_KEY = 'app_theme_mode';
 const WebCropper = Platform.OS === 'web' ? require('react-easy-crop').default : null;
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const TILE_SIZE = 256;
 const STATIC_AVATARS = [
   'https://api.dicebear.com/9.x/adventurer-neutral/png?seed=Sky',
   'https://api.dicebear.com/9.x/adventurer-neutral/png?seed=Milo',
@@ -44,6 +52,7 @@ const STATIC_AVATARS = [
   'https://api.dicebear.com/9.x/adventurer-neutral/png?seed=Noah',
   'https://api.dicebear.com/9.x/adventurer-neutral/png?seed=Luna'
 ];
+const ADMIN_EMPTY_ANIMATION = require('../../assets/lottie/no-result-found.json');
 
 const COUNTRY_PHONE_RULES = {
   '+91': { exact: 10 },
@@ -163,6 +172,7 @@ const BASE_TABS_BY_ROLE = {
 const getTabsByRole = (role) => BASE_TABS_BY_ROLE[role] || BASE_TABS_BY_ROLE.JOB_PICKER;
 const getRoleLabel = (role) =>
   role === 'ADMIN' ? 'Administrator' : role === 'JOB_POSTER' ? 'Job Poster' : 'Job Picker';
+const formatDateValue = (value) => (value ? value.toISOString().slice(0, 10) : '');
 
 function AvatarFallback({ size }) {
   const outerSize = size;
@@ -680,7 +690,7 @@ function AdminUsersPage({ users, isLoading, onRefresh, onUpdateAccess, styles, c
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
         {isLoading ? (
           <View style={styles.centerLoaderWrap}>
-            <LottieLoader size={90} />
+            <LottieLoader inline size={94} text="Loading users..." />
             <Text style={styles.pageSubtitle}>Loading users...</Text>
           </View>
         ) : users.length ? (
@@ -731,6 +741,1065 @@ function AdminUsersPage({ users, isLoading, onRefresh, onUpdateAccess, styles, c
             <Text style={styles.pageSubtitle}>No users found.</Text>
           </View>
         )}
+      </ScrollView>
+    </View>
+  );
+}
+
+function AdminModerationPage({
+  adminPanelTab,
+  setAdminPanelTab,
+  jobs,
+  categories,
+  isLoading,
+  onRefresh,
+  categorySearch,
+  setCategorySearch,
+  categoryFilter,
+  setCategoryFilter,
+  categoryDraft,
+  setCategoryDraft,
+  onCreateCategory,
+  onUpdateCategoryStatus,
+  styles,
+  colors
+}) {
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [statusPickerItem, setStatusPickerItem] = useState(null);
+  const [pendingStatusChange, setPendingStatusChange] = useState(null);
+  const adminFilterOptions = ['ALL', 'PENDING', 'APPROVED', 'REJECTED'];
+  const closeCreateCategoryModal = () => {
+    setShowCreateModal(false);
+    setCategoryDraft({ name: '', description: '' });
+  };
+
+  return (
+    <View style={styles.settingsScreen}>
+      <View style={styles.settingsNav}>
+        <View style={styles.settingsNavRight} />
+        <Text style={styles.settingsNavTitle}>Admin Panel</Text>
+        <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
+          <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
+
+      <View style={styles.adminPanelTabs}>
+        <Pressable
+          style={[styles.adminPanelTabBtn, adminPanelTab === 'jobs' && styles.adminPanelTabBtnActive]}
+          onPress={() => setAdminPanelTab('jobs')}
+        >
+          <Text style={[styles.adminPanelTabText, adminPanelTab === 'jobs' && styles.adminPanelTabTextActive]}>All Jobs</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.adminPanelTabBtn, adminPanelTab === 'categories' && styles.adminPanelTabBtnActive]}
+          onPress={() => setAdminPanelTab('categories')}
+        >
+          <Text style={[styles.adminPanelTabText, adminPanelTab === 'categories' && styles.adminPanelTabTextActive]}>
+            All Categories
+          </Text>
+        </Pressable>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        {isLoading ? (
+          <AdminListState
+            mode="loading"
+            title={adminPanelTab === 'jobs' ? 'Loading all jobs...' : 'Loading all categories...'}
+            subtitle="Please wait while we fetch latest records."
+            colors={colors}
+          />
+        ) : adminPanelTab === 'jobs' ? (
+          jobs.length ? (
+            jobs.map((job) => (
+              <View key={job.id} style={styles.adminJobCard}>
+                <Text style={styles.adminJobTitle}>{job.title}</Text>
+                <Text style={styles.adminJobMeta}>Category: {job?.category?.name || '-'}</Text>
+                <Text style={styles.adminJobMeta}>Posted By: {job?.owner?.name || '-'}</Text>
+                <Text style={styles.adminJobMeta}>Status: {job.status}</Text>
+                <Text style={styles.adminJobMeta}>Budget: {job.budget}</Text>
+              </View>
+            ))
+          ) : (
+            <AdminListState
+              mode="empty"
+              title="No jobs found"
+              subtitle="Try changing filters or create a new job."
+              colors={colors}
+              emptySource={ADMIN_EMPTY_ANIMATION}
+            />
+          )
+        ) : (
+          <>
+            <View style={styles.adminCategoryToolbar}>
+              <View style={styles.categorySearchWrap}>
+                <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+                <TextInput
+                  value={categorySearch}
+                  onChangeText={setCategorySearch}
+                  placeholder="Search categories..."
+                  placeholderTextColor={colors.textSecondary}
+                  style={styles.categorySearchInput}
+                />
+              </View>
+              <Pressable style={styles.categoryFilterIconBtn} onPress={() => setShowCreateModal(true)}>
+                <Ionicons name="add" size={18} color={colors.primary} />
+              </Pressable>
+              <Pressable style={styles.categoryFilterIconBtn} onPress={() => setShowFilterModal(true)}>
+                <Ionicons name="filter-outline" size={18} color={colors.primary} />
+              </Pressable>
+            </View>
+
+            {categories.length ? (
+              categories.map((item) => (
+                <Pressable key={item.id} style={styles.adminCategoryCard} onPress={() => setSelectedCategory(item)}>
+                  <View style={styles.adminCategoryTop}>
+                    <View style={styles.adminCategoryNameWrap}>
+                      <Text style={styles.adminCategoryName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.adminCategoryDescriptionOneLine} numberOfLines={1}>
+                        {item.description || 'No description provided.'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={styles.adminCategoryDropdownBtn}
+                      onPress={(event) => {
+                        event?.stopPropagation?.();
+                        setStatusPickerItem(item);
+                      }}
+                    >
+                      <Text style={styles.adminCategoryDropdownText}>{item.status}</Text>
+                      <Ionicons name="chevron-down" size={14} color={colors.primary} />
+                    </Pressable>
+                  </View>
+                </Pressable>
+              ))
+            ) : (
+              <AdminListState
+                mode="empty"
+                title="No categories found"
+                subtitle="Use + button to create a category or adjust filters."
+                colors={colors}
+                emptySource={ADMIN_EMPTY_ANIMATION}
+              />
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      <Modal visible={showFilterModal} transparent animationType="fade" onRequestClose={() => setShowFilterModal(false)}>
+        <Pressable style={styles.filterBackdrop} onPress={() => setShowFilterModal(false)}>
+          <Pressable style={styles.categoryFilterModal} onPress={() => {}}>
+            <Text style={styles.optionTitle}>Filter Categories</Text>
+            <Text style={styles.categoryFilterHint}>Choose status to refine admin categories</Text>
+            {adminFilterOptions.map((option) => (
+              <Pressable
+                key={option}
+                style={[styles.categoryFilterOption, categoryFilter === option && styles.categoryFilterOptionActive]}
+                onPress={() => {
+                  setCategoryFilter(option);
+                  setShowFilterModal(false);
+                }}
+              >
+                <View style={styles.categoryFilterOptionLeft}>
+                  <Ionicons
+                    name={
+                      option === 'ALL'
+                        ? 'apps-outline'
+                        : option === 'APPROVED'
+                          ? 'checkmark-circle-outline'
+                          : option === 'REJECTED'
+                            ? 'close-circle-outline'
+                            : 'time-outline'
+                    }
+                    size={16}
+                    color={categoryFilter === option ? colors.primary : colors.textSecondary}
+                  />
+                  <Text style={[styles.categoryFilterOptionText, categoryFilter === option && styles.categoryFilterOptionTextActive]}>
+                    {option}
+                  </Text>
+                </View>
+                {categoryFilter === option ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={Boolean(selectedCategory)} transparent animationType="fade" onRequestClose={() => setSelectedCategory(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.categoryDetailModal}>
+            <Text style={styles.categoryDetailTitle}>{selectedCategory?.name || ''}</Text>
+            <Text style={styles.categoryDetailDescription}>{selectedCategory?.description || 'No description provided.'}</Text>
+            <View style={styles.categoryDetailStatusWrap}>
+              <Text style={styles.categoryDetailStatusLabel}>Status</Text>
+              <CategoryStatusBadge status={selectedCategory?.status} styles={styles} />
+            </View>
+            <View style={styles.optionActionsRow}>
+              <Pressable
+                style={[styles.optionCancel, styles.optionActionBtn]}
+                onPress={() => {
+                  if (selectedCategory) {
+                    setStatusPickerItem(selectedCategory);
+                  }
+                }}
+              >
+                <Text style={styles.optionCancelText}>Change Status</Text>
+              </Pressable>
+              <Pressable style={[styles.modalBtnPrimary, styles.optionActionBtn]} onPress={() => setSelectedCategory(null)}>
+                <Text style={styles.modalBtnPrimaryText}>Close</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showCreateModal} transparent animationType="fade" onRequestClose={closeCreateCategoryModal}>
+        <Pressable style={styles.modalBackdrop} onPress={closeCreateCategoryModal}>
+          <Pressable style={styles.optionModal} onPress={() => {}}>
+            <View style={styles.adminSectionHeader}>
+              <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+              <Text style={styles.adminCreateCategoryTitle}>Create Category</Text>
+            </View>
+            <TextInput
+              value={categoryDraft.name}
+              onChangeText={(value) => setCategoryDraft((prev) => ({ ...prev, name: value }))}
+              placeholder="Category name"
+              placeholderTextColor={colors.textSecondary}
+              style={styles.categoryCreateInput}
+            />
+            <TextInput
+              value={categoryDraft.description}
+              onChangeText={(value) => setCategoryDraft((prev) => ({ ...prev, description: value }))}
+              placeholder="Category description"
+              placeholderTextColor={colors.textSecondary}
+              style={[styles.categoryCreateInput, styles.categoryCreateDescription]}
+              multiline
+            />
+            <View style={styles.optionActionsRow}>
+              <Pressable style={[styles.optionCancel, styles.optionActionBtn]} onPress={closeCreateCategoryModal}>
+                <Text style={styles.optionCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtnPrimary, styles.optionActionBtn]}
+                onPress={async () => {
+                  const created = await onCreateCategory();
+                  if (created) {
+                    closeCreateCategoryModal();
+                  }
+                }}
+              >
+                <Text style={styles.modalBtnPrimaryText}>Create</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={Boolean(statusPickerItem)} transparent animationType="fade" onRequestClose={() => setStatusPickerItem(null)}>
+        <Pressable style={styles.filterBackdrop} onPress={() => setStatusPickerItem(null)}>
+          <Pressable style={styles.categoryFilterModal} onPress={() => {}}>
+            <Text style={styles.optionTitle}>Change Status</Text>
+            <Text style={styles.categoryFilterHint}>{statusPickerItem?.name || ''}</Text>
+            {['PENDING', 'APPROVED', 'REJECTED'].map((status) => (
+              <Pressable
+                key={status}
+                style={[styles.categoryFilterOption, statusPickerItem?.status === status && styles.categoryFilterOptionActive]}
+                onPress={() => {
+                  if (!statusPickerItem || statusPickerItem.status === status) {
+                    setStatusPickerItem(null);
+                    return;
+                  }
+                  setPendingStatusChange({
+                    categoryId: statusPickerItem.id,
+                    categoryName: statusPickerItem.name,
+                    fromStatus: statusPickerItem.status,
+                    toStatus: status
+                  });
+                  setStatusPickerItem(null);
+                }}
+              >
+                <Text style={[styles.categoryFilterOptionText, statusPickerItem?.status === status && styles.categoryFilterOptionTextActive]}>
+                  {status}
+                </Text>
+                {statusPickerItem?.status === status ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={Boolean(pendingStatusChange)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingStatusChange(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.optionModal}>
+            <Text style={styles.optionTitle}>Confirm Status Change</Text>
+            <Text style={styles.optionMessage}>
+              {`Change "${pendingStatusChange?.categoryName || ''}" from ${pendingStatusChange?.fromStatus || ''} to ${pendingStatusChange?.toStatus || ''}?`}
+            </Text>
+            <View style={styles.optionActionsRow}>
+              <Pressable style={[styles.optionCancel, styles.optionActionBtn]} onPress={() => setPendingStatusChange(null)}>
+                <Text style={styles.optionCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtnPrimary, styles.optionActionBtn]}
+                onPress={async () => {
+                  const payload = pendingStatusChange;
+                  setPendingStatusChange(null);
+                  if (!payload) return;
+                  await onUpdateCategoryStatus(payload.categoryId, payload.toStatus);
+                  setSelectedCategory((prev) =>
+                    prev && prev.id === payload.categoryId ? { ...prev, status: payload.toStatus } : prev
+                  );
+                }}
+              >
+                <Text style={styles.modalBtnPrimaryText}>Confirm</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function CreateJobPage({
+  userRole,
+  token,
+  jobForm,
+  setJobForm,
+  approvedCategoryOptions,
+  onCreateJob,
+  onValidationError,
+  isCreatingJob,
+  styles,
+  colors
+}) {
+  const scrollRef = useRef(null);
+  const titleRef = useRef(null);
+  const descriptionRef = useRef(null);
+  const budgetRef = useRef(null);
+  const locationLinkRef = useRef(null);
+  const addressRef = useRef(null);
+  const fieldYRef = useRef({});
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerPage, setPickerPage] = useState('form');
+  const [mapZoom, setMapZoom] = useState(13);
+  const [mapCanvasLayout, setMapCanvasLayout] = useState({ width: 0, height: 0 });
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const [mapSearchResults, setMapSearchResults] = useState([]);
+  const [isSearchingMap, setIsSearchingMap] = useState(false);
+  const [draftCoordinate, setDraftCoordinate] = useState(
+    jobForm.latitude !== null && jobForm.longitude !== null
+      ? { latitude: jobForm.latitude, longitude: jobForm.longitude }
+      : { latitude: 22.3039, longitude: 70.8022 }
+  );
+  const pinchStartDistanceRef = useRef(null);
+  const pinchStartZoomRef = useRef(mapZoom);
+  const isPinchingRef = useRef(false);
+  const suppressNextTapRef = useRef(false);
+  const [errors, setErrors] = useState({});
+  const cardFade = useRef(new Animated.Value(0)).current;
+  const cardRise = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(cardFade, { toValue: 1, duration: 320, useNativeDriver: true }),
+      Animated.timing(cardRise, { toValue: 0, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true })
+    ]).start();
+  }, [cardFade, cardRise]);
+
+  const selectedCategory = approvedCategoryOptions.find((item) => item.id === jobForm.categoryId);
+  const dueDateValue = jobForm.dueDate ? new Date(jobForm.dueDate) : new Date();
+  const registerFieldY = (fieldName) => (event) => {
+    fieldYRef.current[fieldName] = event.nativeEvent.layout.y;
+  };
+
+  const scrollToField = (fieldName) => {
+    const y = fieldYRef.current[fieldName];
+    if (typeof y === 'number') {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: true });
+    }
+  };
+
+  const focusFirstInvalidField = (fieldName) => {
+    if (fieldName === 'title') {
+      scrollToField('title');
+      setTimeout(() => titleRef.current?.focus(), 120);
+      return;
+    }
+    if (fieldName === 'description') {
+      scrollToField('description');
+      setTimeout(() => descriptionRef.current?.focus(), 120);
+      return;
+    }
+    if (fieldName === 'categoryId') {
+      scrollToField('categoryId');
+      setShowCategoryDropdown(true);
+      return;
+    }
+    if (fieldName === 'budget') {
+      scrollToField('budget');
+      setTimeout(() => budgetRef.current?.focus(), 120);
+      return;
+    }
+    if (fieldName === 'jobType') {
+      scrollToField('jobType');
+      return;
+    }
+    if (fieldName === 'locationLink') {
+      scrollToField('locationLink');
+      setTimeout(() => locationLinkRef.current?.focus(), 120);
+      return;
+    }
+    if (fieldName === 'address') {
+      scrollToField('address');
+      setTimeout(() => addressRef.current?.focus(), 120);
+      return;
+    }
+    if (fieldName === 'status') {
+      scrollToField('status');
+      return;
+    }
+    if (fieldName === 'map') {
+      setPickerPage('map');
+    }
+  };
+
+  const confirmMapSelection = () => {
+    setJobForm((prev) => ({
+      ...prev,
+      latitude: Number(draftCoordinate.latitude.toFixed(6)),
+      longitude: Number(draftCoordinate.longitude.toFixed(6)),
+      locationLink: `https://maps.google.com/?q=${draftCoordinate.latitude.toFixed(6)},${draftCoordinate.longitude.toFixed(6)}`
+    }));
+    setErrors((prev) => ({ ...prev, map: '' }));
+    setPickerPage('form');
+  };
+
+  const lngToPixelX = (lng, zoom) => {
+    const worldSize = 256 * 2 ** zoom;
+    return ((lng + 180) / 360) * worldSize;
+  };
+
+  const latToPixelY = (lat, zoom) => {
+    const worldSize = 256 * 2 ** zoom;
+    const latRad = (lat * Math.PI) / 180;
+    const mercN = Math.log(Math.tan(Math.PI / 4 + latRad / 2));
+    return worldSize / 2 - (worldSize * mercN) / (2 * Math.PI);
+  };
+
+  const pixelXToLng = (x, zoom) => {
+    const worldSize = 256 * 2 ** zoom;
+    return (x / worldSize) * 360 - 180;
+  };
+
+  const pixelYToLat = (y, zoom) => {
+    const worldSize = 256 * 2 ** zoom;
+    const n = Math.PI - (2 * Math.PI * y) / worldSize;
+    return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  };
+
+  const getMapTopLeftWorld = () => {
+    const width = mapCanvasLayout.width || 1;
+    const height = mapCanvasLayout.height || 1;
+    const centerX = lngToPixelX(draftCoordinate.longitude, mapZoom);
+    const centerY = latToPixelY(draftCoordinate.latitude, mapZoom);
+    return { topLeftWorldX: centerX - width / 2, topLeftWorldY: centerY - height / 2, width, height };
+  };
+
+  const mapTiles = useMemo(() => {
+    if (!mapCanvasLayout.width || !mapCanvasLayout.height) return [];
+    const { topLeftWorldX, topLeftWorldY, width, height } = getMapTopLeftWorld();
+    const startTileX = Math.floor(topLeftWorldX / TILE_SIZE);
+    const startTileY = Math.floor(topLeftWorldY / TILE_SIZE);
+    const endTileX = Math.floor((topLeftWorldX + width) / TILE_SIZE);
+    const endTileY = Math.floor((topLeftWorldY + height) / TILE_SIZE);
+    const limit = 2 ** mapZoom;
+    const tiles = [];
+
+    for (let tileX = startTileX; tileX <= endTileX; tileX += 1) {
+      for (let tileY = startTileY; tileY <= endTileY; tileY += 1) {
+        if (tileY < 0 || tileY >= limit) continue;
+        const wrappedX = ((tileX % limit) + limit) % limit;
+        tiles.push({
+          key: `${tileX}-${tileY}-${mapZoom}`,
+          left: tileX * TILE_SIZE - topLeftWorldX,
+          top: tileY * TILE_SIZE - topLeftWorldY,
+          url: `https://tile.openstreetmap.org/${mapZoom}/${wrappedX}/${tileY}.png`
+        });
+      }
+    }
+    return tiles;
+  }, [mapCanvasLayout.width, mapCanvasLayout.height, draftCoordinate.latitude, draftCoordinate.longitude, mapZoom]);
+
+  const pickFromMapPress = (event) => {
+    if (suppressNextTapRef.current) {
+      suppressNextTapRef.current = false;
+      return;
+    }
+    const { topLeftWorldX, topLeftWorldY, width, height } = getMapTopLeftWorld();
+    const px = clamp(event.nativeEvent.locationX, 0, width);
+    const py = clamp(event.nativeEvent.locationY, 0, height);
+
+    const targetX = topLeftWorldX + px;
+    const targetY = topLeftWorldY + py;
+
+    const selectedLng = pixelXToLng(targetX, mapZoom);
+    const selectedLat = pixelYToLat(targetY, mapZoom);
+
+    setDraftCoordinate({
+      latitude: Number(selectedLat.toFixed(6)),
+      longitude: Number(selectedLng.toFixed(6))
+    });
+  };
+
+  const getTouchDistance = (touches) => {
+    if (!touches || touches.length < 2) return null;
+    const a = touches[0];
+    const b = touches[1];
+    const dx = a.pageX - b.pageX;
+    const dy = a.pageY - b.pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const onMapTouchStart = (event) => {
+    const distance = getTouchDistance(event.nativeEvent.touches);
+    if (!distance) return;
+    pinchStartDistanceRef.current = distance;
+    pinchStartZoomRef.current = mapZoom;
+    isPinchingRef.current = true;
+  };
+
+  const onMapTouchMove = (event) => {
+    if (!isPinchingRef.current) return;
+    const distance = getTouchDistance(event.nativeEvent.touches);
+    const startDistance = pinchStartDistanceRef.current;
+    if (!distance || !startDistance) return;
+
+    const scale = distance / startDistance;
+    const nextZoom = clamp(Math.round(pinchStartZoomRef.current + Math.log2(scale) * 3), 2, 18);
+    if (nextZoom !== mapZoom) {
+      setMapZoom(nextZoom);
+    }
+  };
+
+  const onMapTouchEnd = (event) => {
+    if (!event.nativeEvent.touches || event.nativeEvent.touches.length < 2) {
+      if (isPinchingRef.current) {
+        suppressNextTapRef.current = true;
+      }
+      isPinchingRef.current = false;
+      pinchStartDistanceRef.current = null;
+    }
+  };
+
+  const searchMapLocation = async () => {
+    const query = String(mapSearchQuery || '').trim();
+    if (!query) {
+      setMapSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearchingMap(true);
+      const response = await fetch(
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`
+      );
+      const data = await response.json();
+      const items = Array.isArray(data?.features)
+        ? data.features
+            .map((item, idx) => {
+              const lon = item?.geometry?.coordinates?.[0];
+              const lat = item?.geometry?.coordinates?.[1];
+              if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+              const props = item?.properties || {};
+              const name = props?.name || props?.city || props?.state || query;
+              const region = [props?.city, props?.state, props?.country].filter(Boolean).join(', ');
+              return {
+                id: `${name}-${lat}-${lon}-${idx}`,
+                name,
+                region,
+                latitude: lat,
+                longitude: lon
+              };
+            })
+            .filter(Boolean)
+        : [];
+      setMapSearchResults(items);
+    } catch (_error) {
+      setMapSearchResults([]);
+      if (onValidationError) {
+        onValidationError('Search Failed', 'Unable to search this location right now.', 'warning');
+      }
+    } finally {
+      setIsSearchingMap(false);
+    }
+  };
+
+  const submitWithValidation = () => {
+    const nextErrors = {};
+    const checks = [
+      { key: 'title', valid: Boolean(jobForm.title.trim()), label: 'Title is required' },
+      { key: 'description', valid: Boolean(jobForm.description.trim()), label: 'Description is required' },
+      { key: 'categoryId', valid: Boolean(jobForm.categoryId), label: 'Category is required' },
+      { key: 'budget', valid: Boolean(jobForm.budget.trim()), label: 'Budget is required' },
+      { key: 'jobType', valid: Boolean(jobForm.jobType), label: 'Job type is required' },
+      { key: 'locationLink', valid: Boolean(jobForm.locationLink.trim()), label: 'Location link is required' },
+      { key: 'address', valid: Boolean(jobForm.address.trim()), label: 'Address is required' },
+      { key: 'status', valid: Boolean(jobForm.status), label: 'Status is required' },
+      { key: 'map', valid: jobForm.latitude !== null && jobForm.longitude !== null, label: 'Map location is required' }
+    ];
+
+    checks.forEach((item) => {
+      if (!item.valid) nextErrors[item.key] = item.label;
+    });
+
+    setErrors(nextErrors);
+    const firstInvalid = checks.find((item) => !item.valid)?.key;
+    if (firstInvalid) {
+      focusFirstInvalidField(firstInvalid);
+      if (onValidationError) {
+        onValidationError('Validation Error', nextErrors[firstInvalid], 'warning');
+      }
+      return;
+    }
+
+    const fallbackDueDate = new Date();
+    fallbackDueDate.setDate(fallbackDueDate.getDate() + 7);
+    const payload = {
+      title: jobForm.title.trim(),
+      description: jobForm.description.trim(),
+      categoryId: jobForm.categoryId,
+      budget: Number(jobForm.budget),
+      jobType: jobForm.jobType,
+      latitude: jobForm.latitude,
+      longitude: jobForm.longitude,
+      address: jobForm.address.trim(),
+      dueDate: jobForm.dueDate || fallbackDueDate.toISOString()
+    };
+
+    onCreateJob(payload);
+  };
+
+  if (userRole === 'ADMIN') {
+    return (
+      <View style={styles.centerPage}>
+        <PageCard
+          title="Moderation"
+          subtitle="Admin users can review approvals here. Job creation is available for Job Poster accounts."
+          icon="shield-checkmark"
+          styles={styles}
+          colors={colors}
+        />
+      </View>
+    );
+  }
+
+  if (pickerPage === 'map') {
+    return (
+      <View style={styles.settingsScreen}>
+        <View style={styles.createMapHeaderWrap}>
+          <View style={styles.createMapHeaderTop}>
+            <Pressable
+              style={[styles.createMapHeaderBtn, styles.createMapHeaderBtnLeft]}
+              onPress={() => setPickerPage('form')}
+              hitSlop={12}
+            >
+              <Ionicons name="close-outline" size={18} color={colors.textSecondary} />
+              <Text style={styles.createMapHeaderBtnText}>Cancel</Text>
+            </Pressable>
+            <Text style={styles.createMapHeaderTitle}>Pick Location</Text>
+            <Pressable
+              style={[styles.createMapHeaderBtnPrimary, styles.createMapHeaderBtnRight]}
+              onPress={confirmMapSelection}
+              hitSlop={12}
+            >
+              <Ionicons name="checkmark-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.createMapHeaderBtnPrimaryText}>Confirm</Text>
+            </Pressable>
+          </View>
+          <View style={styles.createMapHeaderMeta}>
+            <Ionicons name="pin-outline" size={14} color={colors.primary} />
+            <Text style={styles.createMapHeaderMetaText}>
+              {draftCoordinate.latitude.toFixed(6)}, {draftCoordinate.longitude.toFixed(6)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.createMapFullWrap}>
+          <View style={styles.createMapSearchRow}>
+            <View style={styles.createMapSearchInputWrap}>
+              <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+              <TextInput
+                value={mapSearchQuery}
+                onChangeText={setMapSearchQuery}
+                onSubmitEditing={searchMapLocation}
+                style={styles.createMapSearchInput}
+                placeholder="Search city, area, landmark..."
+                placeholderTextColor={colors.textSecondary}
+                returnKeyType="search"
+              />
+            </View>
+            <Pressable style={styles.createMapSearchBtn} onPress={searchMapLocation}>
+              {isSearchingMap ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+              )}
+            </Pressable>
+          </View>
+          {mapSearchResults.length ? (
+            <View style={styles.createMapResultsCard}>
+              {mapSearchResults.map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={styles.createMapResultItem}
+                  onPress={() => {
+                    setDraftCoordinate({
+                      latitude: Number(item.latitude),
+                      longitude: Number(item.longitude)
+                    });
+                    setMapZoom(14);
+                    setMapSearchResults([]);
+                    setMapSearchQuery(item.region ? `${item.name}, ${item.region}` : item.name);
+                  }}
+                >
+                  <Ionicons name="location-outline" size={16} color={colors.primary} />
+                  <View style={styles.createMapResultTextWrap}>
+                    <Text style={styles.createMapResultTitle}>{item.name}</Text>
+                    {item.region ? <Text style={styles.createMapResultSub}>{item.region}</Text> : null}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          <View style={styles.createMapNativeContainer}>
+            <Pressable
+              style={styles.createMapNativePressable}
+              onLayout={(event) => setMapCanvasLayout(event.nativeEvent.layout)}
+              onPress={pickFromMapPress}
+              onTouchStart={onMapTouchStart}
+              onTouchMove={onMapTouchMove}
+              onTouchEnd={onMapTouchEnd}
+            >
+              <View style={styles.createMapTilesCanvas}>
+                {mapTiles.map((tile) => (
+                  <Image
+                    key={tile.key}
+                    source={{ uri: tile.url }}
+                    style={[styles.createMapTileImage, { left: tile.left, top: tile.top }]}
+                  />
+                ))}
+              </View>
+              <View style={styles.createMapNativeCrosshair}>
+                <Ionicons name="location" size={22} color={colors.primary} />
+              </View>
+              <View style={styles.createMapNativeHint}>
+                <Text style={styles.createMapNativeHintText}>Tap map to select location</Text>
+              </View>
+            </Pressable>
+            <View style={styles.createMapNativeControls}>
+              <Pressable style={styles.createMapZoomBtn} onPress={() => setMapZoom((prev) => clamp(prev - 1, 2, 18))}>
+                <Ionicons name="remove" size={16} color={colors.textMain} />
+              </Pressable>
+              <Text style={styles.createMapZoomText}>Zoom {mapZoom}</Text>
+              <Pressable style={styles.createMapZoomBtn} onPress={() => setMapZoom((prev) => clamp(prev + 1, 2, 18))}>
+                <Ionicons name="add" size={16} color={colors.textMain} />
+              </Pressable>
+            </View>
+          </View>
+          <View style={styles.createMapWebCoords}>
+            <TextInput
+              value={String(draftCoordinate.latitude)}
+              onChangeText={(value) =>
+                setDraftCoordinate((prev) => ({ ...prev, latitude: Number(value || 0) }))
+              }
+              style={[styles.createFieldInput, styles.createMapCoordInput]}
+              placeholder="Latitude"
+              keyboardType="decimal-pad"
+              placeholderTextColor={colors.textSecondary}
+            />
+            <TextInput
+              value={String(draftCoordinate.longitude)}
+              onChangeText={(value) =>
+                setDraftCoordinate((prev) => ({ ...prev, longitude: Number(value || 0) }))
+              }
+              style={[styles.createFieldInput, styles.createMapCoordInput]}
+              placeholder="Longitude"
+              keyboardType="decimal-pad"
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.settingsScreen}>
+      <View style={styles.settingsNav}>
+        <View style={styles.settingsNavRight} />
+        <Text style={styles.settingsNavTitle}>Create Job</Text>
+        <View style={styles.settingsNavRight} />
+      </View>
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollBody}
+      >
+        <Animated.View style={[styles.createJobCard, { opacity: cardFade, transform: [{ translateY: cardRise }] }]}>
+          <View style={styles.createJobCardHeader}>
+            <View style={styles.createJobCardIcon}>
+              <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+            </View>
+            <View style={styles.createJobCardHeaderText}>
+              <Text style={styles.optionTitle}>Post New Job</Text>
+              <Text style={styles.optionSubtitle}>Fill required details and publish when ready.</Text>
+            </View>
+          </View>
+
+          <View onLayout={registerFieldY('title')}>
+            <Text style={styles.createFieldLabel}>Title *</Text>
+          </View>
+          <TextInput
+            ref={titleRef}
+            value={jobForm.title}
+            onChangeText={(value) => {
+              setJobForm((prev) => ({ ...prev, title: value }));
+              setErrors((prev) => ({ ...prev, title: '' }));
+            }}
+            style={[styles.createFieldInput, errors.title ? styles.createFieldInputError : null]}
+            placeholder="Need plumber for bathroom leakage"
+            placeholderTextColor={colors.textSecondary}
+          />
+          {errors.title ? <Text style={styles.createFieldErrorText}>{errors.title}</Text> : null}
+
+          <View onLayout={registerFieldY('description')}>
+            <Text style={styles.createFieldLabel}>Description *</Text>
+          </View>
+          <TextInput
+            ref={descriptionRef}
+            value={jobForm.description}
+            onChangeText={(value) => {
+              setJobForm((prev) => ({ ...prev, description: value }));
+              setErrors((prev) => ({ ...prev, description: '' }));
+            }}
+            style={[styles.createFieldInput, styles.createFieldArea, errors.description ? styles.createFieldInputError : null]}
+            placeholder="Describe the work, timing and expectations..."
+            placeholderTextColor={colors.textSecondary}
+            multiline
+          />
+          {errors.description ? <Text style={styles.createFieldErrorText}>{errors.description}</Text> : null}
+
+          <View onLayout={registerFieldY('categoryId')}>
+            <Text style={styles.createFieldLabel}>Category *</Text>
+          </View>
+          <Pressable
+            style={[styles.createFieldSelect, errors.categoryId ? styles.createFieldInputError : null]}
+            onPress={() => approvedCategoryOptions.length && setShowCategoryDropdown((prev) => !prev)}
+          >
+            <Ionicons name="layers-outline" size={16} color={colors.primary} />
+            <Text style={styles.createFieldSelectText}>
+              {selectedCategory?.name || (approvedCategoryOptions.length ? 'Select category' : 'No categories available')}
+            </Text>
+            <Ionicons name={showCategoryDropdown ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
+          </Pressable>
+          {showCategoryDropdown && approvedCategoryOptions.length ? (
+            <View style={styles.createDropdown}>
+              {approvedCategoryOptions.map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={styles.createDropdownItem}
+                  onPress={() => {
+                    setJobForm((prev) => ({ ...prev, categoryId: item.id }));
+                    setShowCategoryDropdown(false);
+                    setErrors((prev) => ({ ...prev, categoryId: '' }));
+                  }}
+                >
+                  <Text style={styles.createDropdownItemText}>{item.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {errors.categoryId ? <Text style={styles.createFieldErrorText}>{errors.categoryId}</Text> : null}
+
+          <View onLayout={registerFieldY('budget')}>
+            <Text style={styles.createFieldLabel}>Budget *</Text>
+          </View>
+          <TextInput
+            ref={budgetRef}
+            value={jobForm.budget}
+            onChangeText={(value) => {
+              setJobForm((prev) => ({ ...prev, budget: value.replace(/[^0-9.]/g, '') }));
+              setErrors((prev) => ({ ...prev, budget: '' }));
+            }}
+            style={[styles.createFieldInput, errors.budget ? styles.createFieldInputError : null]}
+            placeholder="5000"
+            keyboardType="decimal-pad"
+            placeholderTextColor={colors.textSecondary}
+          />
+          {errors.budget ? <Text style={styles.createFieldErrorText}>{errors.budget}</Text> : null}
+
+          <View onLayout={registerFieldY('jobType')}>
+            <Text style={styles.createFieldLabel}>Job Type *</Text>
+          </View>
+          <View style={styles.createPillRow}>
+            {['ONE_TIME', 'PART_TIME', 'FULL_TIME'].map((type) => (
+              <Pressable
+                key={type}
+                style={[
+                  styles.createPill,
+                  jobForm.jobType === type && styles.createPillActive,
+                  errors.jobType ? styles.createPillError : null
+                ]}
+                onPress={() => {
+                  setJobForm((prev) => ({ ...prev, jobType: type }));
+                  setErrors((prev) => ({ ...prev, jobType: '' }));
+                }}
+              >
+                <Text style={[styles.createPillText, jobForm.jobType === type && styles.createPillTextActive]}>
+                  {type.replace('_', ' ')}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {errors.jobType ? <Text style={styles.createFieldErrorText}>{errors.jobType}</Text> : null}
+
+          <View onLayout={registerFieldY('locationLink')}>
+            <Text style={styles.createFieldLabel}>Location Link *</Text>
+          </View>
+          <View style={[styles.createLocationRow, errors.locationLink ? styles.createFieldInputErrorWrap : null]}>
+            <TextInput
+              ref={locationLinkRef}
+              value={jobForm.locationLink}
+              onChangeText={(value) => {
+                setJobForm((prev) => ({ ...prev, locationLink: value }));
+                setErrors((prev) => ({ ...prev, locationLink: '' }));
+              }}
+              style={[styles.createFieldInput, styles.createLocationInput]}
+              placeholder="Pick from map to auto-fill"
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="none"
+            />
+            <Pressable style={styles.createMapBtn} onPress={() => setPickerPage('map')}>
+              <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.createMapBtnText}>Add</Text>
+            </Pressable>
+          </View>
+          {errors.locationLink ? <Text style={styles.createFieldErrorText}>{errors.locationLink}</Text> : null}
+          <View onLayout={registerFieldY('map')} style={styles.createMapSelectedWrap}>
+            <Ionicons name="navigate-circle-outline" size={16} color={colors.primary} />
+            <Text style={styles.createMapSelectedText}>
+              {jobForm.latitude !== null && jobForm.longitude !== null
+                ? `${jobForm.latitude}, ${jobForm.longitude}`
+                : 'No map location selected yet'}
+            </Text>
+          </View>
+          {errors.map ? <Text style={styles.createFieldErrorText}>{errors.map}</Text> : null}
+
+          <View onLayout={registerFieldY('address')}>
+            <Text style={styles.createFieldLabel}>Address *</Text>
+          </View>
+          <TextInput
+            ref={addressRef}
+            value={jobForm.address}
+            onChangeText={(value) => {
+              setJobForm((prev) => ({ ...prev, address: value }));
+              setErrors((prev) => ({ ...prev, address: '' }));
+            }}
+            style={[styles.createFieldInput, styles.createFieldArea, errors.address ? styles.createFieldInputError : null]}
+            placeholder="Street, city, area..."
+            placeholderTextColor={colors.textSecondary}
+            multiline
+          />
+          {errors.address ? <Text style={styles.createFieldErrorText}>{errors.address}</Text> : null}
+
+          <View onLayout={registerFieldY('status')}>
+            <Text style={styles.createFieldLabel}>Status *</Text>
+          </View>
+          <View style={styles.createPillRow}>
+            {['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((status) => (
+              <Pressable
+                key={status}
+                style={[
+                  styles.createPill,
+                  jobForm.status === status && styles.createPillActive,
+                  errors.status ? styles.createPillError : null
+                ]}
+                onPress={() => {
+                  setJobForm((prev) => ({ ...prev, status }));
+                  setErrors((prev) => ({ ...prev, status: '' }));
+                }}
+              >
+                <Text style={[styles.createPillText, jobForm.status === status && styles.createPillTextActive]}>
+                  {status.replace('_', ' ')}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {errors.status ? <Text style={styles.createFieldErrorText}>{errors.status}</Text> : null}
+
+          <Text style={styles.createFieldLabel}>Due Date (Optional)</Text>
+          <Pressable style={styles.createFieldSelect} onPress={() => setShowDatePicker(true)}>
+            <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+            <Text style={styles.createFieldSelectText}>
+              {jobForm.dueDate ? formatDateValue(new Date(jobForm.dueDate)) : 'Select date'}
+            </Text>
+          </Pressable>
+          {showDatePicker && Platform.OS === 'ios' ? (
+            <Modal transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+              <Pressable style={styles.datePickerBackdrop} onPress={() => setShowDatePicker(false)}>
+                <Pressable style={styles.datePickerCard} onPress={() => {}}>
+                  <DateTimePicker
+                    value={dueDateValue}
+                    mode="date"
+                    minimumDate={new Date()}
+                    display="spinner"
+                    onChange={(_event, selectedDate) => {
+                      if (!selectedDate) return;
+                      setJobForm((prev) => ({ ...prev, dueDate: selectedDate.toISOString() }));
+                    }}
+                  />
+                  <Pressable style={styles.datePickerDoneBtn} onPress={() => setShowDatePicker(false)}>
+                    <Text style={styles.datePickerDoneText}>Done</Text>
+                  </Pressable>
+                </Pressable>
+              </Pressable>
+            </Modal>
+          ) : null}
+          {showDatePicker && Platform.OS !== 'ios' ? (
+            <DateTimePicker
+              value={dueDateValue}
+              mode="date"
+              minimumDate={new Date()}
+              display="default"
+              onChange={(_event, selectedDate) => {
+                setShowDatePicker(false);
+                if (!selectedDate) return;
+                setJobForm((prev) => ({ ...prev, dueDate: selectedDate.toISOString() }));
+              }}
+            />
+          ) : null}
+
+          <Pressable style={styles.createSubmitBtn} onPress={submitWithValidation} disabled={isCreatingJob || !token}>
+            {isCreatingJob ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="send-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.createSubmitBtnText}>Create Job</Text>
+              </>
+            )}
+          </Pressable>
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -837,6 +1906,7 @@ function PageContent({
   tabKey,
   user,
   userRole,
+  token,
   settingsPage,
   themeMode,
   setThemeMode,
@@ -860,6 +1930,26 @@ function PageContent({
   isCategoryLoading,
   hasFetchedCategoriesOnce,
   onRefreshCategories,
+  jobForm,
+  setJobForm,
+  approvedCategoryOptions,
+  onCreateJob,
+  onValidationError,
+  isCreatingJob,
+  adminPanelTab,
+  setAdminPanelTab,
+  adminJobs,
+  adminCategories,
+  isAdminPanelLoading,
+  onRefreshAdminPanel,
+  adminCategorySearch,
+  setAdminCategorySearch,
+  adminCategoryFilter,
+  setAdminCategoryFilter,
+  adminCategoryDraft,
+  setAdminCategoryDraft,
+  onCreateAdminCategory,
+  onUpdateAdminCategoryStatus,
   adminUsers,
   isAdminUsersLoading,
   onRefreshAdminUsers,
@@ -920,24 +2010,41 @@ function PageContent({
     );
   }
   if (tabKey === 'create') {
-    const title = userRole === 'ADMIN' ? 'Moderation' : userRole === 'JOB_POSTER' ? 'Post Job' : 'Apply Fast';
-    const subtitle =
-      userRole === 'ADMIN'
-        ? 'Review important approvals and critical actions.'
-        : userRole === 'JOB_POSTER'
-          ? 'Create a new job post and publish it quickly.'
-          : 'Use quick actions for applications and saved jobs.';
-
-    return (
-      <View style={styles.centerPage}>
-        <PageCard
-          title={title}
-          subtitle={subtitle}
-          icon="add-circle"
+    if (userRole === 'ADMIN') {
+      return (
+        <AdminModerationPage
+          adminPanelTab={adminPanelTab}
+          setAdminPanelTab={setAdminPanelTab}
+          jobs={adminJobs}
+          categories={adminCategories}
+          isLoading={isAdminPanelLoading}
+          onRefresh={onRefreshAdminPanel}
+          categorySearch={adminCategorySearch}
+          setCategorySearch={setAdminCategorySearch}
+          categoryFilter={adminCategoryFilter}
+          setCategoryFilter={setAdminCategoryFilter}
+          categoryDraft={adminCategoryDraft}
+          setCategoryDraft={setAdminCategoryDraft}
+          onCreateCategory={onCreateAdminCategory}
+          onUpdateCategoryStatus={onUpdateAdminCategoryStatus}
           styles={styles}
           colors={colors}
         />
-      </View>
+      );
+    }
+    return (
+      <CreateJobPage
+        userRole={userRole}
+        token={token}
+        jobForm={jobForm}
+        setJobForm={setJobForm}
+        approvedCategoryOptions={approvedCategoryOptions}
+        onCreateJob={onCreateJob}
+        onValidationError={onValidationError}
+        isCreatingJob={isCreatingJob}
+        styles={styles}
+        colors={colors}
+      />
     );
   }
   if (tabKey === 'messages') {
@@ -1022,9 +2129,19 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [showAvatarOptions, setShowAvatarOptions] = useState(false);
   const [showAvatarList, setShowAvatarList] = useState(false);
   const [showAvatarPreview, setShowAvatarPreview] = useState(false);
-  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryDescription, setNewCategoryDescription] = useState('');
+  const [jobForm, setJobForm] = useState({
+    title: '',
+    description: '',
+    categoryId: '',
+    budget: '',
+    jobType: 'ONE_TIME',
+    locationLink: '',
+    address: '',
+    status: 'OPEN',
+    dueDate: '',
+    latitude: null,
+    longitude: null
+  });
   const [showWebCropper, setShowWebCropper] = useState(false);
   const [webCropSource, setWebCropSource] = useState('');
   const [webCropMimeType, setWebCropMimeType] = useState('image/jpeg');
@@ -1033,9 +2150,9 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [webCroppedPixels, setWebCroppedPixels] = useState(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isCreatingJob, setIsCreatingJob] = useState(false);
   const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   const [hasFetchedCategoriesOnce, setHasFetchedCategoriesOnce] = useState(false);
-  const [isCategorySubmitting, setIsCategorySubmitting] = useState(false);
   const [categoriesTab, setCategoriesTab] = useState('all');
   const [categorySearch, setCategorySearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
@@ -1043,6 +2160,14 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [myCategories, setMyCategories] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
   const [isAdminUsersLoading, setIsAdminUsersLoading] = useState(false);
+  const [adminPanelTab, setAdminPanelTab] = useState('jobs');
+  const [adminJobs, setAdminJobs] = useState([]);
+  const [adminCategories, setAdminCategories] = useState([]);
+  const [isAdminPanelLoading, setIsAdminPanelLoading] = useState(false);
+  const [adminCategorySearch, setAdminCategorySearch] = useState('');
+  const [debouncedAdminCategorySearch, setDebouncedAdminCategorySearch] = useState('');
+  const [adminCategoryFilter, setAdminCategoryFilter] = useState('ALL');
+  const [adminCategoryDraft, setAdminCategoryDraft] = useState({ name: '', description: '' });
   const [localUser, setLocalUser] = useState(user || null);
   const [popup, setPopup] = useState({ visible: false, title: '', message: '', type: 'error' });
   const contentFade = useRef(new Animated.Value(1)).current;
@@ -1127,6 +2252,14 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       type
     });
   };
+
+  const approvedCategoryOptions = useMemo(
+    () => allCategories.filter((item) => {
+      const status = String(item?.status || '').toUpperCase();
+      return !status || status === 'APPROVED';
+    }),
+    [allCategories]
+  );
 
   const applyAvatarUpdate = async ({ avatarData, avatarUrl, resetAvatar }) => {
     if (!token) {
@@ -1366,30 +2499,100 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
-  const submitCategory = async () => {
-    if (!token) return;
-    if (!newCategoryName.trim()) {
-      showPopup('Validation Error', 'Category name is required.', 'warning');
+  const submitCreateJob = async (payload) => {
+    if (!token) {
+      showPopup('Session Expired', 'Please login again to create job.', 'warning');
       return;
     }
+
     try {
-      setIsCategorySubmitting(true);
+      setIsCreatingJob(true);
+      await createJob({ token, payload });
+      setJobForm({
+        title: '',
+        description: '',
+        categoryId: '',
+        budget: '',
+        jobType: 'ONE_TIME',
+        locationLink: '',
+        address: '',
+        status: 'OPEN',
+        dueDate: '',
+        latitude: null,
+        longitude: null
+      });
+      showPopup('Job Created', 'Your job has been created successfully.', 'success');
+      setActiveTab('explore');
+    } catch (error) {
+      showPopup('Create Failed', error?.message || 'Unable to create job.', 'error');
+    } finally {
+      setIsCreatingJob(false);
+    }
+  };
+
+  const fetchAdminPanelData = async ({ forceLoader = false, tab = adminPanelTab } = {}) => {
+    if (!token || userRole !== 'ADMIN') return;
+    try {
+      setIsAdminPanelLoading(true);
+
+      const isCategoryTab = tab === 'categories';
+      if (isCategoryTab) {
+        const categoriesRes = await getAllCategoriesAdmin({
+          token,
+          status: adminCategoryFilter,
+          q: debouncedAdminCategorySearch.trim() || undefined
+        });
+        setAdminCategories(categoriesRes?.data || []);
+      } else {
+        const jobsRes = await getAllJobs({ token, page: 1, limit: 60, status: 'ALL' });
+        setAdminJobs(jobsRes?.data?.jobs || []);
+      }
+    } catch (error) {
+      showPopup('Admin Panel Failed', error?.message || 'Unable to load admin panel data.', 'error');
+    } finally {
+      setIsAdminPanelLoading(false);
+    }
+  };
+
+  const createAdminCategory = async () => {
+    if (!token || userRole !== 'ADMIN') return;
+    const normalizedName = adminCategoryDraft.name.trim().replace(/\s+/g, ' ');
+    if (!normalizedName) {
+      showPopup('Validation Error', 'Category name is required.', 'warning');
+      return false;
+    }
+    if (adminCategories.some((item) => String(item.name || '').trim().toLowerCase() === normalizedName.toLowerCase())) {
+      showPopup('Validation Error', 'Category name already exists.', 'warning');
+      return false;
+    }
+    try {
       await createCategory({
         token,
         payload: {
-          name: newCategoryName.trim(),
-          description: newCategoryDescription.trim()
+          name: normalizedName,
+          description: adminCategoryDraft.description.trim()
         }
       });
-      setShowAddCategoryModal(false);
-      setNewCategoryName('');
-      setNewCategoryDescription('');
-      showPopup('Category Added', 'Category submitted with pending status.', 'success');
-      await fetchCategories({ forceLoader: true });
+      setAdminCategoryDraft({ name: '', description: '' });
+      showPopup('Category Created', 'Category created successfully.', 'success');
+      await fetchAdminPanelData({ forceLoader: true, tab: 'categories' });
+      return true;
     } catch (error) {
       showPopup('Create Failed', error?.message || 'Unable to create category.', 'error');
-    } finally {
-      setIsCategorySubmitting(false);
+      return false;
+    }
+  };
+
+  const updateAdminCategoryStatus = async (categoryId, status) => {
+    if (!token || userRole !== 'ADMIN') return;
+    try {
+      await updateCategoryStatus({ token, categoryId, status });
+      setAdminCategories((prev) =>
+        prev.map((item) => (item.id === categoryId ? { ...item, status } : item))
+      );
+      showPopup('Category Updated', `Category status changed to ${status}.`, 'success');
+    } catch (error) {
+      showPopup('Update Failed', error?.message || 'Unable to update category status.', 'error');
     }
   };
 
@@ -1431,9 +2634,44 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   };
 
   useEffect(() => {
-    if (activeTab !== 'settings' || settingsPage !== 'categories') return;
-    fetchCategories();
-  }, [activeTab, settingsPage, categorySearch, categoryFilter, categoriesTab, token]);
+    if (!token) return;
+    if (activeTab === 'create') {
+      if (userRole === 'ADMIN') {
+        fetchAdminPanelData({ forceLoader: true, tab: adminPanelTab });
+        return;
+      }
+      (async () => {
+        try {
+          setIsCategoryLoading(true);
+          const approvedRes = await getApprovedCategories({ token });
+          setAllCategories(approvedRes?.data || []);
+          setHasFetchedCategoriesOnce(true);
+        } catch (error) {
+          showPopup('Categories Failed', error?.message || 'Unable to load categories.', 'error');
+        } finally {
+          setIsCategoryLoading(false);
+        }
+      })();
+      return;
+    }
+    if (activeTab === 'settings' && settingsPage === 'categories') {
+      fetchCategories();
+    }
+  }, [activeTab, settingsPage, categorySearch, categoryFilter, categoriesTab, token, allCategories.length, userRole, adminPanelTab]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedAdminCategorySearch(adminCategorySearch);
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [adminCategorySearch]);
+
+  useEffect(() => {
+    if (!token || userRole !== 'ADMIN' || activeTab !== 'create') return;
+    if (adminPanelTab !== 'categories') return;
+    fetchAdminPanelData({ tab: 'categories' });
+  }, [activeTab, userRole, token, adminPanelTab, debouncedAdminCategorySearch, adminCategoryFilter]);
 
   useEffect(() => {
     if (userRole !== 'ADMIN' || activeTab !== 'users') return;
@@ -1509,6 +2747,9 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   };
 
   const centerTab = visibleTabs[2] || visibleTabs[0];
+  const handleCenterAction = () => {
+    switchTab(centerTab.key);
+  };
 
   return (
     <View style={styles.container}>
@@ -1517,6 +2758,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           tabKey={activeTab}
           user={localUser}
           userRole={userRole}
+          token={token}
           settingsPage={settingsPage}
           themeMode={themeMode}
           setThemeMode={setThemeMode}
@@ -1540,6 +2782,26 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           isCategoryLoading={isCategoryLoading}
           hasFetchedCategoriesOnce={hasFetchedCategoriesOnce}
           onRefreshCategories={() => fetchCategories({ forceLoader: true })}
+          jobForm={jobForm}
+          setJobForm={setJobForm}
+          approvedCategoryOptions={approvedCategoryOptions}
+          onCreateJob={submitCreateJob}
+          onValidationError={showPopup}
+          isCreatingJob={isCreatingJob}
+          adminPanelTab={adminPanelTab}
+          setAdminPanelTab={setAdminPanelTab}
+          adminJobs={adminJobs}
+          adminCategories={adminCategories}
+          isAdminPanelLoading={isAdminPanelLoading}
+          onRefreshAdminPanel={() => fetchAdminPanelData({ forceLoader: true })}
+          adminCategorySearch={adminCategorySearch}
+          setAdminCategorySearch={setAdminCategorySearch}
+          adminCategoryFilter={adminCategoryFilter}
+          setAdminCategoryFilter={setAdminCategoryFilter}
+          adminCategoryDraft={adminCategoryDraft}
+          setAdminCategoryDraft={setAdminCategoryDraft}
+          onCreateAdminCategory={createAdminCategory}
+          onUpdateAdminCategoryStatus={updateAdminCategoryStatus}
           adminUsers={adminUsers}
           isAdminUsersLoading={isAdminUsersLoading}
           onRefreshAdminUsers={() => fetchAdminUsers({ forceLoader: true })}
@@ -1551,49 +2813,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       </Animated.View>
 
       {activeTab === 'settings' && settingsPage === 'categories' ? (
-        <Pressable style={styles.categoryFab} onPress={() => setShowAddCategoryModal(true)}>
+        <Pressable style={styles.categoryFab} onPress={() => setActiveTab('create')}>
           <Ionicons name="add" size={28} color="#FFFFFF" />
         </Pressable>
       ) : null}
-
-      <Modal visible={showAddCategoryModal} transparent animationType="fade" onRequestClose={() => setShowAddCategoryModal(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.categoryCreateCard}>
-            <View style={styles.categoryCreateHeader}>
-              <View style={styles.categoryCreateIconWrap}>
-                <Ionicons name="layers-outline" size={18} color={colors.primary} />
-              </View>
-              <View style={styles.categoryCreateHeaderText}>
-                <Text style={styles.optionTitle}>Create Category</Text>
-                <Text style={styles.optionSubtitle}>Submit your category for admin approval</Text>
-              </View>
-            </View>
-            <TextInput
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-              placeholder="Category name"
-              placeholderTextColor={colors.textSecondary}
-              style={styles.categoryCreateInput}
-            />
-            <TextInput
-              value={newCategoryDescription}
-              onChangeText={setNewCategoryDescription}
-              placeholder="One-line description"
-              placeholderTextColor={colors.textSecondary}
-              style={[styles.categoryCreateInput, styles.categoryCreateDescription]}
-              multiline
-            />
-            <View style={styles.modalActions}>
-              <Pressable style={styles.modalBtnSecondary} onPress={() => setShowAddCategoryModal(false)}>
-                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
-              </Pressable>
-              <Pressable style={styles.modalBtnPrimary} onPress={submitCategory}>
-                <Text style={styles.modalBtnPrimaryText}>Submit</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={showAvatarPreview} transparent animationType="fade" onRequestClose={() => setShowAvatarPreview(false)}>
         <View style={styles.previewBackdrop}>
@@ -1650,7 +2873,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           })}
         </View>
 
-        <Pressable style={styles.centerBtn} onPress={() => switchTab(centerTab.key)}>
+        <Pressable style={styles.centerBtn} onPress={handleCenterAction}>
           <Animated.View
             style={{
               transform: [{ translateY: iconLift[centerTab.key] }, { scale: iconScales[centerTab.key] }]
@@ -1798,7 +3021,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         onClose={() => setPopup((prev) => ({ ...prev, visible: false }))}
       />
       <LottieLoader
-        visible={isCategorySubmitting || isUploadingAvatar || isSavingProfile}
+        visible={isUploadingAvatar || isSavingProfile || isCreatingJob}
         text="Please wait..."
       />
     </View>
@@ -2329,9 +3552,10 @@ const createStyles = (colors) =>
       color: '#FFFFFF'
     },
     categorySearchRow: {
-      marginBottom: 8,
       flexDirection: 'row',
-      alignItems: 'center'
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 10
     },
     categorySearchWrap: {
       flex: 1,
@@ -2351,7 +3575,7 @@ const createStyles = (colors) =>
       fontSize: 14
     },
     categoryFilterIconBtn: {
-      marginLeft: 8,
+      marginLeft: 0,
       width: 42,
       height: 42,
       borderRadius: 10,
@@ -2594,6 +3818,152 @@ const createStyles = (colors) =>
     adminStatusTextDanger: {
       color: '#B91C1C'
     },
+    adminPanelTabs: {
+      flexDirection: 'row',
+      marginBottom: 10,
+      gap: 8
+    },
+    adminPanelTabBtn: {
+      flex: 1,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10
+    },
+    adminPanelTabBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    adminPanelTabText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    adminPanelTabTextActive: {
+      color: colors.primary
+    },
+    adminJobCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      padding: 12,
+      marginBottom: 10
+    },
+    adminJobTitle: {
+      color: colors.textMain,
+      fontWeight: '800',
+      fontSize: 15
+    },
+    adminJobMeta: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    adminCreateCategoryCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      padding: 14,
+      marginBottom: 10
+    },
+    adminSectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8
+    },
+    adminCreateCategoryTitle: {
+      color: colors.textMain,
+      fontSize: 15,
+      fontWeight: '800',
+      marginBottom: 0
+    },
+    adminCategoryToolbar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 10
+    },
+    adminCategoryCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      padding: 12,
+      marginBottom: 10
+    },
+    adminCategoryTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    adminCategoryNameWrap: {
+      flex: 1,
+      marginRight: 10
+    },
+    adminCategoryName: {
+      color: colors.textMain,
+      fontWeight: '800',
+      fontSize: 14,
+      maxWidth: '100%'
+    },
+    adminCategoryDescriptionOneLine: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    adminCategoryDescription: {
+      marginTop: 8,
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    adminCategoryDropdownBtn: {
+      minWidth: 98,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 6
+    },
+    adminCategoryDropdownText: {
+      color: colors.textMain,
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    adminCategoryActions: {
+      flexDirection: 'row',
+      marginTop: 10,
+      gap: 8
+    },
+    adminCategoryActionBtn: {
+      flex: 1,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 9
+    },
+    adminCategoryApproveBtn: {
+      backgroundColor: '#059669'
+    },
+    adminCategoryRejectBtn: {
+      backgroundColor: '#DC2626'
+    },
+    adminCategoryActionText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700'
+    },
     categorySkeletonCard: {
       borderWidth: 1,
       borderColor: colors.border,
@@ -2665,6 +4035,463 @@ const createStyles = (colors) =>
       shadowRadius: 10,
       elevation: 10
     },
+    createJobCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 18,
+      backgroundColor: colors.surface,
+      padding: 14
+    },
+    createJobCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 10
+    },
+    createJobCardIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10
+    },
+    createJobCardHeaderText: {
+      flex: 1
+    },
+    createFieldLabel: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '700',
+      marginBottom: 6
+    },
+    createFieldInput: {
+      height: 42,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      color: colors.textMain,
+      paddingHorizontal: 10,
+      marginBottom: 10
+    },
+    createFieldInputError: {
+      borderColor: '#DC2626'
+    },
+    createFieldInputErrorWrap: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: '#DC2626',
+      padding: 6,
+      marginBottom: 8
+    },
+    createFieldErrorText: {
+      color: '#DC2626',
+      fontSize: 12,
+      marginTop: -4,
+      marginBottom: 8,
+      fontWeight: '600'
+    },
+    createFieldArea: {
+      minHeight: 78,
+      height: undefined,
+      textAlignVertical: 'top',
+      paddingTop: 10
+    },
+    createFieldSelect: {
+      height: 42,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 10,
+      marginBottom: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
+    createFieldSelectText: {
+      flex: 1,
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '600'
+    },
+    createDropdown: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      backgroundColor: colors.surface,
+      marginBottom: 10,
+      overflow: 'hidden'
+    },
+    createDropdownItem: {
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border
+    },
+    createDropdownItemText: {
+      color: colors.textMain,
+      fontSize: 13
+    },
+    createPillRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: 10
+    },
+    createPill: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      borderRadius: 999,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      marginRight: 8,
+      marginBottom: 8
+    },
+    createPillActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    createPillError: {
+      borderColor: '#DC2626'
+    },
+    createPillText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    createPillTextActive: {
+      color: colors.primary
+    },
+    createLocationRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 2
+    },
+    createLocationInput: {
+      flex: 1,
+      marginBottom: 0,
+      marginRight: 8
+    },
+    createMapBtn: {
+      height: 42,
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 6
+    },
+    createMapBtnText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    createMapSelectedWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primarySoft,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
+      marginBottom: 8
+    },
+    createMapSelectedText: {
+      marginLeft: 8,
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '600'
+    },
+    createMapHeaderWrap: {
+      borderBottomWidth: 1,
+      borderBottomColor: '#0B5F59',
+      backgroundColor: '#0F766E',
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      paddingBottom: 10,
+      marginHorizontal: -16
+    },
+    createMapHeaderTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8
+    },
+    createMapHeaderMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'center',
+      backgroundColor: 'rgba(255,255,255,0.18)',
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5
+    },
+    createMapHeaderMetaText: {
+      marginLeft: 6,
+      color: '#E6FFFA',
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    createMapHeaderTitle: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '800'
+    },
+    createMapHeaderBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 40,
+      paddingHorizontal: 10
+    },
+    createMapHeaderBtnLeft: {
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.06)'
+    },
+    createMapHeaderBtnRight: {
+      minWidth: 94,
+      justifyContent: 'center'
+    },
+    createMapHeaderBtnText: {
+      marginLeft: 4,
+      color: '#D1FAE5',
+      fontSize: 13,
+      fontWeight: '700'
+    },
+    createMapHeaderBtnPrimary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#0EA5A2',
+      borderRadius: 18,
+      paddingHorizontal: 10,
+      paddingVertical: 7
+    },
+    createMapHeaderBtnPrimaryText: {
+      marginLeft: 4,
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    datePickerBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(2, 6, 23, 0.35)',
+      justifyContent: 'flex-end'
+    },
+    datePickerCard: {
+      borderTopLeftRadius: 18,
+      borderTopRightRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingTop: 8,
+      paddingBottom: 16,
+      paddingHorizontal: 10
+    },
+    datePickerDoneBtn: {
+      alignSelf: 'flex-end',
+      marginTop: 4,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 10,
+      backgroundColor: colors.primary
+    },
+    datePickerDoneText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    createMapFullWrap: {
+      flex: 1,
+      padding: 12,
+      backgroundColor: colors.background
+    },
+    createMapSearchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8
+    },
+    createMapSearchInputWrap: {
+      flex: 1,
+      height: 42,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10
+    },
+    createMapSearchInput: {
+      flex: 1,
+      marginLeft: 8,
+      color: colors.textMain,
+      fontSize: 13
+    },
+    createMapSearchBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      marginLeft: 8,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    createMapResultsCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      marginBottom: 8,
+      maxHeight: 180
+    },
+    createMapResultItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border
+    },
+    createMapResultTextWrap: {
+      marginLeft: 8,
+      flex: 1
+    },
+    createMapResultTitle: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '700'
+    },
+    createMapResultSub: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 11
+    },
+    createMapNativeContainer: {
+      flex: 1,
+      minHeight: 360,
+      borderRadius: 14,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface
+    },
+    createMapNativePressable: {
+      flex: 1
+    },
+    createMapTilesCanvas: {
+      flex: 1,
+      backgroundColor: '#E5E7EB'
+    },
+    createMapTileImage: {
+      position: 'absolute',
+      width: TILE_SIZE,
+      height: TILE_SIZE
+    },
+    createMapNativeCrosshair: {
+      position: 'absolute',
+      left: '50%',
+      top: '50%',
+      marginLeft: -11,
+      marginTop: -22
+    },
+    createMapNativeHint: {
+      position: 'absolute',
+      top: 10,
+      alignSelf: 'center',
+      backgroundColor: 'rgba(15, 23, 42, 0.72)',
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5
+    },
+    createMapNativeHintText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    createMapNativeControls: {
+      position: 'absolute',
+      right: 10,
+      bottom: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255,255,255,0.92)',
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    createMapZoomBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface
+    },
+    createMapZoomText: {
+      marginHorizontal: 10,
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    createMapWebOnlyWrap: {
+      flex: 1
+    },
+    createMapNativeFull: {
+      width: '100%',
+      height: '100%'
+    },
+    createMapCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.sheet,
+      padding: 10,
+      marginBottom: 10
+    },
+    createMapNative: {
+      width: '100%',
+      height: 260,
+      borderRadius: 10
+    },
+    createMapWebFrame: {
+      width: '100%',
+      height: 220,
+      borderRadius: 10,
+      overflow: 'hidden',
+      marginBottom: 8
+    },
+    createMapWebCoords: {
+      flexDirection: 'row'
+    },
+    createMapCoordInput: {
+      flex: 1,
+      marginBottom: 0,
+      marginRight: 8
+    },
+    createMapActionRow: {
+      marginTop: 10,
+      flexDirection: 'row'
+    },
+    createSubmitBtn: {
+      height: 46,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 8
+    },
+    createSubmitBtnText: {
+      color: '#FFFFFF',
+      fontWeight: '800',
+      fontSize: 14
+    },
     categoryCreateCard: {
       width: '100%',
       maxWidth: 380,
@@ -2673,6 +4500,113 @@ const createStyles = (colors) =>
       borderColor: colors.border,
       backgroundColor: colors.surface,
       padding: 14
+    },
+    jobCreateCard: {
+      width: '100%',
+      maxWidth: 420,
+      maxHeight: '88%',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 14
+    },
+    jobCreateForm: {
+      marginTop: 4
+    },
+    jobFieldLabel: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '700',
+      marginBottom: 6
+    },
+    jobChipRow: {
+      paddingBottom: 8
+    },
+    jobTypeRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: 8
+    },
+    jobChip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      borderRadius: 999,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      marginRight: 8,
+      marginBottom: 8
+    },
+    jobChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    jobChipText: {
+      color: colors.textSecondary,
+      fontWeight: '700',
+      fontSize: 12
+    },
+    jobChipTextActive: {
+      color: colors.primary
+    },
+    jobEmptyHintWrap: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderStyle: 'dashed',
+      borderRadius: 10,
+      paddingVertical: 8,
+      paddingHorizontal: 12
+    },
+    jobEmptyHint: {
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    jobMapBox: {
+      height: 180,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      marginBottom: 8,
+      overflow: 'hidden',
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    jobMapGridLineHorizontal: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: '50%',
+      height: 1,
+      backgroundColor: colors.border
+    },
+    jobMapGridLineVertical: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      left: '50%',
+      width: 1,
+      backgroundColor: colors.border
+    },
+    jobMapHint: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '600'
+    },
+    jobMapMarker: {
+      position: 'absolute',
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      borderWidth: 2,
+      borderColor: '#FFFFFF',
+      backgroundColor: colors.primary
+    },
+    jobMapCoords: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      marginBottom: 8
     },
     categoryCreateHeader: {
       flexDirection: 'row',
@@ -2888,6 +4822,33 @@ const createStyles = (colors) =>
       marginTop: 2,
       color: colors.textSecondary,
       fontSize: 12
+    },
+    optionModal: {
+      width: '100%',
+      maxWidth: 360,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 14
+    },
+    optionMessage: {
+      marginTop: 8,
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 20
+    },
+    optionActionsRow: {
+      marginTop: 12,
+      flexDirection: 'row',
+      gap: 8
+    },
+    optionActionBtn: {
+      flex: 1,
+      height: 42,
+      marginTop: 0,
+      marginLeft: 0,
+      marginRight: 0
     },
     optionRow: {
       height: 46,
