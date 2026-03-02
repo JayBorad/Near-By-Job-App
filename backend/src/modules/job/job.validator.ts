@@ -9,7 +9,7 @@ export const createJobValidator = [
   body('latitude').isFloat({ min: -90, max: 90 }).withMessage('Invalid latitude'),
   body('longitude').isFloat({ min: -180, max: 180 }).withMessage('Invalid longitude'),
   body('address').trim().notEmpty().withMessage('Address is required'),
-  body('dueDate').isISO8601().toDate().withMessage('Valid dueDate is required')
+  body('dueDate').optional().isISO8601().toDate().withMessage('Valid dueDate is required')
 ];
 
 export const updateJobValidator = [

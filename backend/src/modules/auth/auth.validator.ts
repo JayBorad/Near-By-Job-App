@@ -16,6 +16,10 @@ export const signUpValidator = [
     .optional()
     .isIn(['JOB_POSTER', 'JOB_PICKER'])
     .withMessage('role must be JOB_POSTER or JOB_PICKER'),
+  body('gender')
+    .optional()
+    .isIn(['MALE', 'FEMALE', 'OTHER'])
+    .withMessage('gender must be MALE, FEMALE or OTHER'),
   body('redirectTo')
     .optional()
     .isURL({ require_protocol: true, require_tld: false })

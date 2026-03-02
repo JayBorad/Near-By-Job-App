@@ -4,9 +4,10 @@ export const createCategoryValidator = [
   body('name').trim().notEmpty().withMessage('Category name is required'),
   body('description')
     .optional()
+    .trim()
     .isString()
-    .isLength({ max: 300 })
-    .withMessage('Description max length is 300')
+    .isLength({ max: 500 })
+    .withMessage('Description max length is 500')
 ];
 
 export const updateCategoryStatusValidator = [

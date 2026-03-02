@@ -15,6 +15,8 @@ const ensureCategoryApproved = async (categoryId) => {
 
 export const createJob = async (userId, payload) => {
   await ensureCategoryApproved(payload.categoryId);
+  const fallbackDueDate = new Date();
+  fallbackDueDate.setDate(fallbackDueDate.getDate() + 7);
 
   return prisma.job.create({
     data: {
@@ -26,7 +28,7 @@ export const createJob = async (userId, payload) => {
       latitude: new Prisma.Decimal(payload.latitude),
       longitude: new Prisma.Decimal(payload.longitude),
       address: payload.address,
-      dueDate: payload.dueDate,
+      dueDate: payload.dueDate || fallbackDueDate,
       createdBy: userId
     }
   });

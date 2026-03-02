@@ -1,7 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { supabase, supabaseAdmin } from '../../config/supabase.js';
 import ApiError from '../../utils/ApiError.js';
-import { Prisma, Role } from '@prisma/client';
+import { Gender, Prisma, Role } from '@prisma/client';
 
 const normalizeUsername = (input) =>
   String(input || '')
@@ -34,6 +34,10 @@ export const signUp = async (payload) => {
   const { name, username, email, password, phone, redirectTo } = payload;
   const requestedRole = String(payload?.role || 'JOB_PICKER').toUpperCase();
   const normalizedRole = requestedRole === Role.JOB_POSTER ? Role.JOB_POSTER : Role.JOB_PICKER;
+  const requestedGender = String(payload?.gender || '').toUpperCase();
+  const normalizedGender = Object.values(Gender).includes(requestedGender as Gender)
+    ? (requestedGender as Gender)
+    : null;
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const normalizedName = String(name || '').trim();
   const normalizedPhone = String(phone || '').trim();
@@ -96,7 +100,8 @@ export const signUp = async (payload) => {
         username: finalUsername,
         email: normalizedEmail,
         phone: normalizedPhone,
-        role: normalizedRole
+        role: normalizedRole,
+        gender: normalizedGender
       }
     });
   } catch (err) {
@@ -285,7 +290,8 @@ export const syncUserFromToken = async (payload) => {
         email: data.user.email,
         phone: data.user.phone || 'N/A',
         avatar: data.user.user_metadata?.avatar_url || null,
-        role: Role.JOB_PICKER
+        role: Role.JOB_PICKER,
+        gender: null
       }
     });
   }
