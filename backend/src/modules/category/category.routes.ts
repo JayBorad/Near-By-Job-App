@@ -5,6 +5,7 @@ import { authorizeRoles } from '../../middleware/role.middleware.js';
 import { validate } from '../../middleware/validation.middleware.js';
 import {
   createCategoryValidator,
+  getAllCategoriesValidator,
   getApprovedCategoriesValidator,
   getMyCategoriesValidator,
   updateCategoryStatusValidator
@@ -14,6 +15,14 @@ const router = express.Router();
 
 router.post('/', authenticate, createCategoryValidator, validate, controller.createCategory);
 router.get('/approved', getApprovedCategoriesValidator, validate, controller.getApprovedCategories);
+router.get(
+  '/',
+  authenticate,
+  authorizeRoles('ADMIN'),
+  getAllCategoriesValidator,
+  validate,
+  controller.getAllCategories
+);
 router.get('/mine', authenticate, getMyCategoriesValidator, validate, controller.getMyCategories);
 router.patch(
   '/:id/status',

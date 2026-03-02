@@ -1,6 +1,6 @@
 import prisma from '../../config/prisma.js';
 import ApiError from '../../utils/ApiError.js';
-import { CategoryStatus } from '@prisma/client';
+import { CategoryStatus, Prisma } from '@prisma/client';
 
 const isMissingDescriptionColumnError = (error) => {
   const message = String(error?.message || '').toLowerCase();
@@ -11,10 +11,28 @@ const isMissingDescriptionColumnError = (error) => {
 };
 
 export const createCategory = async (userId, payload) => {
+  const normalizedName = String(payload?.name || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+  const existing = await prisma.category.findFirst({
+    where: {
+      name: {
+        equals: normalizedName,
+        mode: 'insensitive'
+      }
+    },
+    select: { id: true, name: true }
+  });
+
+  if (existing) {
+    throw new ApiError(409, 'Category name already exists');
+  }
+
   try {
     return await prisma.category.create({
       data: {
-        name: payload.name,
+        name: normalizedName,
         description: payload.description || null,
         status: 'PENDING',
         createdBy: userId
@@ -24,7 +42,7 @@ export const createCategory = async (userId, payload) => {
     if (isMissingDescriptionColumnError(error)) {
       const fallback = await prisma.category.create({
         data: {
-          name: payload.name,
+          name: normalizedName,
           status: 'PENDING',
           createdBy: userId
         }
@@ -94,6 +112,72 @@ export const getApprovedCategories = async (query) => {
   }
 };
 
+export const getAllCategories = async (query) => {
+  const status = String(query?.status || '').trim().toUpperCase();
+  const q = String(query?.q || '').trim();
+  const where: Prisma.CategoryWhereInput = {
+    ...(status && status !== 'ALL' ? { status: status as CategoryStatus } : {}),
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' as const } },
+            { description: { contains: q, mode: 'insensitive' as const } }
+          ]
+        }
+      : {})
+  };
+
+  try {
+    return await prisma.category.findMany({
+      where,
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            username: true
+          }
+        },
+        approver: {
+          select: {
+            id: true,
+            name: true,
+            username: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  } catch (error) {
+    if (!isMissingDescriptionColumnError(error)) throw error;
+    const fallbackWhere: Prisma.CategoryWhereInput = {
+      ...(status && status !== 'ALL' ? { status: status as CategoryStatus } : {}),
+      ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {})
+    };
+    const fallback = await prisma.category.findMany({
+      where: fallbackWhere,
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            username: true
+          }
+        },
+        approver: {
+          select: {
+            id: true,
+            name: true,
+            username: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return fallback.map((item) => ({ ...item, description: null }));
+  }
+};
+
 export const getMyCategories = async (userId, query) => {
   const status = String(query?.status || '').trim();
   const q = String(query?.q || '').trim();
@@ -151,7 +235,7 @@ export const updateCategoryStatus = async (categoryId, adminId, status) => {
     where: { id: categoryId },
     data: {
       status,
-      approvedBy: adminId
+      approvedBy: status === 'APPROVED' || status === 'REJECTED' ? adminId : null
     }
   });
 };

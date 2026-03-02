@@ -11,6 +11,11 @@ export const getApprovedCategories = asyncHandler(async (_req, res) => {
   return res.status(200).json({ success: true, data: result });
 });
 
+export const getAllCategories = asyncHandler(async (req, res) => {
+  const result = await service.getAllCategories(req.query);
+  return res.status(200).json({ success: true, data: result });
+});
+
 export const getMyCategories = asyncHandler(async (req, res) => {
   const result = await service.getMyCategories(req.user.id, req.query);
   return res.status(200).json({ success: true, data: result });

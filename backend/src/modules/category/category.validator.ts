@@ -13,8 +13,8 @@ export const createCategoryValidator = [
 export const updateCategoryStatusValidator = [
   param('id').isUUID().withMessage('Category id must be a UUID'),
   body('status')
-    .isIn(['APPROVED', 'REJECTED'])
-    .withMessage('Status must be APPROVED or REJECTED')
+    .isIn(['PENDING', 'APPROVED', 'REJECTED'])
+    .withMessage('Status must be PENDING, APPROVED or REJECTED')
 ];
 
 export const getMyCategoriesValidator = [
@@ -30,6 +30,18 @@ export const getMyCategoriesValidator = [
 ];
 
 export const getApprovedCategoriesValidator = [
+  query('q')
+    .optional()
+    .isString()
+    .isLength({ max: 100 })
+    .withMessage('Search query max length is 100')
+];
+
+export const getAllCategoriesValidator = [
+  query('status')
+    .optional()
+    .isIn(['ALL', 'PENDING', 'APPROVED', 'REJECTED'])
+    .withMessage('Status must be ALL, PENDING, APPROVED or REJECTED'),
   query('q')
     .optional()
     .isString()
