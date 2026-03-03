@@ -9,9 +9,13 @@ datasource db {
 }
 
 enum Role {
-  JOB_POSTER
-  JOB_PICKER
+  USER
   ADMIN
+}
+
+enum UserMode {
+  JOB_PICKER
+  JOB_POSTER
 }
 
 enum UserStatus {
@@ -62,7 +66,8 @@ model User {
   address        String?
   avatar         String?
   bio            String?
-  role           Role              @default(JOB_PICKER)
+  role           Role              @default(USER)
+  userMode       UserMode          @default(JOB_PICKER)
   status         UserStatus        @default(ACTIVE)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
@@ -74,6 +79,7 @@ model User {
   recvMessages   ChatMessage[]     @relation("ChatReceiver")
 
   @@index([role])
+  @@index([userMode])
   @@index([status])
 }
 
