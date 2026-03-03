@@ -2614,7 +2614,50 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, styles, colors
   );
 }
 
-function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenCategories, onRequestLogout, styles, colors }) {
+function UserModePage({ user, onBack, onChangeMode, isChangingMode, styles, colors }) {
+  const currentMode = user?.userMode || 'JOB_PICKER';
+
+  return (
+    <View style={styles.settingsScreen}>
+      <View style={styles.settingsNav}>
+        <Pressable style={styles.settingsBackBtn} onPress={onBack}>
+          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          <Text style={styles.settingsBackText}>Settings</Text>
+        </Pressable>
+        <Text style={styles.settingsNavTitle}>Switch Mode</Text>
+        <View style={styles.settingsNavRight} />
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        <View style={styles.profileEditCard}>
+          <Text style={styles.profileSectionTitle}>Choose Your Work Mode</Text>
+          <Text style={styles.profileHint}>
+            Job Poster can create jobs. Job Picker can browse and apply jobs.
+          </Text>
+          <View style={[styles.genderRow, { marginTop: 12 }]}>
+            {['JOB_PICKER', 'JOB_POSTER'].map((mode) => (
+              <Pressable
+                key={mode}
+                style={[styles.genderPill, currentMode === mode && styles.genderPillActive]}
+                onPress={() => onChangeMode(mode)}
+                disabled={isChangingMode || currentMode === mode}
+              >
+                <Text style={[styles.genderPillText, currentMode === mode && styles.genderPillTextActive]}>
+                  {mode === 'JOB_PICKER' ? 'Job Picker' : 'Job Poster'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={[styles.profileReadOnly, { marginTop: 12 }]}>
+            {isChangingMode ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenMode, onOpenCategories, onRequestLogout, styles, colors }) {
   return (
     <View style={styles.settingsScreen}>
       <View style={styles.settingsNav}>
@@ -2660,6 +2703,16 @@ function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenCate
           styles={styles}
           colors={colors}
         />
+        {user?.role !== 'ADMIN' ? (
+          <SettingsOption
+            icon="swap-horizontal-outline"
+            title="Switch Mode"
+            subtitle={`Current: ${user?.userMode === 'JOB_POSTER' ? 'Job Poster' : 'Job Picker'}`}
+            onPress={onOpenMode}
+            styles={styles}
+            colors={colors}
+          />
+        ) : null}
         <SettingsOption
           icon="layers-outline"
           title="Categories"
@@ -2714,6 +2767,7 @@ function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenCate
 
 export {
   ProfilePage,
+  UserModePage,
   CategoryPage,
   AdminUsersPage,
   AdminModerationPage,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AdminCategoriesPage, CategoryPage, ProfilePage, SettingsPage } from '../tabScreens';
+import { AdminCategoriesPage, CategoryPage, ProfilePage, SettingsPage, UserModePage } from '../tabScreens';
 
 export function SettingsTab({
   settingsPage,
@@ -8,14 +8,18 @@ export function SettingsTab({
   themeMode,
   setThemeMode,
   onOpenProfile,
+  onOpenMode,
   onBackFromProfile,
+  onBackFromMode,
   onBackFromCategories,
   onRequestLogout,
   onOpenAvatarOptions,
   onOpenAvatarPreview,
   onSaveProfile,
+  onChangeMode,
   onOpenCategories,
   isSavingProfile,
+  isChangingMode,
   isUploadingAvatar,
   categoriesTab,
   setCategoriesTab,
@@ -52,6 +56,19 @@ export function SettingsTab({
         onSaveProfile={onSaveProfile}
         isSavingProfile={isSavingProfile}
         isUploadingAvatar={isUploadingAvatar}
+        styles={styles}
+        colors={colors}
+      />
+    );
+  }
+
+  if (settingsPage === 'mode' && userRole !== 'ADMIN') {
+    return (
+      <UserModePage
+        user={user}
+        onBack={onBackFromMode}
+        onChangeMode={onChangeMode}
+        isChangingMode={isChangingMode}
         styles={styles}
         colors={colors}
       />
@@ -105,6 +122,7 @@ export function SettingsTab({
       themeMode={themeMode}
       setThemeMode={setThemeMode}
       onOpenProfile={onOpenProfile}
+      onOpenMode={onOpenMode}
       onOpenCategories={onOpenCategories}
       onRequestLogout={onRequestLogout}
       styles={styles}

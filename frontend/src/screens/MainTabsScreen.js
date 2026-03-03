@@ -118,6 +118,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [webCroppedPixels, setWebCroppedPixels] = useState(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isChangingMode, setIsChangingMode] = useState(false);
   const [isCreatingJob, setIsCreatingJob] = useState(false);
   const [isMyJobsLoading, setIsMyJobsLoading] = useState(false);
   const [myJobs, setMyJobs] = useState([]);
@@ -168,6 +169,9 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [debouncedAdminCategorySearch, setDebouncedAdminCategorySearch] = useState('');
   const [adminCategoryFilter, setAdminCategoryFilter] = useState('ALL');
   const [adminCategoryDraft, setAdminCategoryDraft] = useState({ name: '', description: '' });
+  const [userCategoryDraft, setUserCategoryDraft] = useState({ name: '', description: '' });
+  const [showUserCategoryCreateModal, setShowUserCategoryCreateModal] = useState(false);
+  const [isCreatingUserCategory, setIsCreatingUserCategory] = useState(false);
   const [localUser, setLocalUser] = useState(user || null);
   const [popup, setPopup] = useState({ visible: false, title: '', message: '', type: 'error' });
   const contentFade = useRef(new Animated.Value(1)).current;
@@ -499,6 +503,39 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       showPopup('Update Failed', error?.message || 'Unable to update profile right now.');
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const changeUserMode = async (nextMode) => {
+    if (!token) {
+      showPopup('Session Expired', 'Please login again to update mode.');
+      return;
+    }
+    if (userRole === 'ADMIN') return;
+
+    const normalizedMode = String(nextMode || '').toUpperCase();
+    if (!['JOB_PICKER', 'JOB_POSTER'].includes(normalizedMode)) return;
+    if (userMode === normalizedMode) return;
+
+    try {
+      setIsChangingMode(true);
+      const response = await updateProfile({
+        token,
+        payload: { userMode: normalizedMode }
+      });
+      const updatedUser = response?.data || null;
+      if (updatedUser) {
+        setLocalUser(updatedUser);
+        if (onUserUpdated) {
+          await onUserUpdated(updatedUser);
+        }
+      }
+      showPopup('Mode Updated', `You are now using ${normalizedMode === 'JOB_POSTER' ? 'Job Poster' : 'Job Picker'} mode.`, 'success');
+      switchSettingsPage('main');
+    } catch (error) {
+      showPopup('Update Failed', error?.message || 'Unable to switch mode right now.');
+    } finally {
+      setIsChangingMode(false);
     }
   };
 
@@ -867,6 +904,38 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
+  const createUserCategory = async () => {
+    if (!token) {
+      showPopup('Session Expired', 'Please login again to create category.');
+      return false;
+    }
+    const name = String(userCategoryDraft.name || '').trim();
+    const description = String(userCategoryDraft.description || '').trim();
+    if (!name || !description) {
+      showPopup('Missing Fields', 'Please enter both name and description.', 'warning');
+      return false;
+    }
+
+    try {
+      setIsCreatingUserCategory(true);
+      await createCategory({
+        token,
+        payload: { name, description }
+      });
+      setShowUserCategoryCreateModal(false);
+      setUserCategoryDraft({ name: '', description: '' });
+      setCategoriesTab('mine');
+      await fetchCategories({ forceLoader: true });
+      showPopup('Category Created', 'Category submitted for review.', 'success');
+      return true;
+    } catch (error) {
+      showPopup('Create Failed', error?.message || 'Unable to create category right now.');
+      return false;
+    } finally {
+      setIsCreatingUserCategory(false);
+    }
+  };
+
   const updateAdminCategoryStatus = async (categoryId, status) => {
     if (!token || userRole !== 'ADMIN') return;
     try {
@@ -1081,13 +1150,17 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           themeMode={themeMode}
           setThemeMode={setThemeMode}
           onOpenProfile={() => switchSettingsPage('profile')}
+          onOpenMode={() => switchSettingsPage('mode')}
           onBackFromProfile={() => switchSettingsPage('main')}
+          onBackFromMode={() => switchSettingsPage('main')}
           onBackFromCategories={() => switchSettingsPage('main')}
           onRequestLogout={() => setShowLogoutConfirm(true)}
           onOpenAvatarOptions={() => setShowAvatarOptions(true)}
           onOpenAvatarPreview={() => setShowAvatarPreview(true)}
           onSaveProfile={saveProfileDetails}
+          onChangeMode={changeUserMode}
           isSavingProfile={isSavingProfile}
+          isChangingMode={isChangingMode}
           onOpenCategories={() => switchSettingsPage('categories')}
           categoriesTab={categoriesTab}
           setCategoriesTab={setCategoriesTab}
@@ -1143,10 +1216,61 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       </Animated.View>
 
       {activeTab === 'settings' && settingsPage === 'categories' && userRole !== 'ADMIN' ? (
-        <Pressable style={styles.categoryFab} onPress={() => setActiveTab('create')}>
+        <Pressable
+          style={styles.categoryFab}
+          onPress={() => {
+            setShowUserCategoryCreateModal(true);
+          }}
+        >
           <Ionicons name="add" size={28} color="#FFFFFF" />
         </Pressable>
       ) : null}
+
+      <Modal
+        visible={showUserCategoryCreateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowUserCategoryCreateModal(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowUserCategoryCreateModal(false)}>
+          <Pressable style={styles.optionModal} onPress={() => {}}>
+            <View style={styles.adminSectionHeader}>
+              <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+              <Text style={styles.adminCreateCategoryTitle}>Create Category</Text>
+            </View>
+            <TextInput
+              value={userCategoryDraft.name}
+              onChangeText={(value) => setUserCategoryDraft((prev) => ({ ...prev, name: value }))}
+              placeholder="Category name"
+              placeholderTextColor={colors.textSecondary}
+              style={styles.categoryCreateInput}
+            />
+            <TextInput
+              value={userCategoryDraft.description}
+              onChangeText={(value) => setUserCategoryDraft((prev) => ({ ...prev, description: value }))}
+              placeholder="Category description"
+              placeholderTextColor={colors.textSecondary}
+              style={[styles.categoryCreateInput, styles.categoryCreateDescription]}
+              multiline
+            />
+            <View style={styles.optionActionsRow}>
+              <Pressable
+                style={[styles.optionCancel, styles.optionActionBtn]}
+                onPress={() => setShowUserCategoryCreateModal(false)}
+              >
+                <Text style={styles.optionCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtnPrimary, styles.optionActionBtn, isCreatingUserCategory ? styles.modalBtnDisabled : null]}
+                onPress={createUserCategory}
+                disabled={isCreatingUserCategory}
+              >
+                <Text style={styles.modalBtnPrimaryText}>{isCreatingUserCategory ? 'Creating...' : 'Create'}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={Boolean(selectedMyJob)} transparent animationType="fade" onRequestClose={() => setSelectedMyJob(null)}>
         <View style={styles.modalBackdrop}>

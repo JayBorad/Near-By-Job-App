@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { clearSession, loadSession, saveSession } from './sessionStorage';
 
 const DEFAULT_WEB_API_BASE_URL = 'http://localhost:8000/api/v1';
 const DEFAULT_NATIVE_API_BASE_URL = 'http://192.168.31.157:8000/api/v1';
@@ -10,13 +11,64 @@ const API_BASE_URL = Platform.OS === 'web'
   ? (WEB_ENV_URL || DEFAULT_WEB_API_BASE_URL)
   : (NATIVE_ENV_URL || DEFAULT_NATIVE_API_BASE_URL);
 
-async function apiRequest(path, options = {}) {
+let refreshInFlight = null;
+
+const isTokenExpiredMessage = (message) => {
+  const normalized = String(message || '').toLowerCase();
+  return normalized.includes('invalid or expired token') || normalized.includes('jwt expired');
+};
+
+async function requestTokenRefresh() {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const current = await loadSession();
+    const refreshToken = current?.refreshToken;
+    if (!refreshToken) {
+      throw new Error('Session expired. Please login again.');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      await clearSession();
+      throw new Error(data?.message || 'Session expired. Please login again.');
+    }
+
+    const nextToken = data?.data?.accessToken;
+    if (!nextToken) {
+      await clearSession();
+      throw new Error('Session expired. Please login again.');
+    }
+
+    await saveSession({
+      token: nextToken,
+      refreshToken: data?.data?.refreshToken || refreshToken,
+      user: data?.data?.user || current?.user || null
+    });
+    return nextToken;
+  })();
+
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
+async function apiRequest(path, options = {}, retryOnAuthError = true) {
+  const requestHeaders = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  };
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    },
+    headers: requestHeaders,
     body: options.body ? JSON.stringify(options.body) : undefined
   });
 
@@ -24,6 +76,23 @@ async function apiRequest(path, options = {}) {
 
   if (!response.ok) {
     const message = data?.message || 'Request failed';
+    const hasAuthHeader = Boolean(requestHeaders.Authorization);
+    const canRetryRefresh = retryOnAuthError && hasAuthHeader && path !== '/auth/refresh-token' && isTokenExpiredMessage(message);
+    if (canRetryRefresh) {
+      const nextToken = await requestTokenRefresh();
+      const retriedHeaders = {
+        ...requestHeaders,
+        Authorization: `Bearer ${nextToken}`
+      };
+      return apiRequest(
+        path,
+        {
+          ...options,
+          headers: retriedHeaders
+        },
+        false
+      );
+    }
     throw new Error(message);
   }
 
