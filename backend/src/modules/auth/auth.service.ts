@@ -38,7 +38,7 @@ export const signUp = async (payload) => {
   const requestedGender = String(payload?.gender || '').toUpperCase();
   const normalizedGender = Object.values(Gender).includes(requestedGender as Gender)
     ? (requestedGender as Gender)
-    : null;
+    : Gender.MALE;
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const normalizedName = String(name || '').trim();
   const normalizedPhone = String(phone || '').trim();
@@ -296,7 +296,7 @@ export const syncUserFromToken = async (payload) => {
         avatar: data.user.user_metadata?.avatar_url || null,
         role: Role.USER,
         userMode: UserMode.JOB_PICKER,
-        gender: null
+        gender: Gender.MALE
       }
     });
   }
