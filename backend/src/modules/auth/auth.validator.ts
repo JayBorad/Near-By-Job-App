@@ -12,10 +12,10 @@ export const signUpValidator = [
   body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
   body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
   body('phone').trim().notEmpty().withMessage('Phone is required'),
-  body('role')
+  body('mode')
     .optional()
     .isIn(['JOB_POSTER', 'JOB_PICKER'])
-    .withMessage('role must be JOB_POSTER or JOB_PICKER'),
+    .withMessage('mode must be JOB_POSTER or JOB_PICKER'),
   body('gender')
     .optional()
     .isIn(['MALE', 'FEMALE', 'OTHER'])

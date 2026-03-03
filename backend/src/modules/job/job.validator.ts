@@ -16,6 +16,7 @@ export const updateJobValidator = [
   param('id').isUUID().withMessage('Invalid job id'),
   body('title').optional().trim().notEmpty(),
   body('description').optional().trim().notEmpty(),
+  body('categoryId').optional().isUUID().withMessage('Valid categoryId is required'),
   body('budget').optional().isFloat({ gt: 0 }),
   body('jobType').optional().isIn(['ONE_TIME', 'PART_TIME', 'FULL_TIME']),
   body('latitude').optional().isFloat({ min: -90, max: 90 }),

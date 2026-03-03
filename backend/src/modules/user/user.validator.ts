@@ -20,6 +20,10 @@ export const updateProfileValidator = [
     .optional()
     .isIn(['MALE', 'FEMALE', 'OTHER'])
     .withMessage('Gender must be MALE, FEMALE or OTHER'),
+  body('userMode')
+    .optional()
+    .isIn(['JOB_POSTER', 'JOB_PICKER'])
+    .withMessage('userMode must be JOB_POSTER or JOB_PICKER'),
   body('address').optional().isString().isLength({ max: 250 }).withMessage('Address max length is 250')
 ];
 
@@ -41,12 +45,56 @@ export const updateAvatarValidator = [
 
 export const userIdParamValidator = [param('id').isUUID().withMessage('Valid user id is required')];
 
+export const updateUserAvatarByAdminValidator = [
+  ...userIdParamValidator,
+  ...updateAvatarValidator
+];
+
 export const updateUserAccessValidator = [
   ...userIdParamValidator,
   body('role')
     .optional()
-    .isIn(['JOB_POSTER', 'JOB_PICKER', 'ADMIN'])
-    .withMessage('role must be JOB_POSTER, JOB_PICKER, or ADMIN'),
+    .isIn(['USER', 'ADMIN'])
+    .withMessage('role must be USER or ADMIN'),
+  body('userMode')
+    .optional()
+    .isIn(['JOB_POSTER', 'JOB_PICKER'])
+    .withMessage('userMode must be JOB_POSTER or JOB_PICKER'),
+  body('status')
+    .optional()
+    .isIn(['ACTIVE', 'DELETED'])
+    .withMessage('status must be ACTIVE or DELETED')
+];
+
+export const updateUserByAdminValidator = [
+  ...userIdParamValidator,
+  body('name').optional().trim().notEmpty().withMessage('Name cannot be empty'),
+  body('username')
+    .optional()
+    .trim()
+    .isLength({ min: 3, max: 30 })
+    .withMessage('Username must be 3-30 characters')
+    .matches(/^[a-zA-Z0-9._]+$/)
+    .withMessage('Username can only contain letters, numbers, dots, and underscores'),
+  body('phone').optional().trim().notEmpty().withMessage('Phone cannot be empty'),
+  body('bio').optional().isString().isLength({ max: 500 }).withMessage('Bio max length is 500'),
+  body('age')
+    .optional({ values: 'falsy' })
+    .isInt({ min: 13, max: 120 })
+    .withMessage('Age must be between 13 and 120'),
+  body('gender')
+    .optional()
+    .isIn(['MALE', 'FEMALE', 'OTHER'])
+    .withMessage('Gender must be MALE, FEMALE or OTHER'),
+  body('address').optional().isString().isLength({ max: 250 }).withMessage('Address max length is 250'),
+  body('role')
+    .optional()
+    .isIn(['USER', 'ADMIN'])
+    .withMessage('role must be USER or ADMIN'),
+  body('userMode')
+    .optional()
+    .isIn(['JOB_POSTER', 'JOB_PICKER'])
+    .withMessage('userMode must be JOB_POSTER or JOB_PICKER'),
   body('status')
     .optional()
     .isIn(['ACTIVE', 'DELETED'])
