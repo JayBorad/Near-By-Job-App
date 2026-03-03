@@ -1,32 +1,28 @@
 import React from 'react';
-import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
-import LottieView from 'lottie-react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-const DEFAULT_LOTTIE_URI = 'https://assets2.lottiefiles.com/packages/lf20_lnk9yxp7.json';
+function LoaderVisual({ size = 86 }) {
+  const ringSize = Math.max(56, size);
+  const coreSize = Math.round(ringSize * 0.62);
+  const dotSize = Math.round(ringSize * 0.1);
 
-export function LottieLoader({
-  visible,
-  text = 'Loading...',
-  size = 86,
-  inline = false,
-  sourceUri = DEFAULT_LOTTIE_URI,
-  showFallback = true,
-  cardStyle,
-  textStyle
-}) {
+  return (
+    <View style={[styles.visualWrap, { width: ringSize + 22, height: ringSize + 22 }]}>
+      <View style={[styles.outerRing, { width: ringSize, height: ringSize, borderRadius: ringSize / 2 }]} />
+      <View style={[styles.innerCore, { width: coreSize, height: coreSize, borderRadius: coreSize / 2 }]}>
+        <ActivityIndicator size="large" color="#0F766E" />
+      </View>
+      <View style={[styles.dot, { width: dotSize, height: dotSize, borderRadius: dotSize / 2, top: 6, left: ringSize / 2 + 3 }]} />
+      <View style={[styles.dotSoft, { width: dotSize, height: dotSize, borderRadius: dotSize / 2, bottom: 7, right: ringSize / 2 + 2 }]} />
+    </View>
+  );
+}
+
+export function LottieLoader({ visible, text = 'Loading...', size = 86, inline = false, cardStyle, textStyle }) {
   if (inline) {
     return (
       <View style={[styles.inlineCard, cardStyle]}>
-        <View style={[styles.lottieWrap, { width: size, height: size }]}>
-          <LottieView
-            autoPlay
-            loop
-            source={{ uri: sourceUri }}
-            style={{ width: size, height: size }}
-            renderMode="AUTOMATIC"
-          />
-          {showFallback ? <ActivityIndicator style={styles.fallback} size="large" color="#0F766E" /> : null}
-        </View>
+        <LoaderVisual size={size} />
         {!!text ? <Text style={[styles.text, textStyle]}>{text}</Text> : null}
       </View>
     );
@@ -35,69 +31,90 @@ export function LottieLoader({
   if (!visible) return null;
 
   return (
-    <Modal transparent animationType="fade" visible={visible}>
+    <View style={styles.pageOverlay}>
       <View style={styles.backdrop}>
         <View style={[styles.card, cardStyle]}>
-          <View style={styles.lottieWrap}>
-            <LottieView
-              autoPlay
-              loop
-              source={{ uri: sourceUri }}
-              style={styles.lottie}
-              renderMode="AUTOMATIC"
-            />
-            {showFallback ? <ActivityIndicator style={styles.fallback} size="large" color="#0F766E" /> : null}
-          </View>
+          <LoaderVisual size={size} />
           {!!text ? <Text style={[styles.text, textStyle]}>{text}</Text> : null}
+          <Text style={styles.subText}>This will finish in a moment</Text>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  pageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 999
+  },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backgroundColor: 'rgba(2, 6, 23, 0.48)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24
   },
   card: {
     width: '100%',
-    maxWidth: 260,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    maxWidth: 290,
+    borderRadius: 22,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center'
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 14
   },
   inlineCard: {
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  lottieWrap: {
-    width: 86,
-    height: 86,
+  visualWrap: {
     alignItems: 'center',
     justifyContent: 'center'
   },
-  lottie: {
-    width: 86,
-    height: 86
+  outerRing: {
+    position: 'absolute',
+    borderWidth: 3,
+    borderColor: '#99F6E4',
+    backgroundColor: '#ECFEFF'
   },
-  fallback: {
-    position: 'absolute'
+  innerCore: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CFFAFE'
+  },
+  dot: {
+    position: 'absolute',
+    backgroundColor: '#14B8A6'
+  },
+  dotSoft: {
+    position: 'absolute',
+    backgroundColor: '#67E8F9'
   },
   text: {
-    marginTop: 4,
+    marginTop: 8,
     color: '#0F172A',
-    fontSize: 13,
-    fontWeight: '700'
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center'
+  },
+  subText: {
+    marginTop: 4,
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center'
   }
 });

@@ -29,7 +29,7 @@ export function SignUpScreen({ onSwitch, onSignUpSuccess }) {
   const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('JOB_PICKER');
+  const [mode, setMode] = useState('JOB_PICKER');
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [codeSearch, setCodeSearch] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -177,7 +177,7 @@ export function SignUpScreen({ onSwitch, onSignUpSuccess }) {
         email: email.trim().toLowerCase(),
         phone: `${countryCode}${phone.trim()}`,
         password: password.trim(),
-        role,
+        mode,
         ...(redirectTo ? { redirectTo } : {})
       });
       setLoading(false);
@@ -277,18 +277,18 @@ export function SignUpScreen({ onSwitch, onSignUpSuccess }) {
             <Text style={styles.roleLabel}>I want to join as</Text>
             <View style={styles.roleRow}>
               <Pressable
-                style={[styles.roleChip, role === 'JOB_PICKER' && styles.roleChipActive]}
-                onPress={() => setRole('JOB_PICKER')}
+                style={[styles.roleChip, mode === 'JOB_PICKER' && styles.roleChipActive]}
+                onPress={() => setMode('JOB_PICKER')}
               >
-                <Text style={[styles.roleChipText, role === 'JOB_PICKER' && styles.roleChipTextActive]}>
+                <Text style={[styles.roleChipText, mode === 'JOB_PICKER' && styles.roleChipTextActive]}>
                   Job Picker
                 </Text>
               </Pressable>
               <Pressable
-                style={[styles.roleChip, role === 'JOB_POSTER' && styles.roleChipActive]}
-                onPress={() => setRole('JOB_POSTER')}
+                style={[styles.roleChip, mode === 'JOB_POSTER' && styles.roleChipActive]}
+                onPress={() => setMode('JOB_POSTER')}
               >
-                <Text style={[styles.roleChipText, role === 'JOB_POSTER' && styles.roleChipTextActive]}>
+                <Text style={[styles.roleChipText, mode === 'JOB_POSTER' && styles.roleChipTextActive]}>
                   Job Poster
                 </Text>
               </Pressable>

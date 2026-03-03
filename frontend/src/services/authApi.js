@@ -136,6 +136,16 @@ export async function createJob({ token, payload }) {
   });
 }
 
+export async function updateJob({ token, jobId, payload }) {
+  return apiRequest(`/jobs/${jobId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: payload
+  });
+}
+
 export async function getAllJobs({ token, page = 1, limit = 20, status = 'ALL' }) {
   const query = new URLSearchParams({
     page: String(page),
@@ -174,12 +184,13 @@ export async function updateCategoryStatus({ token, categoryId, status }) {
   });
 }
 
-export async function getAllUsers({ token, page = 1, limit = 20, role, status, q }) {
+export async function getAllUsers({ token, page = 1, limit = 20, role, mode, status, q }) {
   const query = new URLSearchParams({
     page: String(page),
     limit: String(limit)
   });
   if (role) query.set('role', role);
+  if (mode) query.set('mode', mode);
   if (status) query.set('status', status);
   if (q) query.set('q', q);
 
@@ -201,6 +212,26 @@ export async function updateUserAccess({ token, userId, payload }) {
   });
 }
 
+export async function updateUserByAdmin({ token, userId, payload }) {
+  return apiRequest(`/users/${userId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: payload
+  });
+}
+
+export async function updateUserAvatarByAdmin({ token, userId, payload }) {
+  return apiRequest(`/users/${userId}/avatar`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: payload
+  });
+}
+
 export async function updatePassword({ token, password }) {
   return apiRequest('/auth/update-password', {
     method: 'POST',
@@ -208,5 +239,24 @@ export async function updatePassword({ token, password }) {
       Authorization: `Bearer ${token}`
     },
     body: { password }
+  });
+}
+
+export async function applyToJob({ token, jobId }) {
+  return apiRequest('/applications', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: { jobId }
+  });
+}
+
+export async function getMyApplications({ token }) {
+  return apiRequest('/applications/me', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
   });
 }
