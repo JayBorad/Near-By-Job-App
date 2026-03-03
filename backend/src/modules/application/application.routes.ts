@@ -2,6 +2,7 @@ import express from 'express';
 import * as controller from './application.controller.js';
 import { authenticate } from '../../middleware/auth.middleware.js';
 import { authorizeRoles } from '../../middleware/role.middleware.js';
+import { authorizeUserModes } from '../../middleware/user-mode.middleware.js';
 import { validate } from '../../middleware/validation.middleware.js';
 import {
   applyJobValidator,
@@ -11,11 +12,20 @@ import {
 
 const router = express.Router();
 
-router.post('/', authenticate, authorizeRoles('JOB_PICKER'), applyJobValidator, validate, controller.applyJob);
+router.post(
+  '/',
+  authenticate,
+  authorizeRoles('USER', 'ADMIN'),
+  authorizeUserModes('JOB_PICKER'),
+  applyJobValidator,
+  validate,
+  controller.applyJob
+);
 router.patch(
   '/:id/accept',
   authenticate,
-  authorizeRoles('JOB_POSTER', 'ADMIN'),
+  authorizeRoles('USER', 'ADMIN'),
+  authorizeUserModes('JOB_POSTER'),
   applicationIdValidator,
   validate,
   controller.acceptApplication
@@ -23,7 +33,8 @@ router.patch(
 router.patch(
   '/:id/reject',
   authenticate,
-  authorizeRoles('JOB_POSTER', 'ADMIN'),
+  authorizeRoles('USER', 'ADMIN'),
+  authorizeUserModes('JOB_POSTER'),
   applicationIdValidator,
   validate,
   controller.rejectApplication
@@ -31,11 +42,12 @@ router.patch(
 router.get(
   '/job/:jobId',
   authenticate,
-  authorizeRoles('JOB_POSTER', 'ADMIN'),
+  authorizeRoles('USER', 'ADMIN'),
+  authorizeUserModes('JOB_POSTER'),
   jobIdParamValidator,
   validate,
   controller.getApplicationsByJob
 );
-router.get('/me', authenticate, authorizeRoles('JOB_PICKER'), controller.getAppliedJobsByUser);
+router.get('/me', authenticate, authorizeRoles('USER', 'ADMIN'), authorizeUserModes('JOB_PICKER'), controller.getAppliedJobsByUser);
 
 export default router;

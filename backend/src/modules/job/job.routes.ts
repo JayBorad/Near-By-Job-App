@@ -2,6 +2,7 @@ import express from 'express';
 import * as controller from './job.controller.js';
 import { authenticate } from '../../middleware/auth.middleware.js';
 import { authorizeRoles } from '../../middleware/role.middleware.js';
+import { authorizeUserModes } from '../../middleware/user-mode.middleware.js';
 import { ensureJobOwner } from '../../middleware/ownership.middleware.js';
 import { validate } from '../../middleware/validation.middleware.js';
 import {
@@ -19,7 +20,8 @@ router.get('/:id', jobIdValidator, validate, controller.getJobById);
 router.post(
   '/',
   authenticate,
-  authorizeRoles('JOB_POSTER', 'ADMIN'),
+  authorizeRoles('USER', 'ADMIN'),
+  authorizeUserModes('JOB_POSTER'),
   createJobValidator,
   validate,
   controller.createJob
@@ -27,7 +29,8 @@ router.post(
 router.patch(
   '/:id',
   authenticate,
-  authorizeRoles('JOB_POSTER', 'ADMIN'),
+  authorizeRoles('USER', 'ADMIN'),
+  authorizeUserModes('JOB_POSTER'),
   updateJobValidator,
   validate,
   ensureJobOwner,
@@ -36,7 +39,8 @@ router.patch(
 router.delete(
   '/:id',
   authenticate,
-  authorizeRoles('JOB_POSTER', 'ADMIN'),
+  authorizeRoles('USER', 'ADMIN'),
+  authorizeUserModes('JOB_POSTER'),
   jobIdValidator,
   validate,
   ensureJobOwner,

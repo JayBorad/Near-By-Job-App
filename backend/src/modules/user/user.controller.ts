@@ -16,6 +16,11 @@ export const updateAvatar = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: 'Avatar updated', data: result });
 });
 
+export const updateUserAvatarByAdmin = asyncHandler(async (req, res) => {
+  const result = await service.updateUserAvatarByAdmin(req.user.id, req.params.id, req.body);
+  return res.status(200).json({ success: true, message: 'User avatar updated', data: result });
+});
+
 export const softDeleteAccount = asyncHandler(async (req, res) => {
   const result = await service.softDeleteAccount(req.user.id);
   return res.status(200).json({ success: true, data: result });
@@ -29,4 +34,9 @@ export const getAllUsers = asyncHandler(async (req, res) => {
 export const updateUserAccess = asyncHandler(async (req, res) => {
   const result = await service.updateUserAccess(req.user.id, req.params.id, req.body);
   return res.status(200).json({ success: true, message: 'User access updated', data: result });
+});
+
+export const updateUserByAdmin = asyncHandler(async (req, res) => {
+  const result = await service.updateUserByAdmin(req.user.id, req.params.id, req.body);
+  return res.status(200).json({ success: true, message: 'User updated', data: result });
 });

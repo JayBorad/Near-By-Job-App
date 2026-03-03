@@ -1,7 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { supabase, supabaseAdmin } from '../../config/supabase.js';
 import ApiError from '../../utils/ApiError.js';
-import { Gender, Prisma, Role } from '@prisma/client';
+import { Gender, Prisma, Role, UserMode } from '@prisma/client';
 
 const normalizeUsername = (input) =>
   String(input || '')
@@ -32,8 +32,9 @@ const makeUniqueUsername = async (requested, email) => {
 
 export const signUp = async (payload) => {
   const { name, username, email, password, phone, redirectTo } = payload;
-  const requestedRole = String(payload?.role || 'JOB_PICKER').toUpperCase();
-  const normalizedRole = requestedRole === Role.JOB_POSTER ? Role.JOB_POSTER : Role.JOB_PICKER;
+  const normalizedRole = Role.USER;
+  const requestedMode = String(payload?.mode || 'JOB_PICKER').toUpperCase();
+  const normalizedMode = requestedMode === UserMode.JOB_POSTER ? UserMode.JOB_POSTER : UserMode.JOB_PICKER;
   const requestedGender = String(payload?.gender || '').toUpperCase();
   const normalizedGender = Object.values(Gender).includes(requestedGender as Gender)
     ? (requestedGender as Gender)
@@ -71,7 +72,7 @@ export const signUp = async (payload) => {
     email: normalizedEmail,
     password,
     options: {
-      data: { name: normalizedName, phone: normalizedPhone, username: finalUsername, role: normalizedRole },
+      data: { name: normalizedName, phone: normalizedPhone, username: finalUsername, role: normalizedRole, mode: normalizedMode },
       ...(redirectTo ? { emailRedirectTo: redirectTo } : {})
     }
   });
@@ -101,6 +102,7 @@ export const signUp = async (payload) => {
         email: normalizedEmail,
         phone: normalizedPhone,
         role: normalizedRole,
+        userMode: normalizedMode,
         gender: normalizedGender
       }
     });
@@ -174,6 +176,7 @@ export const signIn = async ({ identifier, email, password }) => {
       bio: true,
       avatar: true,
       role: true,
+      userMode: true,
       status: true
     }
   });
@@ -225,6 +228,7 @@ export const refreshTokenSession = async ({ refreshToken }) => {
       bio: true,
       avatar: true,
       role: true,
+      userMode: true,
       status: true
     }
   });
@@ -290,7 +294,8 @@ export const syncUserFromToken = async (payload) => {
         email: data.user.email,
         phone: data.user.phone || 'N/A',
         avatar: data.user.user_metadata?.avatar_url || null,
-        role: Role.JOB_PICKER,
+        role: Role.USER,
+        userMode: UserMode.JOB_PICKER,
         gender: null
       }
     });

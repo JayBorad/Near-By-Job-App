@@ -2,9 +2,10 @@ import prisma from '../../config/prisma.js';
 import { supabaseAdmin } from '../../config/supabase.js';
 import ApiError from '../../utils/ApiError.js';
 import { parsePagination } from '../../utils/pagination.js';
-import { Prisma, Role, UserStatus } from '@prisma/client';
+import { Prisma, Role, UserMode, UserStatus } from '@prisma/client';
 
-const ALLOWED_ROLES = new Set([Role.JOB_POSTER, Role.JOB_PICKER, Role.ADMIN]);
+const ALLOWED_ROLES = new Set([Role.USER, Role.ADMIN]);
+const ALLOWED_USER_MODES = new Set([UserMode.JOB_PICKER, UserMode.JOB_POSTER]);
 const ALLOWED_USER_STATUS = new Set([UserStatus.ACTIVE, UserStatus.DELETED]);
 
 const AVATAR_BUCKET = 'avatars';
@@ -35,6 +36,7 @@ const userSelect = {
   avatar: true,
   bio: true,
   role: true,
+  userMode: true,
   status: true,
   createdAt: true,
   updatedAt: true
@@ -141,6 +143,13 @@ export const updateProfile = async (userId, payload) => {
   if ('gender' in payload && (payload.gender === '' || payload.gender === null)) {
     payload.gender = null;
   }
+  if ('userMode' in payload) {
+    const normalizedMode = String(payload.userMode || '').trim().toUpperCase();
+    if (!ALLOWED_USER_MODES.has(normalizedMode as UserMode)) {
+      throw new ApiError(400, 'Invalid user mode');
+    }
+    payload.userMode = normalizedMode as UserMode;
+  }
 
   try {
     return prisma.user.update({
@@ -156,7 +165,7 @@ export const updateProfile = async (userId, payload) => {
   }
 };
 
-export const updateAvatar = async (userId, payload) => {
+const updateAvatarForUser = async (userId, payload) => {
   const { avatarData, avatarUrl, resetAvatar } = payload;
 
   const providedCount = Number(Boolean(avatarData)) + Number(Boolean(avatarUrl)) + Number(Boolean(resetAvatar));
@@ -205,8 +214,11 @@ export const updateAvatar = async (userId, payload) => {
 
   const currentUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { avatar: true }
+    select: { id: true, status: true, avatar: true }
   });
+  if (!currentUser || currentUser.status === 'DELETED') {
+    throw new ApiError(404, 'User not found');
+  }
 
   const updatedUser = await prisma.user.update({
     where: { id: userId },
@@ -223,6 +235,11 @@ export const updateAvatar = async (userId, payload) => {
   return updatedUser;
 };
 
+export const updateAvatar = async (userId, payload) => updateAvatarForUser(userId, payload);
+
+export const updateUserAvatarByAdmin = async (_adminId, userId, payload) =>
+  updateAvatarForUser(userId, payload);
+
 export const softDeleteAccount = async (userId) => {
   await prisma.user.update({
     where: { id: userId },
@@ -237,6 +254,7 @@ export const getAllUsers = async (query) => {
   const searchText = String(query?.q || '').trim();
   const roleFilter = String(query?.role || '').trim().toUpperCase();
   const statusFilter = String(query?.status || '').trim().toUpperCase();
+  const modeFilter = String(query?.mode || '').trim().toUpperCase();
   const where: Prisma.UserWhereInput = {};
 
   if (ALLOWED_ROLES.has(roleFilter as Role)) {
@@ -244,6 +262,9 @@ export const getAllUsers = async (query) => {
   }
   if (ALLOWED_USER_STATUS.has(statusFilter as UserStatus)) {
     where.status = statusFilter as UserStatus;
+  }
+  if (ALLOWED_USER_MODES.has(modeFilter as UserMode)) {
+    where.userMode = modeFilter as UserMode;
   }
   if (searchText) {
     where.OR = [
@@ -268,7 +289,9 @@ export const getAllUsers = async (query) => {
         age: true,
         gender: true,
         address: true,
+        avatar: true,
         role: true,
+        userMode: true,
         status: true,
         createdAt: true,
         updatedAt: true
@@ -295,10 +318,11 @@ export const updateUserAccess = async (adminId, userId, payload) => {
 
   const data: Prisma.UserUpdateInput = {};
   if (payload.role) data.role = payload.role;
+  if (payload.userMode) data.userMode = payload.userMode;
   if (payload.status) data.status = payload.status;
 
   if (!Object.keys(data).length) {
-    throw new ApiError(400, 'At least one of role or status is required');
+    throw new ApiError(400, 'At least one of role, userMode or status is required');
   }
 
   const user = await prisma.user.findUnique({
@@ -307,6 +331,77 @@ export const updateUserAccess = async (adminId, userId, payload) => {
   });
   if (!user || user.status === 'DELETED') {
     throw new ApiError(404, 'User not found');
+  }
+
+  return prisma.user.update({
+    where: { id: userId },
+    data,
+    select: userSelect
+  });
+};
+
+export const updateUserByAdmin = async (adminId, userId, payload) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, status: true }
+  });
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const data: Prisma.UserUpdateInput = {};
+
+  if ('name' in payload) data.name = String(payload.name || '').trim();
+  if ('username' in payload) {
+    const normalizedUsername = String(payload.username || '').trim().toLowerCase();
+    const existingUsernameUser = await prisma.user.findFirst({
+      where: {
+        username: normalizedUsername,
+        id: { not: userId }
+      }
+    });
+    if (existingUsernameUser) {
+      throw new ApiError(409, 'Username is already taken');
+    }
+    data.username = normalizedUsername;
+  }
+  if ('phone' in payload) {
+    const normalizedPhone = String(payload.phone || '').trim();
+    const existingPhoneUser = await prisma.user.findFirst({
+      where: {
+        phone: normalizedPhone,
+        id: { not: userId }
+      }
+    });
+    if (existingPhoneUser) {
+      throw new ApiError(409, 'Phone number is already registered');
+    }
+    data.phone = normalizedPhone;
+  }
+  if ('age' in payload) data.age = payload.age ? Number(payload.age) : null;
+  if ('gender' in payload) data.gender = payload.gender || null;
+  if ('address' in payload) data.address = String(payload.address || '').trim();
+  if ('bio' in payload) data.bio = String(payload.bio || '').trim();
+
+  if ('role' in payload) {
+    if (adminId === userId) {
+      throw new ApiError(400, 'Admin cannot change own role from this endpoint');
+    }
+    data.role = payload.role;
+  }
+  if ('userMode' in payload) {
+    data.userMode = payload.userMode;
+  }
+  if ('status' in payload) {
+    if (adminId === userId) {
+      throw new ApiError(400, 'Admin cannot change own status from this endpoint');
+    }
+    data.status = payload.status;
+  }
+
+  if (!Object.keys(data).length) {
+    throw new ApiError(400, 'No valid fields provided for update');
   }
 
   return prisma.user.update({

@@ -74,7 +74,8 @@ export const getApprovedCategories = async (query) => {
           select: {
             id: true,
             name: true,
-            username: true
+            username: true,
+            role: true
           }
         }
       }
@@ -103,7 +104,8 @@ export const getApprovedCategories = async (query) => {
           select: {
             id: true,
             name: true,
-            username: true
+            username: true,
+            role: true
           }
         }
       }
@@ -135,14 +137,16 @@ export const getAllCategories = async (query) => {
           select: {
             id: true,
             name: true,
-            username: true
+            username: true,
+            role: true
           }
         },
         approver: {
           select: {
             id: true,
             name: true,
-            username: true
+            username: true,
+            role: true
           }
         }
       },
@@ -161,14 +165,16 @@ export const getAllCategories = async (query) => {
           select: {
             id: true,
             name: true,
-            username: true
+            username: true,
+            role: true
           }
         },
         approver: {
           select: {
             id: true,
             name: true,
-            username: true
+            username: true,
+            role: true
           }
         }
       },
