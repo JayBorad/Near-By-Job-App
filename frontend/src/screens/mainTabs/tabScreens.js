@@ -2435,20 +2435,58 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
 function PickerJobsPage({ jobs, isLoading, onRefresh, onApplyJob, isApplying, styles, colors }) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [minBudget, setMinBudget] = useState('');
+  const [maxBudget, setMaxBudget] = useState('');
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
+  const filterSheetAnim = useRef(new Animated.Value(0)).current;
+  const statusOptions = ['ALL', 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+  const parsedMinBudget = Number.parseFloat(minBudget);
+  const parsedMaxBudget = Number.parseFloat(maxBudget);
+  const hasValidMinBudget = Number.isFinite(parsedMinBudget);
+  const hasValidMaxBudget = Number.isFinite(parsedMaxBudget);
+  const hasAnyFilter = statusFilter !== 'ALL' || hasValidMinBudget || hasValidMaxBudget;
+
+  const openFilterSheet = () => {
+    setShowFilterSheet(true);
+    Animated.timing(filterSheetAnim, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true
+    }).start();
+  };
+
+  const closeFilterSheet = () => {
+    Animated.timing(filterSheetAnim, {
+      toValue: 0,
+      duration: 220,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true
+    }).start(({ finished }) => {
+      if (finished) {
+        setShowFilterSheet(false);
+      }
+    });
+  };
+
   const filteredJobs = useMemo(
     () =>
       jobs.filter((job) => {
         const status = String(job?.status || '').toUpperCase();
         const okStatus = statusFilter === 'ALL' || status === statusFilter;
+        const numericBudget = Number(job?.budget);
+        const hasNumericBudget = Number.isFinite(numericBudget);
+        const okMinBudget = !hasValidMinBudget || (hasNumericBudget && numericBudget >= parsedMinBudget);
+        const okMaxBudget = !hasValidMaxBudget || (hasNumericBudget && numericBudget <= parsedMaxBudget);
         const q = query.trim().toLowerCase();
         const okQuery =
           !q ||
           [job?.title, job?.description, job?.category?.name, job?.owner?.name]
             .some((v) => String(v || '').toLowerCase().includes(q));
-        return okStatus && okQuery;
+        return okStatus && okMinBudget && okMaxBudget && okQuery;
       }),
-    [jobs, statusFilter, query]
+    [jobs, statusFilter, query, hasValidMinBudget, hasValidMaxBudget, parsedMinBudget, parsedMaxBudget]
   );
 
   return (
@@ -2474,18 +2512,20 @@ function PickerJobsPage({ jobs, isLoading, onRefresh, onApplyJob, isApplying, st
             style={styles.categorySearchInput}
           />
         </View>
+        <Pressable
+          style={[styles.categoryFilterIconBtn, hasAnyFilter ? styles.categoryFilterIconBtnActive : null]}
+          onPress={openFilterSheet}
+        >
+          <Ionicons name="filter-outline" size={18} color={hasAnyFilter ? '#FFFFFF' : colors.primary} />
+          {hasAnyFilter ? (
+            <View style={styles.adminUserFilterBadge}>
+              <Text style={styles.adminUserFilterBadgeText}>
+                {[statusFilter !== 'ALL', hasValidMinBudget, hasValidMaxBudget].filter(Boolean).length}
+              </Text>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.createPillRow}>
-        {['ALL', 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((value) => (
-          <Pressable
-            key={`picker-status-${value}`}
-            style={[styles.createPill, statusFilter === value && styles.createPillActive]}
-            onPress={() => setStatusFilter(value)}
-          >
-            <Text style={[styles.createPillText, statusFilter === value && styles.createPillTextActive]}>{value}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
         {isLoading ? (
@@ -2525,6 +2565,89 @@ function PickerJobsPage({ jobs, isLoading, onRefresh, onApplyJob, isApplying, st
           <AdminListState mode="empty" title="No jobs found" subtitle="Try changing filters." colors={colors} emptySource={ADMIN_EMPTY_ANIMATION} />
         )}
       </ScrollView>
+
+      <Modal visible={showFilterSheet} transparent animationType="none" onRequestClose={closeFilterSheet}>
+        <Pressable style={styles.bottomSheetBackdrop} onPress={closeFilterSheet}>
+          <Animated.View
+            style={[
+              styles.bottomFilterSheet,
+              {
+                transform: [
+                  {
+                    translateY: filterSheetAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [360, 0]
+                    })
+                  }
+                ],
+                opacity: filterSheetAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.7, 1]
+                })
+              }
+            ]}
+          >
+            <Pressable onPress={() => {}}>
+              <View style={styles.bottomSheetGrabber} />
+              <View style={styles.bottomSheetHeaderRow}>
+                <Text style={styles.optionTitle}>Filters</Text>
+                <Pressable
+                  onPress={() => {
+                    setStatusFilter('ALL');
+                    setMinBudget('');
+                    setMaxBudget('');
+                  }}
+                >
+                  <Text style={styles.bottomSheetResetText}>Reset</Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.bottomSheetLabel}>Status</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.createPillRow}>
+                {statusOptions.map((value) => (
+                  <Pressable
+                    key={`picker-status-${value}`}
+                    style={[styles.createPill, statusFilter === value && styles.createPillActive]}
+                    onPress={() => setStatusFilter(value)}
+                  >
+                    <Text style={[styles.createPillText, statusFilter === value && styles.createPillTextActive]}>{value}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              <Text style={styles.bottomSheetLabel}>Budget Range</Text>
+              <View style={styles.bottomBudgetRow}>
+                <View style={styles.bottomBudgetInputWrap}>
+                  <Text style={styles.bottomBudgetInputLabel}>Min</Text>
+                  <TextInput
+                    value={minBudget}
+                    onChangeText={(value) => setMinBudget(value.replace(/[^\d]/g, ''))}
+                    placeholder="0"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    style={styles.bottomBudgetInput}
+                  />
+                </View>
+                <View style={styles.bottomBudgetInputWrap}>
+                  <Text style={styles.bottomBudgetInputLabel}>Max</Text>
+                  <TextInput
+                    value={maxBudget}
+                    onChangeText={(value) => setMaxBudget(value.replace(/[^\d]/g, ''))}
+                    placeholder="50000"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    style={styles.bottomBudgetInput}
+                  />
+                </View>
+              </View>
+
+              <Pressable style={styles.bottomSheetApplyBtn} onPress={closeFilterSheet}>
+                <Text style={styles.bottomSheetApplyBtnText}>Apply Filters</Text>
+              </Pressable>
+            </Pressable>
+          </Animated.View>
+        </Pressable>
+      </Modal>
 
       <Modal visible={Boolean(selectedJob)} transparent animationType="fade" onRequestClose={() => setSelectedJob(null)}>
         <View style={styles.modalBackdrop}>
