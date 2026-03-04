@@ -591,6 +591,10 @@ export const createStyles = (colors) =>
       alignItems: 'center',
       justifyContent: 'center'
     },
+    categoryFilterIconBtnActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary
+    },
     categoryFilterModal: {
       width: 280,
       borderRadius: 14,
@@ -613,6 +617,83 @@ export const createStyles = (colors) =>
       justifyContent: 'flex-start',
       paddingHorizontal: 16,
       paddingTop: TOP_SAFE_PADDING + 118
+    },
+    bottomSheetBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(2, 6, 23, 0.45)',
+      justifyContent: 'flex-end'
+    },
+    bottomFilterSheet: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 18,
+      borderTopRightRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderBottomWidth: 0,
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: Platform.OS === 'ios' ? 24 : 16
+    },
+    bottomSheetGrabber: {
+      width: 44,
+      height: 5,
+      borderRadius: 4,
+      backgroundColor: colors.border,
+      alignSelf: 'center',
+      marginBottom: 10
+    },
+    bottomSheetHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10
+    },
+    bottomSheetResetText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    bottomSheetLabel: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '700',
+      marginBottom: 8
+    },
+    bottomBudgetRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 14
+    },
+    bottomBudgetInputWrap: {
+      flex: 1
+    },
+    bottomBudgetInputLabel: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '600',
+      marginBottom: 6
+    },
+    bottomBudgetInput: {
+      height: 42,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      backgroundColor: colors.sheet,
+      color: colors.textMain,
+      paddingHorizontal: 10,
+      fontSize: 14
+    },
+    bottomSheetApplyBtn: {
+      height: 42,
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    bottomSheetApplyBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '800'
     },
     categoryFilterHint: {
       marginTop: 2,
