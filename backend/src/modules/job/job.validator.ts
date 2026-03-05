@@ -3,6 +3,10 @@ import { body, param, query } from 'express-validator';
 export const createJobValidator = [
   body('title').trim().notEmpty().withMessage('Title is required'),
   body('description').trim().notEmpty().withMessage('Description is required'),
+  body('requiredWorkers')
+    .optional()
+    .isInt({ min: 1, max: 1000 })
+    .withMessage('requiredWorkers must be between 1 and 1000'),
   body('categoryId').isUUID().withMessage('Valid categoryId is required'),
   body('budget').isFloat({ gt: 0 }).withMessage('Budget must be greater than 0'),
   body('jobType').isIn(['ONE_TIME', 'PART_TIME', 'FULL_TIME']).withMessage('Invalid job type'),
@@ -16,6 +20,7 @@ export const updateJobValidator = [
   param('id').isUUID().withMessage('Invalid job id'),
   body('title').optional().trim().notEmpty(),
   body('description').optional().trim().notEmpty(),
+  body('requiredWorkers').optional().isInt({ min: 1, max: 1000 }),
   body('categoryId').optional().isUUID().withMessage('Valid categoryId is required'),
   body('budget').optional().isFloat({ gt: 0 }),
   body('jobType').optional().isIn(['ONE_TIME', 'PART_TIME', 'FULL_TIME']),

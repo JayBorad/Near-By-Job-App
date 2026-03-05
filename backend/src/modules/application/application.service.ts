@@ -18,6 +18,17 @@ export const applyJob = async (userId, jobId) => {
     throw new ApiError(400, 'Job owner cannot apply to own job');
   }
 
+  const acceptedCount = await prisma.jobApplication.count({
+    where: {
+      jobId,
+      status: 'ACCEPTED'
+    }
+  });
+  const requiredWorkers = Math.max(1, Number(job.requiredWorkers || 1));
+  if (acceptedCount >= requiredWorkers) {
+    throw new ApiError(400, 'This job has reached required approved workers');
+  }
+
   const existing = await prisma.jobApplication.findUnique({
     where: {
       jobId_applicantId: {
@@ -59,14 +70,28 @@ export const updateApplicationStatus = async (ownerId, ownerRole, applicationId,
 
   if (status === 'ACCEPTED') {
     return prisma.$transaction(async (tx) => {
+      const acceptedCount = await tx.jobApplication.count({
+        where: {
+          jobId: application.jobId,
+          status: 'ACCEPTED'
+        }
+      });
+      const requiredWorkers = Math.max(1, Number(application.job.requiredWorkers || 1));
+      if (acceptedCount >= requiredWorkers) {
+        throw new ApiError(400, 'Required workers already approved for this job');
+      }
+
       const updated = await tx.jobApplication.update({
         where: { id: applicationId },
         data: { status: 'ACCEPTED' }
       });
 
+      const totalAccepted = acceptedCount + 1;
       await tx.job.update({
         where: { id: application.jobId },
-        data: { status: 'IN_PROGRESS' }
+        data: {
+          status: totalAccepted >= requiredWorkers ? 'IN_PROGRESS' : application.job.status
+        }
       });
 
       return updated;

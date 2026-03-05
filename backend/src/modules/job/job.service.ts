@@ -52,6 +52,9 @@ export const createJob = async (userId, payload) => {
   const createData = {
     title: payload.title,
     description: payload.description,
+    requiredWorkers: Number.isFinite(Number(payload.requiredWorkers))
+      ? Math.max(1, Math.floor(Number(payload.requiredWorkers)))
+      : 1,
     categoryId: payload.categoryId,
     budget: new Prisma.Decimal(payload.budget),
     jobType: payload.jobType,
@@ -77,6 +80,13 @@ export const updateJob = async (jobId, payload) => {
   }
 
   const updateData = { ...payload };
+  if (payload.requiredWorkers !== undefined) {
+    const normalizedRequiredWorkers = Math.floor(Number(payload.requiredWorkers));
+    if (!Number.isFinite(normalizedRequiredWorkers) || normalizedRequiredWorkers < 1) {
+      throw new ApiError(400, 'requiredWorkers must be greater than or equal to 1');
+    }
+    updateData.requiredWorkers = normalizedRequiredWorkers;
+  }
   if (payload.budget !== undefined) updateData.budget = new Prisma.Decimal(payload.budget);
   if (payload.latitude !== undefined) updateData.latitude = new Prisma.Decimal(payload.latitude);
   if (payload.longitude !== undefined) updateData.longitude = new Prisma.Decimal(payload.longitude);

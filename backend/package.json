@@ -5,9 +5,13 @@
   "main": "dist/server.js",
   "type": "module",
   "scripts": {
+    "predev": "npm run prisma:generate",
     "dev": "nodemon --legacy-watch --watch . --ext ts --exec tsx server.ts",
+    "prebuild": "npm run prisma:generate",
     "build": "tsc -p tsconfig.json",
+    "pretypecheck": "npm run prisma:generate",
     "typecheck": "tsc --noEmit",
+    "prestart": "npm run prisma:generate",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
