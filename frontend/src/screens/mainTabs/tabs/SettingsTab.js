@@ -79,6 +79,7 @@ export function SettingsTab({
     if (userRole === 'ADMIN') {
       return (
         <AdminCategoriesPage
+          onBack={onBackFromCategories}
           categories={adminCategories}
           isLoading={isAdminPanelLoading}
           onRefresh={onRefreshAdminCategories}

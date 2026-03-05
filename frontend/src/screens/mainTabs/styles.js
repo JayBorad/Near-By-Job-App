@@ -1357,6 +1357,11 @@ export const createStyles = (colors) =>
       justifyContent: 'space-between',
       marginBottom: 6
     },
+    myJobDetailHeaderActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6
+    },
     myJobDetailTitle: {
       flex: 1,
       marginRight: 8,

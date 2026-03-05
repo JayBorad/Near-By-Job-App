@@ -1,12 +1,22 @@
 import React from 'react';
-import { MyJobsPage, PickerJobsPage } from '../tabScreens';
+import { MyJobDetailsPage, MyJobsPage, PickerJobsPage } from '../tabScreens';
 
 export function ExploreTab({
   userMode,
   myJobs,
+  myJobsPage,
   isMyJobsLoading,
   onRefreshMyJobs,
   onOpenMyJob,
+  selectedMyJob,
+  selectedMyJobApplications,
+  isSelectedMyJobApplicationsLoading,
+  isUpdatingJobApplicationStatus,
+  onBackFromMyJobDetail,
+  onRefreshSelectedMyJobApplications,
+  onApproveJobApplication,
+  onRejectJobApplication,
+  onEditMyJob,
   pickerJobs,
   isPickerJobsLoading,
   onRefreshPickerJobs,
@@ -16,6 +26,24 @@ export function ExploreTab({
   colors
 }) {
   if (userMode === 'JOB_POSTER') {
+    if (myJobsPage === 'detail' && selectedMyJob) {
+      return (
+        <MyJobDetailsPage
+          job={selectedMyJob}
+          applications={selectedMyJobApplications}
+          isLoadingApplications={isSelectedMyJobApplicationsLoading}
+          isUpdatingApplicationStatus={isUpdatingJobApplicationStatus}
+          onBack={onBackFromMyJobDetail}
+          onRefreshApplications={onRefreshSelectedMyJobApplications}
+          onApproveApplication={onApproveJobApplication}
+          onRejectApplication={onRejectJobApplication}
+          onEditJob={() => onEditMyJob(selectedMyJob)}
+          styles={styles}
+          colors={colors}
+        />
+      );
+    }
+
     return (
       <MyJobsPage
         jobs={myJobs}

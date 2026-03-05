@@ -329,3 +329,30 @@ export async function getMyApplications({ token }) {
     }
   });
 }
+
+export async function getApplicationsByJob({ token, jobId }) {
+  return apiRequest(`/applications/job/${jobId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function acceptApplication({ token, applicationId }) {
+  return apiRequest(`/applications/${applicationId}/accept`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function rejectApplication({ token, applicationId }) {
+  return apiRequest(`/applications/${applicationId}/reject`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}

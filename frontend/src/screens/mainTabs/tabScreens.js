@@ -1267,6 +1267,7 @@ function AdminModerationPage({
 }
 
 function AdminCategoriesPage({
+  onBack,
   categories,
   isLoading,
   onRefresh,
@@ -1308,7 +1309,10 @@ function AdminCategoriesPage({
   return (
     <View style={styles.settingsScreen}>
       <View style={styles.settingsNav}>
-        <View style={styles.settingsNavRight} />
+        <Pressable style={styles.settingsBackBtn} onPress={onBack}>
+          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          <Text style={styles.settingsBackText}>Settings</Text>
+        </Pressable>
         <Text style={styles.settingsNavTitle}>Categories</Text>
         <View style={styles.settingsNavRight}>
           <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
@@ -1618,6 +1622,7 @@ function CreateJobPage({
   const titleRef = useRef(null);
   const descriptionRef = useRef(null);
   const budgetRef = useRef(null);
+  const requiredWorkersRef = useRef(null);
   const locationLinkRef = useRef(null);
   const addressRef = useRef(null);
   const fieldYRef = useRef({});
@@ -1681,6 +1686,11 @@ function CreateJobPage({
     if (fieldName === 'budget') {
       scrollToField('budget');
       setTimeout(() => budgetRef.current?.focus(), 120);
+      return;
+    }
+    if (fieldName === 'requiredWorkers') {
+      scrollToField('requiredWorkers');
+      setTimeout(() => requiredWorkersRef.current?.focus(), 120);
       return;
     }
     if (fieldName === 'jobType') {
@@ -1884,6 +1894,11 @@ function CreateJobPage({
       { key: 'description', valid: Boolean(jobForm.description.trim()), label: 'Description is required' },
       { key: 'categoryId', valid: Boolean(jobForm.categoryId), label: 'Category is required' },
       { key: 'budget', valid: Boolean(jobForm.budget.trim()), label: 'Budget is required' },
+      {
+        key: 'requiredWorkers',
+        valid: Number.isInteger(Number.parseInt(jobForm.requiredWorkers, 10)) && Number.parseInt(jobForm.requiredWorkers, 10) > 0,
+        label: 'Required workers must be at least 1'
+      },
       { key: 'jobType', valid: Boolean(jobForm.jobType), label: 'Job type is required' },
       { key: 'locationLink', valid: Boolean(jobForm.locationLink.trim()), label: 'Location link is required' },
       { key: 'address', valid: Boolean(jobForm.address.trim()), label: 'Address is required' },
@@ -1912,6 +1927,7 @@ function CreateJobPage({
       description: jobForm.description.trim(),
       categoryId: jobForm.categoryId,
       budget: Number(jobForm.budget),
+      requiredWorkers: Number.parseInt(jobForm.requiredWorkers, 10),
       jobType: jobForm.jobType,
       latitude: jobForm.latitude,
       longitude: jobForm.longitude,
@@ -2181,6 +2197,23 @@ function CreateJobPage({
           />
           {errors.budget ? <Text style={styles.createFieldErrorText}>{errors.budget}</Text> : null}
 
+          <View onLayout={registerFieldY('requiredWorkers')}>
+            <Text style={styles.createFieldLabel}>Required Workers *</Text>
+          </View>
+          <TextInput
+            ref={requiredWorkersRef}
+            value={jobForm.requiredWorkers}
+            onChangeText={(value) => {
+              setJobForm((prev) => ({ ...prev, requiredWorkers: value.replace(/[^0-9]/g, '') }));
+              setErrors((prev) => ({ ...prev, requiredWorkers: '' }));
+            }}
+            style={[styles.createFieldInput, errors.requiredWorkers ? styles.createFieldInputError : null]}
+            placeholder="1"
+            keyboardType="number-pad"
+            placeholderTextColor={colors.textSecondary}
+          />
+          {errors.requiredWorkers ? <Text style={styles.createFieldErrorText}>{errors.requiredWorkers}</Text> : null}
+
           <View onLayout={registerFieldY('jobType')}>
             <Text style={styles.createFieldLabel}>Job Type *</Text>
           </View>
@@ -2340,6 +2373,7 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
   const openCount = jobs.filter((job) => String(job?.status || '').toUpperCase() === 'OPEN').length;
   const inProgressCount = jobs.filter((job) => String(job?.status || '').toUpperCase() === 'IN_PROGRESS').length;
   const completedCount = jobs.filter((job) => String(job?.status || '').toUpperCase() === 'COMPLETED').length;
+  const totalApplicants = jobs.reduce((count, job) => count + Number(job?.applicationCount || 0), 0);
 
   return (
     <View style={styles.settingsScreen}>
@@ -2380,6 +2414,9 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
               <Text style={styles.myJobsStatLabel}>Active</Text>
             </View>
           </View>
+          <Text style={styles.myJobOpenText}>
+            {totalApplicants} total {totalApplicants === 1 ? 'application' : 'applications'} received
+          </Text>
         </View>
 
         {jobs.length ? (
@@ -2409,6 +2446,22 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
                   <Ionicons name="briefcase-outline" size={13} color={colors.primary} />
                   <Text style={styles.myJobMetaPillText}>{String(item?.jobType || '').replace('_', ' ') || '-'}</Text>
                 </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="people-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>{item?.applicationCount || 0} Applied</Text>
+                </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="checkmark-done-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>
+                    {item?.acceptedApplicationCount || 0}/{item?.requiredWorkers || 1} Approved
+                  </Text>
+                </View>
+                {(item?.pendingApplicationCount || 0) > 0 ? (
+                  <View style={styles.myJobMetaPill}>
+                    <Ionicons name="time-outline" size={13} color={colors.primary} />
+                    <Text style={styles.myJobMetaPillText}>{item?.pendingApplicationCount || 0} Pending</Text>
+                  </View>
+                ) : null}
               </View>
               <View style={styles.myJobOpenRow}>
                 <Text style={styles.myJobOpenText}>Tap to open details</Text>
@@ -2428,6 +2481,195 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
           </>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+function MyJobDetailsPage({
+  job,
+  applications,
+  isLoadingApplications,
+  isUpdatingApplicationStatus,
+  onBack,
+  onRefreshApplications,
+  onApproveApplication,
+  onRejectApplication,
+  onEditJob,
+  styles,
+  colors
+}) {
+  const [selectedApplicantRecord, setSelectedApplicantRecord] = useState(null);
+  const requiredWorkers = Number(job?.requiredWorkers || 1);
+  const acceptedCount = applications.filter((item) => String(item?.status || '').toUpperCase() === 'ACCEPTED').length;
+  const pendingCount = applications.filter((item) => String(item?.status || '').toUpperCase() === 'PENDING').length;
+  const remainingSlots = Math.max(requiredWorkers - acceptedCount, 0);
+
+  return (
+    <View style={styles.settingsScreen}>
+      <View style={styles.settingsNav}>
+        <Pressable style={[styles.settingsBackBtn, { width: 96 }]} onPress={onBack}>
+          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          <Text style={styles.settingsBackText} numberOfLines={1}>
+            My Jobs
+          </Text>
+        </Pressable>
+        <Text style={styles.settingsNavTitle}>Job Details</Text>
+        <View style={styles.settingsNavRight}>
+          <Pressable style={styles.settingsNavIconBtn} onPress={onRefreshApplications}>
+            <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+          </Pressable>
+        </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        <View style={styles.myJobCard}>
+          <View style={styles.myJobHead}>
+            <Text style={styles.myJobTitle} numberOfLines={2}>
+              {job?.title || '-'}
+            </Text>
+            <View style={styles.myJobDetailHeaderActions}>
+              <View style={styles.myJobStatusPill}>
+                <Text style={styles.myJobStatusPillText}>{String(job?.status || 'OPEN').replace('_', ' ')}</Text>
+              </View>
+              <Pressable style={[styles.settingsNavIconBtn, { backgroundColor: colors.primarySoft }]} onPress={onEditJob}>
+                <Ionicons name="create-outline" size={16} color={colors.primary} />
+              </Pressable>
+            </View>
+          </View>
+          <Text style={styles.myJobDescription}>{job?.description || 'No description provided.'}</Text>
+          <View style={styles.myJobMetaRow}>
+            <View style={styles.myJobMetaPill}>
+              <Ionicons name="layers-outline" size={13} color={colors.primary} />
+              <Text style={styles.myJobMetaPillText}>{job?.category?.name || '-'}</Text>
+            </View>
+            <View style={styles.myJobMetaPill}>
+              <Ionicons name="cash-outline" size={13} color={colors.primary} />
+              <Text style={styles.myJobMetaPillText}>₹{job?.budget || '-'}</Text>
+            </View>
+            <View style={styles.myJobMetaPill}>
+              <Ionicons name="people-outline" size={13} color={colors.primary} />
+              <Text style={styles.myJobMetaPillText}>Required: {requiredWorkers}</Text>
+            </View>
+            <View style={styles.myJobMetaPill}>
+              <Ionicons name="checkmark-done-outline" size={13} color={colors.primary} />
+              <Text style={styles.myJobMetaPillText}>Approved: {acceptedCount}</Text>
+            </View>
+            <View style={styles.myJobMetaPill}>
+              <Ionicons name="time-outline" size={13} color={colors.primary} />
+              <Text style={styles.myJobMetaPillText}>Pending: {pendingCount}</Text>
+            </View>
+          </View>
+          <Text style={styles.myJobMeta}>Due Date: {job?.dueDate ? String(job.dueDate).slice(0, 10) : '-'}</Text>
+          <Text style={styles.myJobMeta}>Remaining Approvals: {remainingSlots}</Text>
+          <JobLocationCard job={job} title="Job Location" styles={styles} colors={colors} />
+        </View>
+
+        <View style={styles.myJobCard}>
+          <Text style={styles.optionTitle}>Applied Users</Text>
+          <Text style={styles.optionSubtitle}>
+            Approve or reject pending applications. Fields stay read-only until you tap Edit Job.
+          </Text>
+        </View>
+
+        {isLoadingApplications ? (
+          <AdminListState
+            mode="loading"
+            title="Loading applicants..."
+            subtitle="Please wait while we fetch applications."
+            colors={colors}
+          />
+        ) : applications.length ? (
+          applications.map((item) => {
+            const status = String(item?.status || 'PENDING').toUpperCase();
+            const disabledApprove = status !== 'PENDING' || remainingSlots <= 0 || isUpdatingApplicationStatus;
+            const disabledReject = status !== 'PENDING' || isUpdatingApplicationStatus;
+            return (
+              <View key={item.id} style={styles.myJobCard}>
+                <Pressable onPress={() => setSelectedApplicantRecord(item)}>
+                  <View style={styles.adminUserCardLead}>
+                    <AvatarView imageUrl={item?.applicant?.avatar || DEFAULT_AVATAR_URL} size={46} colors={colors} showBorder />
+                    <View style={styles.adminUserCardBody}>
+                      <View style={styles.adminUserCardTop}>
+                        <Text style={styles.adminUserCardName} numberOfLines={1}>
+                          {item?.applicant?.name || 'Unknown User'}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                      </View>
+                      <Text style={styles.adminUserCardEmail} numberOfLines={1}>
+                        {item?.applicant?.email || '-'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.myJobHead, { marginTop: 10 }]}>
+                    <Text style={styles.myJobMeta}>Phone: {item?.applicant?.phone || '-'}</Text>
+                    <View style={styles.myJobStatusPill}>
+                      <Text style={styles.myJobStatusPillText}>{status}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.myJobMeta}>Applied: {item?.createdAt ? String(item.createdAt).slice(0, 10) : '-'}</Text>
+                </Pressable>
+                <View style={styles.optionActionsRow}>
+                  <Pressable
+                    style={[styles.optionCancel, styles.optionActionBtn, disabledReject ? styles.modalBtnDisabled : null]}
+                    disabled={disabledReject}
+                    onPress={() => onRejectApplication(item.id)}
+                  >
+                    <Text style={styles.optionCancelText}>Reject</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.modalBtnPrimary, styles.optionActionBtn, disabledApprove ? styles.modalBtnDisabled : null]}
+                    disabled={disabledApprove}
+                    onPress={() => onApproveApplication(item.id)}
+                  >
+                    <Text style={styles.modalBtnPrimaryText}>{remainingSlots <= 0 && status === 'PENDING' ? 'Filled' : 'Approve'}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })
+        ) : (
+          <AdminListState
+            mode="empty"
+            title="No applicants yet"
+            subtitle="When users apply to this job, they will appear here."
+            colors={colors}
+            emptySource={ADMIN_EMPTY_ANIMATION}
+          />
+        )}
+      </ScrollView>
+
+      <Modal visible={Boolean(selectedApplicantRecord)} transparent animationType="fade" onRequestClose={() => setSelectedApplicantRecord(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setSelectedApplicantRecord(null)}>
+          <Pressable style={styles.optionModal} onPress={() => {}}>
+            <View style={styles.adminFilterHead}>
+              <Text style={styles.optionTitle}>Applicant Details</Text>
+              <Pressable style={styles.settingsNavIconBtn} onPress={() => setSelectedApplicantRecord(null)}>
+                <Ionicons name="close-outline" size={20} color={colors.primary} />
+              </Pressable>
+            </View>
+            <View style={styles.adminUserDetailHero}>
+              <AvatarView
+                imageUrl={selectedApplicantRecord?.applicant?.avatar || DEFAULT_AVATAR_URL}
+                size={84}
+                colors={colors}
+                showBorder
+              />
+              <Text style={styles.adminUserDetailName}>{selectedApplicantRecord?.applicant?.name || 'Unknown User'}</Text>
+              <Text style={styles.adminUserDetailEmail}>{selectedApplicantRecord?.applicant?.email || '-'}</Text>
+            </View>
+
+            <View style={styles.adminUserDetailCard}>
+              <Text style={styles.myJobMeta}>Phone: {selectedApplicantRecord?.applicant?.phone || '-'}</Text>
+              <Text style={styles.myJobMeta}>Application Status: {selectedApplicantRecord?.status || '-'}</Text>
+              <Text style={styles.myJobMeta}>
+                Applied On: {selectedApplicantRecord?.createdAt ? String(selectedApplicantRecord.createdAt).slice(0, 10) : '-'}
+              </Text>
+              <Text style={styles.myJobMeta}>Applicant ID: {selectedApplicantRecord?.applicant?.id || '-'}</Text>
+            </View>
+
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -2692,6 +2934,26 @@ function PickerJobsPage({ jobs, isLoading, onRefresh, onApplyJob, isApplying, st
 }
 
 function MyApplicationsPage({ applications, isLoading, onRefresh, styles, colors }) {
+  const [searchText, setSearchText] = useState('');
+  const [applicationStatusFilter, setApplicationStatusFilter] = useState('ALL');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const filterOptions = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED'];
+  const filteredApplications = useMemo(
+    () =>
+      applications.filter((item) => {
+        const status = String(item?.status || '').toUpperCase();
+        const matchesStatus = applicationStatusFilter === 'ALL' || status === applicationStatusFilter;
+        const q = searchText.trim().toLowerCase();
+        const matchesQuery =
+          !q ||
+          [item?.job?.title, item?.job?.description, item?.job?.category?.name, item?.job?.owner?.name]
+            .some((v) => String(v || '').toLowerCase().includes(q));
+        return matchesStatus && matchesQuery;
+      }),
+    [applications, applicationStatusFilter, searchText]
+  );
+
   return (
     <View style={styles.settingsScreen}>
       <View style={styles.settingsNav}>
@@ -2704,12 +2966,28 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, styles, colors
         </View>
       </View>
 
+      <View style={styles.adminCategoryToolbar}>
+        <View style={styles.categorySearchWrap}>
+          <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+          <TextInput
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Search applications..."
+            placeholderTextColor={colors.textSecondary}
+            style={styles.categorySearchInput}
+          />
+        </View>
+        <Pressable style={styles.categoryFilterIconBtn} onPress={() => setShowFilterModal(true)}>
+          <Ionicons name="filter-outline" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
         {isLoading ? (
           <AdminListState mode="loading" title="Loading applications..." subtitle="Please wait..." colors={colors} />
-        ) : applications.length ? (
-          applications.map((item) => (
-            <View key={item.id} style={styles.myJobCard}>
+        ) : filteredApplications.length ? (
+          filteredApplications.map((item) => (
+            <Pressable key={item.id} style={styles.myJobCard} onPress={() => setSelectedApplication(item)}>
               <View style={styles.myJobHead}>
                 <Text style={styles.myJobTitle} numberOfLines={1}>{item?.job?.title || '-'}</Text>
                 <View style={styles.myJobStatusPill}>
@@ -2727,12 +3005,80 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, styles, colors
                   <Text style={styles.myJobMetaPillText}>{item?.job?.owner?.name || '-'}</Text>
                 </View>
               </View>
-            </View>
+              <View style={styles.myJobOpenRow}>
+                <Text style={styles.myJobOpenText}>Tap to open details</Text>
+                <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primary} />
+              </View>
+            </Pressable>
           ))
         ) : (
-          <AdminListState mode="empty" title="No applications yet" subtitle="Pick jobs from All Jobs and they will appear here." colors={colors} emptySource={ADMIN_EMPTY_ANIMATION} />
+          <AdminListState
+            mode="empty"
+            title="No applications found"
+            subtitle={applications.length ? 'No applications match your current filters.' : 'Pick jobs from All Jobs and they will appear here.'}
+            colors={colors}
+            emptySource={ADMIN_EMPTY_ANIMATION}
+          />
         )}
       </ScrollView>
+
+      <Modal visible={showFilterModal} transparent animationType="fade" onRequestClose={() => setShowFilterModal(false)}>
+        <Pressable style={styles.filterBackdrop} onPress={() => setShowFilterModal(false)}>
+          <Pressable style={styles.categoryFilterModal} onPress={() => {}}>
+            <Text style={styles.optionTitle}>Filter Applications</Text>
+            <Text style={styles.categoryFilterHint}>Choose application status</Text>
+            {filterOptions.map((option) => (
+              <Pressable
+                key={option}
+                style={[styles.categoryFilterOption, applicationStatusFilter === option && styles.categoryFilterOptionActive]}
+                onPress={() => {
+                  setApplicationStatusFilter(option);
+                  setShowFilterModal(false);
+                }}
+              >
+                <View style={styles.categoryFilterOptionLeft}>
+                  <Ionicons
+                    name={option === 'ALL' ? 'apps-outline' : option === 'ACCEPTED' ? 'checkmark-circle-outline' : option === 'REJECTED' ? 'close-circle-outline' : 'time-outline'}
+                    size={16}
+                    color={applicationStatusFilter === option ? colors.primary : colors.textSecondary}
+                  />
+                  <Text style={[styles.categoryFilterOptionText, applicationStatusFilter === option && styles.categoryFilterOptionTextActive]}>
+                    {option}
+                  </Text>
+                </View>
+                {applicationStatusFilter === option ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={Boolean(selectedApplication)} transparent animationType="fade" onRequestClose={() => setSelectedApplication(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.myJobDetailModal}>
+            <View style={styles.myJobDetailHeader}>
+              <Text style={styles.myJobDetailTitle} numberOfLines={2}>
+                {selectedApplication?.job?.title || 'Job Details'}
+              </Text>
+              <View style={styles.myJobStatusPill}>
+                <Text style={styles.myJobStatusPillText}>{String(selectedApplication?.status || 'PENDING')}</Text>
+              </View>
+            </View>
+            <Text style={styles.myJobDetailDescription}>{selectedApplication?.job?.description || 'No description provided.'}</Text>
+            <View style={styles.myJobInfoCard}>
+              <Text style={styles.myJobMeta}>Category: {selectedApplication?.job?.category?.name || '-'}</Text>
+              <Text style={styles.myJobMeta}>Posted By: {selectedApplication?.job?.owner?.name || '-'}</Text>
+              <Text style={styles.myJobMeta}>Budget: ₹{selectedApplication?.job?.budget || '-'}</Text>
+              <Text style={styles.myJobMeta}>Due Date: {selectedApplication?.job?.dueDate ? String(selectedApplication.job.dueDate).slice(0, 10) : '-'}</Text>
+              <Text style={styles.myJobMeta}>Applied On: {selectedApplication?.createdAt ? String(selectedApplication.createdAt).slice(0, 10) : '-'}</Text>
+            </View>
+            <JobLocationCard job={selectedApplication?.job} title="Job Location" styles={styles} colors={colors} />
+            <Pressable style={styles.optionCancel} onPress={() => setSelectedApplication(null)}>
+              <Text style={styles.optionCancelText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2897,6 +3243,7 @@ export {
   AdminCategoriesPage,
   CreateJobPage,
   MyJobsPage,
+  MyJobDetailsPage,
   PickerJobsPage,
   MyApplicationsPage,
   SettingsPage

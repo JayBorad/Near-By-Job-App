@@ -21,12 +21,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPopup } from '../components/AnimatedPopup';
 import { AdminListState } from '../components/AdminListState';
 import {
+  acceptApplication,
+  rejectApplication,
   createCategory,
   createJob,
   applyToJob,
   getAllCategoriesAdmin,
   getAllJobs,
   getAllUsers,
+  getApplicationsByJob,
   getMyApplications,
   getApprovedCategories,
   getMyCategories,
@@ -100,6 +103,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [jobForm, setJobForm] = useState({
     title: '',
     description: '',
+    requiredWorkers: '1',
     categoryId: '',
     budget: '',
     jobType: 'ONE_TIME',
@@ -128,6 +132,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [isMyApplicationsLoading, setIsMyApplicationsLoading] = useState(false);
   const [isApplyingJob, setIsApplyingJob] = useState(false);
   const [selectedMyJob, setSelectedMyJob] = useState(null);
+  const [myJobsPage, setMyJobsPage] = useState('list');
+  const [selectedMyJobApplications, setSelectedMyJobApplications] = useState([]);
+  const [isSelectedMyJobApplicationsLoading, setIsSelectedMyJobApplicationsLoading] = useState(false);
+  const [isUpdatingJobApplicationStatus, setIsUpdatingJobApplicationStatus] = useState(false);
   const [showEditJobModal, setShowEditJobModal] = useState(false);
   const [showEditMapPicker, setShowEditMapPicker] = useState(false);
   const [showEditCategoryPicker, setShowEditCategoryPicker] = useState(false);
@@ -144,6 +152,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [editJobForm, setEditJobForm] = useState({
     title: '',
     description: '',
+    requiredWorkers: '1',
     categoryId: '',
     budget: '',
     jobType: 'ONE_TIME',
@@ -580,12 +589,88 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       const response = await getAllJobs({ token, page: 1, limit: 200, status: 'ALL' });
       const allJobs = response?.data?.jobs || [];
       const ownJobs = allJobs.filter((item) => item?.owner?.id === localUser?.id);
-      setMyJobs(ownJobs);
-      setSelectedMyJob((prev) => (prev ? ownJobs.find((item) => item.id === prev.id) || null : null));
+      const ownJobsWithApplications = await Promise.all(
+        ownJobs.map(async (job) => {
+          try {
+            const appRes = await getApplicationsByJob({ token, jobId: job.id });
+            const applications = Array.isArray(appRes?.data) ? appRes.data : [];
+            const acceptedCount = applications.filter(
+              (application) => String(application?.status || '').toUpperCase() === 'ACCEPTED'
+            ).length;
+            const pendingCount = applications.filter(
+              (application) => String(application?.status || '').toUpperCase() === 'PENDING'
+            ).length;
+            return {
+              ...job,
+              applicationCount: applications.length,
+              acceptedApplicationCount: acceptedCount,
+              pendingApplicationCount: pendingCount
+            };
+          } catch (_error) {
+            return {
+              ...job,
+              applicationCount: 0,
+              acceptedApplicationCount: 0,
+              pendingApplicationCount: 0
+            };
+          }
+        })
+      );
+      setMyJobs(ownJobsWithApplications);
+      setSelectedMyJob((prev) => (prev ? ownJobsWithApplications.find((item) => item.id === prev.id) || null : null));
     } catch (error) {
       showPopup('Jobs Failed', error?.message || 'Unable to load your jobs.', 'error');
     } finally {
       setIsMyJobsLoading(false);
+    }
+  };
+
+  const fetchApplicationsForMySelectedJob = async (jobId, { forceLoader = false } = {}) => {
+    if (!token || !jobId) return;
+    try {
+      if (forceLoader || !selectedMyJobApplications.length) {
+        setIsSelectedMyJobApplicationsLoading(true);
+      }
+      const response = await getApplicationsByJob({ token, jobId });
+      setSelectedMyJobApplications(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      showPopup('Applications Failed', error?.message || 'Unable to load job applications.', 'error');
+    } finally {
+      setIsSelectedMyJobApplicationsLoading(false);
+    }
+  };
+
+  const openMyJobDetailPage = async (job) => {
+    if (!job?.id) return;
+    setSelectedMyJob(job);
+    setMyJobsPage('detail');
+    await fetchApplicationsForMySelectedJob(job.id, { forceLoader: true });
+  };
+
+  const backFromMyJobDetailPage = () => {
+    setMyJobsPage('list');
+    setSelectedMyJobApplications([]);
+    setSelectedMyJob(null);
+  };
+
+  const updateSelectedJobApplicationStatus = async (applicationId, status) => {
+    if (!token || !applicationId || !selectedMyJob?.id) return;
+    try {
+      setIsUpdatingJobApplicationStatus(true);
+      if (status === 'ACCEPTED') {
+        await acceptApplication({ token, applicationId });
+      } else {
+        await rejectApplication({ token, applicationId });
+      }
+      showPopup('Application Updated', `Application ${status.toLowerCase()} successfully.`, 'success');
+      await Promise.all([
+        fetchApplicationsForMySelectedJob(selectedMyJob.id, { forceLoader: false }),
+        fetchMyJobs({ forceLoader: false })
+      ]);
+    } catch (error) {
+      showPopup('Update Failed', error?.message || 'Unable to update application.', 'error');
+    } finally {
+      setIsUpdatingJobApplicationStatus(false);
     }
   };
 
@@ -652,6 +737,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     setEditJobForm({
       title: String(job.title || ''),
       description: String(job.description || ''),
+      requiredWorkers: String(job.requiredWorkers || 1),
       categoryId: String(job.categoryId || ''),
       budget: String(job.budget || ''),
       jobType: String(job.jobType || 'ONE_TIME'),
@@ -758,6 +844,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       showPopup('Validation Error', 'Please fill all required fields.', 'warning');
       return;
     }
+    const requiredWorkers = Number.parseInt(editJobForm.requiredWorkers, 10);
+    if (!Number.isInteger(requiredWorkers) || requiredWorkers < 1) {
+      showPopup('Validation Error', 'Required workers must be at least 1.', 'warning');
+      return;
+    }
     if (!editJobForm.categoryId) {
       showPopup('Validation Error', 'Category is required.', 'warning');
       return;
@@ -785,6 +876,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         payload: {
           title: editJobForm.title.trim(),
           description: editJobForm.description.trim(),
+          requiredWorkers,
           categoryId: editJobForm.categoryId,
           budget: Number(editJobForm.budget),
           jobType: editJobForm.jobType,
@@ -821,6 +913,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       setJobForm({
         title: '',
         description: '',
+        requiredWorkers: '1',
         categoryId: '',
         budget: '',
         jobType: 'ONE_TIME',
@@ -1090,6 +1183,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     ]).start(() => {
       setActiveTab(nextKey);
       if (nextKey !== 'settings') setSettingsPage('main');
+      if (nextKey !== 'explore') {
+        setMyJobsPage('list');
+        setSelectedMyJobApplications([]);
+        setSelectedMyJob(null);
+      }
       animateIcon(nextKey);
       Animated.parallel([
         Animated.timing(contentFade, {
@@ -1182,7 +1280,19 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           myJobs={myJobs}
           isMyJobsLoading={isMyJobsLoading}
           onRefreshMyJobs={() => fetchMyJobs({ forceLoader: true })}
-          onOpenMyJob={setSelectedMyJob}
+          myJobsPage={myJobsPage}
+          onOpenMyJob={openMyJobDetailPage}
+          selectedMyJob={selectedMyJob}
+          selectedMyJobApplications={selectedMyJobApplications}
+          isSelectedMyJobApplicationsLoading={isSelectedMyJobApplicationsLoading}
+          isUpdatingJobApplicationStatus={isUpdatingJobApplicationStatus}
+          onBackFromMyJobDetail={backFromMyJobDetailPage}
+          onRefreshSelectedMyJobApplications={() =>
+            fetchApplicationsForMySelectedJob(selectedMyJob?.id, { forceLoader: true })
+          }
+          onApproveJobApplication={(applicationId) => updateSelectedJobApplicationStatus(applicationId, 'ACCEPTED')}
+          onRejectJobApplication={(applicationId) => updateSelectedJobApplicationStatus(applicationId, 'REJECTED')}
+          onEditMyJob={openEditJobModal}
           pickerJobs={pickerJobs}
           isPickerJobsLoading={isPickerJobsLoading}
           onRefreshPickerJobs={() => fetchPickerJobs({ forceLoader: true })}
@@ -1272,64 +1382,6 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         </Pressable>
       </Modal>
 
-      <Modal visible={Boolean(selectedMyJob)} transparent animationType="fade" onRequestClose={() => setSelectedMyJob(null)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.myJobDetailModal}>
-            <View style={styles.myJobDetailHeader}>
-              <Text style={styles.myJobDetailTitle} numberOfLines={2}>
-                {selectedMyJob?.title || 'Job Details'}
-              </Text>
-              <View style={styles.myJobStatusPill}>
-                <Text style={styles.myJobStatusPillText}>{String(selectedMyJob?.status || 'OPEN').replace('_', ' ')}</Text>
-              </View>
-            </View>
-            <Text style={styles.myJobDetailDescription}>{selectedMyJob?.description || 'No description provided.'}</Text>
-
-            <View style={styles.myJobMetaRowSection}>
-              <View style={styles.myJobMetaPill}>
-                <Ionicons name="layers-outline" size={13} color={colors.primary} />
-                <Text style={styles.myJobMetaPillText}>{selectedMyJob?.category?.name || '-'}</Text>
-              </View>
-              <View style={styles.myJobMetaPill}>
-                <Ionicons name="briefcase-outline" size={13} color={colors.primary} />
-                <Text style={styles.myJobMetaPillText}>{String(selectedMyJob?.jobType || '').replace('_', ' ') || '-'}</Text>
-              </View>
-              <View style={styles.myJobMetaPill}>
-                <Ionicons name="cash-outline" size={13} color={colors.primary} />
-                <Text style={styles.myJobMetaPillText}>₹{selectedMyJob?.budget || '-'}</Text>
-              </View>
-            </View>
-
-            <View style={styles.myJobInfoCard}>
-              <Text style={styles.myJobMeta}>
-                Posted: {selectedMyJob?.createdAt ? String(selectedMyJob.createdAt).slice(0, 10) : '-'}
-              </Text>
-              <Text style={styles.myJobMeta}>
-              Due Date: {selectedMyJob?.dueDate ? String(selectedMyJob.dueDate).slice(0, 10) : '-'}
-              </Text>
-            </View>
-
-            <JobLocationCard job={selectedMyJob} title="Job Location" styles={styles} colors={colors} />
-
-            <View style={styles.optionActionsRow}>
-              <Pressable style={[styles.optionCancel, styles.optionActionBtn]} onPress={() => setSelectedMyJob(null)}>
-                <Text style={styles.optionCancelText}>Close</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalBtnPrimary, styles.optionActionBtn, styles.modalBtnPrimaryInline]}
-                onPress={() => {
-                  openEditJobModal(selectedMyJob);
-                  setSelectedMyJob(null);
-                }}
-              >
-                <Ionicons name="create-outline" size={14} color="#FFFFFF" />
-                <Text style={styles.modalBtnPrimaryText}>Edit Job</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       <Modal
         visible={showEditJobModal}
         transparent
@@ -1363,6 +1415,18 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
                 placeholder="Job description"
                 placeholderTextColor={colors.textSecondary}
                 multiline
+              />
+
+              <Text style={styles.createFieldLabel}>Required Workers *</Text>
+              <TextInput
+                value={editJobForm.requiredWorkers}
+                onChangeText={(value) =>
+                  setEditJobForm((prev) => ({ ...prev, requiredWorkers: value.replace(/[^0-9]/g, '') }))
+                }
+                style={styles.createFieldInput}
+                placeholder="1"
+                keyboardType="number-pad"
+                placeholderTextColor={colors.textSecondary}
               />
 
               <Text style={styles.createFieldLabel}>Category *</Text>
