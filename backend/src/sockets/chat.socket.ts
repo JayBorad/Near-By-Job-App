@@ -1,5 +1,34 @@
 import { resolveUserFromToken } from '../middleware/auth.middleware.js';
-import { createMessage } from '../modules/chat/chat.service.js';
+import {
+  createMessage,
+  markMessagesDelivered,
+  markMessagesSeen,
+  validateChatParticipants
+} from '../modules/chat/chat.service.js';
+
+const connectedUsers = new Map();
+
+const addConnectedUserSocket = (userId, socketId) => {
+  const existing = connectedUsers.get(userId) || new Set();
+  existing.add(socketId);
+  connectedUsers.set(userId, existing);
+};
+
+const removeConnectedUserSocket = (userId, socketId) => {
+  const existing = connectedUsers.get(userId);
+  if (!existing) return;
+  existing.delete(socketId);
+  if (!existing.size) {
+    connectedUsers.delete(userId);
+  } else {
+    connectedUsers.set(userId, existing);
+  }
+};
+
+const isUserOnline = (userId) => {
+  const existing = connectedUsers.get(userId);
+  return Boolean(existing && existing.size);
+};
 
 export const setupChatSocket = (io) => {
   io.use(async (socket, next) => {
@@ -18,25 +47,108 @@ export const setupChatSocket = (io) => {
   });
 
   io.on('connection', (socket) => {
-    socket.on('join_job_room', async ({ jobId }) => {
-      if (!jobId) return;
+    const currentUserId = socket.user.id;
+    addConnectedUserSocket(currentUserId, socket.id);
+
+    socket.on('join_job_room', async ({ jobId, peerId }, ack) => {
+      if (!jobId || !peerId) {
+        if (ack) ack({ success: false, message: 'jobId and peerId are required' });
+        return;
+      }
+      try {
+        await validateChatParticipants(jobId, currentUserId, peerId);
+      } catch (error) {
+        if (ack) ack({ success: false, message: error.message });
+        return;
+      }
       socket.join(jobId);
+      const seenIds = await markMessagesSeen({ jobId, viewerId: currentUserId });
+      if (seenIds.length) {
+        io.to(jobId).emit('message_status_updated', {
+          messageIds: seenIds,
+          status: 'SEEN'
+        });
+      }
+      if (ack) ack({ success: true, data: { online: isUserOnline(peerId) } });
+    });
+
+    socket.on('check_user_online', ({ userId }, ack) => {
+      if (!ack) return;
+      ack({ success: true, data: { online: isUserOnline(userId) } });
+    });
+
+    socket.on('typing_start', async ({ jobId, receiverId }) => {
+      if (!jobId || !receiverId) return;
+      try {
+        await validateChatParticipants(jobId, currentUserId, receiverId);
+      } catch (_error) {
+        return;
+      }
+      io.to(jobId).emit('typing', { jobId, userId: currentUserId, isTyping: true });
+    });
+
+    socket.on('typing_stop', async ({ jobId, receiverId }) => {
+      if (!jobId || !receiverId) return;
+      try {
+        await validateChatParticipants(jobId, currentUserId, receiverId);
+      } catch (_error) {
+        return;
+      }
+      io.to(jobId).emit('typing', { jobId, userId: currentUserId, isTyping: false });
+    });
+
+    socket.on('mark_seen', async ({ jobId, peerId }, ack) => {
+      if (!jobId || !peerId) {
+        if (ack) ack({ success: false, message: 'jobId and peerId are required' });
+        return;
+      }
+      try {
+        await validateChatParticipants(jobId, currentUserId, peerId);
+        const seenIds = await markMessagesSeen({ jobId, viewerId: currentUserId });
+        if (seenIds.length) {
+          io.to(jobId).emit('message_status_updated', {
+            messageIds: seenIds,
+            status: 'SEEN'
+          });
+        }
+        if (ack) ack({ success: true });
+      } catch (error) {
+        if (ack) ack({ success: false, message: error.message });
+      }
     });
 
     socket.on('send_message', async (payload, ack) => {
       try {
         const message = await createMessage({
           jobId: payload.jobId,
-          senderId: socket.user.id,
+          senderId: currentUserId,
           receiverId: payload.receiverId,
           message: payload.message
         });
 
         io.to(payload.jobId).emit('new_message', message);
+
+        if (isUserOnline(payload.receiverId)) {
+          const deliveredIds = await markMessagesDelivered({
+            jobId: payload.jobId,
+            receiverId: payload.receiverId
+          });
+          if (deliveredIds.length) {
+            io.to(payload.jobId).emit('message_status_updated', {
+              messageIds: deliveredIds,
+              status: 'DELIVERED'
+            });
+          }
+        }
+
         if (ack) ack({ success: true, data: message });
       } catch (error) {
         if (ack) ack({ success: false, message: error.message });
       }
+    });
+
+    socket.on('disconnect', () => {
+      removeConnectedUserSocket(currentUserId, socket.id);
     });
   });
 };

@@ -17,6 +17,7 @@ router.use('/users', userRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/jobs', jobRoutes);
 router.use('/applications', applicationRoutes);
+router.use('/chat', chatRoutes);
 router.use('/chats', chatRoutes);
 
 export default router;

@@ -87,3 +87,56 @@ export const createMessage = async ({ jobId, senderId, receiverId, message }) =>
     }
   });
 };
+
+export const markMessagesDelivered = async ({ jobId, receiverId }) => {
+  const pending = await prisma.chatMessage.findMany({
+    where: {
+      jobId,
+      receiverId,
+      status: 'SENT'
+    },
+    select: { id: true }
+  });
+
+  if (!pending.length) return [];
+
+  const now = new Date();
+  await prisma.chatMessage.updateMany({
+    where: {
+      id: { in: pending.map((item) => item.id) }
+    },
+    data: {
+      status: 'DELIVERED',
+      deliveredAt: now
+    }
+  });
+
+  return pending.map((item) => item.id);
+};
+
+export const markMessagesSeen = async ({ jobId, viewerId }) => {
+  const unread = await prisma.chatMessage.findMany({
+    where: {
+      jobId,
+      receiverId: viewerId,
+      status: { in: ['SENT', 'DELIVERED'] }
+    },
+    select: { id: true }
+  });
+
+  if (!unread.length) return [];
+
+  const now = new Date();
+  await prisma.chatMessage.updateMany({
+    where: {
+      id: { in: unread.map((item) => item.id) }
+    },
+    data: {
+      status: 'SEEN',
+      deliveredAt: now,
+      seenAt: now
+    }
+  });
+
+  return unread.map((item) => item.id);
+};
