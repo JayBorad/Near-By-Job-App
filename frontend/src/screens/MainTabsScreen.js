@@ -30,6 +30,7 @@ import {
   getAllJobs,
   getAllUsers,
   getApplicationsByJob,
+  getChatMessagesByJob,
   getMyApplications,
   getApprovedCategories,
   getMyCategories,
@@ -40,6 +41,7 @@ import {
   updateProfile,
   updateProfileAvatar
 } from '../services/authApi';
+import { io } from 'socket.io-client';
 import { COUNTRY_CODES } from '../constants/countryCodes';
 import {
   createStyles,
@@ -87,6 +89,30 @@ const STATIC_AVATARS = [
   'https://api.dicebear.com/9.x/adventurer-neutral/png?seed=Luna'
 ];
 const ADMIN_EMPTY_ANIMATION = require('../../assets/lottie/no-result-found.json');
+const SOCKET_BASE_URL = (Platform.OS === 'web'
+  ? (process.env.EXPO_PUBLIC_API_BASE_URL_WEB || 'http://localhost:8000/api/v1')
+  : (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.31.157:8000/api/v1')
+).replace(/\/api\/v1\/?$/, '');
+
+const formatChatTime = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+};
+
+const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const formatChatDayLabel = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const today = startOfDay(new Date());
+  const target = startOfDay(date);
+  const diff = Math.round((today.getTime() - target.getTime()) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return date.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
+};
 
 export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -183,8 +209,43 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [isCreatingUserCategory, setIsCreatingUserCategory] = useState(false);
   const [localUser, setLocalUser] = useState(user || null);
   const [popup, setPopup] = useState({ visible: false, title: '', message: '', type: 'error' });
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [activeChatSession, setActiveChatSession] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [isChatMessagesLoading, setIsChatMessagesLoading] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [isSendingChatMessage, setIsSendingChatMessage] = useState(false);
+  const [isPeerOnline, setIsPeerOnline] = useState(false);
+  const [isPeerTyping, setIsPeerTyping] = useState(false);
+  const [typingDots, setTypingDots] = useState('.');
+  const socketRef = useRef(null);
+  const chatScrollRef = useRef(null);
+  const typingStopTimerRef = useRef(null);
+  const peerOnlinePollRef = useRef(null);
   const contentFade = useRef(new Animated.Value(1)).current;
   const contentShift = useRef(new Animated.Value(0)).current;
+  const chatRenderItems = useMemo(() => {
+    const items = [];
+    let previousDayKey = '';
+    chatMessages.forEach((message) => {
+      const parsed = new Date(message?.createdAt || '');
+      const dayKey = Number.isNaN(parsed.getTime()) ? '' : `${parsed.getFullYear()}-${parsed.getMonth()}-${parsed.getDate()}`;
+      if (dayKey && dayKey !== previousDayKey) {
+        previousDayKey = dayKey;
+        items.push({
+          type: 'day',
+          key: `day-${dayKey}`,
+          label: formatChatDayLabel(parsed)
+        });
+      }
+      items.push({
+        type: 'message',
+        key: `message-${message.id}`,
+        message
+      });
+    });
+    return items;
+  }, [chatMessages]);
 
   useEffect(() => {
     setLocalUser(user || null);
@@ -1094,6 +1155,95 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
+  const loadChatMessages = async (jobId) => {
+    if (!token || !jobId) return;
+    try {
+      setIsChatMessagesLoading(true);
+      const response = await getChatMessagesByJob({ token, jobId });
+      setChatMessages(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      showPopup('Chat Failed', error?.message || 'Unable to load chat messages.', 'error');
+    } finally {
+      setIsChatMessagesLoading(false);
+    }
+  };
+
+  const openChatSession = async ({ job, peer }) => {
+    if (!job?.id || !peer?.id) return;
+    const nextSession = {
+      jobId: job.id,
+      jobTitle: job.title || 'Job Chat',
+      peerId: peer.id,
+      peerName: peer.name || peer.username || 'User',
+      peerAvatar: peer.avatar || null
+    };
+    setActiveChatSession(nextSession);
+    setShowChatModal(true);
+    await loadChatMessages(job.id);
+    if (socketRef.current) {
+      socketRef.current.emit('join_job_room', { jobId: job.id, peerId: peer.id }, (ack) => {
+        if (ack?.success) {
+          setIsPeerOnline(Boolean(ack?.data?.online));
+        }
+      });
+    }
+  };
+
+  const closeChatSession = () => {
+    setShowChatModal(false);
+    setActiveChatSession(null);
+    setChatMessages([]);
+    setChatInput('');
+    setIsPeerOnline(false);
+    setIsPeerTyping(false);
+    if (typingStopTimerRef.current) {
+      clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+    if (peerOnlinePollRef.current) {
+      clearInterval(peerOnlinePollRef.current);
+      peerOnlinePollRef.current = null;
+    }
+  };
+
+  const sendChatMessage = async () => {
+    const messageText = String(chatInput || '').trim();
+    if (!messageText || !activeChatSession?.jobId || !activeChatSession?.peerId || !socketRef.current) return;
+    try {
+      setIsSendingChatMessage(true);
+      if (typingStopTimerRef.current) {
+        clearTimeout(typingStopTimerRef.current);
+        typingStopTimerRef.current = null;
+      }
+      socketRef.current.emit('typing_stop', {
+        jobId: activeChatSession.jobId,
+        receiverId: activeChatSession.peerId
+      });
+      await new Promise((resolve, reject) => {
+        socketRef.current.emit(
+          'send_message',
+          {
+            jobId: activeChatSession.jobId,
+            receiverId: activeChatSession.peerId,
+            message: messageText
+          },
+          (ack) => {
+            if (ack?.success) {
+              resolve(ack.data);
+            } else {
+              reject(new Error(ack?.message || 'Unable to send message'));
+            }
+          }
+        );
+      });
+      setChatInput('');
+    } catch (error) {
+      showPopup('Send Failed', error?.message || 'Unable to send message.', 'error');
+    } finally {
+      setIsSendingChatMessage(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
     if (activeTab === 'create') {
@@ -1138,6 +1288,81 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     if (!token || userRole !== 'USER' || userMode !== 'JOB_PICKER' || activeTab !== 'messages') return;
     fetchMyApplications();
   }, [activeTab, token, userRole, userMode]);
+
+  useEffect(() => {
+    if (!token || userRole !== 'USER') return;
+    const socket = io(SOCKET_BASE_URL, {
+      transports: ['websocket'],
+      auth: { token }
+    });
+    socketRef.current = socket;
+
+    socket.on('new_message', (incoming) => {
+      if (!incoming?.id || !activeChatSession?.jobId) return;
+      if (incoming.jobId !== activeChatSession.jobId) return;
+      if (incoming?.receiverId === localUser?.id && activeChatSession?.peerId) {
+        socket.emit('mark_seen', { jobId: activeChatSession.jobId, peerId: activeChatSession.peerId });
+      }
+      setChatMessages((prev) => {
+        if (prev.some((item) => item.id === incoming.id)) return prev;
+        return [...prev, incoming];
+      });
+    });
+
+    socket.on('message_status_updated', (payload) => {
+      const ids = Array.isArray(payload?.messageIds) ? payload.messageIds : [];
+      if (!ids.length || !payload?.status) return;
+      setChatMessages((prev) =>
+        prev.map((item) => (ids.includes(item.id) ? { ...item, status: payload.status } : item))
+      );
+    });
+
+    socket.on('typing', (payload) => {
+      if (!activeChatSession?.jobId || !activeChatSession?.peerId) return;
+      if (payload?.jobId !== activeChatSession.jobId) return;
+      if (payload?.userId !== activeChatSession.peerId) return;
+      setIsPeerTyping(Boolean(payload?.isTyping));
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [token, userRole, activeChatSession?.jobId]);
+
+  useEffect(() => {
+    if (!showChatModal || !activeChatSession?.peerId || !socketRef.current) return;
+    const checkOnline = () => {
+      socketRef.current.emit('check_user_online', { userId: activeChatSession.peerId }, (ack) => {
+        if (ack?.success) {
+          setIsPeerOnline(Boolean(ack?.data?.online));
+        }
+      });
+    };
+    checkOnline();
+    peerOnlinePollRef.current = setInterval(checkOnline, 6000);
+    return () => {
+      if (peerOnlinePollRef.current) {
+        clearInterval(peerOnlinePollRef.current);
+        peerOnlinePollRef.current = null;
+      }
+    };
+  }, [showChatModal, activeChatSession?.peerId]);
+
+  useEffect(() => {
+    if (!isPeerTyping) return;
+    const ticker = setInterval(() => {
+      setTypingDots((prev) => (prev.length >= 3 ? '.' : `${prev}.`));
+    }, 360);
+    return () => clearInterval(ticker);
+  }, [isPeerTyping]);
+
+  useEffect(() => {
+    if (!chatMessages.length) return;
+    requestAnimationFrame(() => {
+      chatScrollRef.current?.scrollToEnd({ animated: true });
+    });
+  }, [chatMessages]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1301,6 +1526,18 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           myApplications={myApplications}
           isMyApplicationsLoading={isMyApplicationsLoading}
           onRefreshMyApplications={() => fetchMyApplications({ forceLoader: true })}
+          onOpenChatWithJobPoster={(application) =>
+            openChatSession({
+              job: application?.job,
+              peer: application?.job?.owner
+            })
+          }
+          onOpenChatWithApplicant={(payload) =>
+            openChatSession({
+              job: payload?.job,
+              peer: payload?.applicant
+            })
+          }
           adminJobs={adminJobs}
           adminCategories={adminCategories}
           isAdminPanelLoading={isAdminPanelLoading}
@@ -1935,6 +2172,192 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         type={popup.type}
         onClose={() => setPopup((prev) => ({ ...prev, visible: false }))}
       />
+
+      <Modal visible={showChatModal} animationType="slide" onRequestClose={closeChatSession}>
+        <View style={[styles.settingsScreen, { paddingTop: TOP_SAFE_PADDING + 8 }]}>
+          <View style={styles.settingsNav}>
+            <Pressable style={[styles.settingsBackBtn, { width: 120 }]} onPress={closeChatSession}>
+              <Ionicons name="chevron-back" size={22} color={colors.primary} />
+              <Text style={styles.settingsBackText} numberOfLines={1}>Back</Text>
+            </Pressable>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text style={styles.settingsNavTitle} numberOfLines={1}>{activeChatSession?.peerName || 'Chat'}</Text>
+              <Text style={[styles.myJobMeta, { marginTop: 0, textAlign: 'right' }]} numberOfLines={1}>
+                {isPeerTyping ? `typing${typingDots}` : isPeerOnline ? 'Online' : activeChatSession?.jobTitle || '-'}
+              </Text>
+            </View>
+          </View>
+
+          <ScrollView
+            ref={chatScrollRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 12 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {isChatMessagesLoading ? (
+              <AdminListState mode="loading" title="Loading chat..." subtitle="Please wait..." colors={colors} />
+            ) : chatRenderItems.length ? (
+              chatRenderItems.map((entry) => {
+                if (entry.type === 'day') {
+                  return (
+                    <View key={entry.key} style={{ alignItems: 'center', marginBottom: 10, marginTop: 4 }}>
+                      <View
+                        style={{
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface,
+                          borderRadius: 999,
+                          paddingHorizontal: 10,
+                          paddingVertical: 4
+                        }}
+                      >
+                        <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>{entry.label}</Text>
+                      </View>
+                    </View>
+                  );
+                }
+                const item = entry.message;
+                const isMine = item?.senderId === localUser?.id;
+                const normalizedStatus = String(item?.status || 'SENT').toUpperCase();
+                return (
+                  <View
+                    key={item.id}
+                    style={{
+                      alignSelf: isMine ? 'flex-end' : 'flex-start',
+                      maxWidth: '82%',
+                      marginBottom: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 14,
+                      backgroundColor: isMine ? colors.primary : colors.surface,
+                      borderWidth: isMine ? 0 : 1,
+                      borderColor: colors.border
+                    }}
+                  >
+                    <Text style={{ color: isMine ? '#FFFFFF' : colors.textMain, fontSize: 14 }}>{item?.message || ''}</Text>
+                    <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                      <Text style={{ color: isMine ? 'rgba(255,255,255,0.85)' : colors.textSecondary, fontSize: 11 }}>
+                        {formatChatTime(item?.createdAt)}
+                      </Text>
+                      {isMine ? (
+                        normalizedStatus === 'SEEN' ? (
+                          <Ionicons name="checkmark-done" size={13} color="#60A5FA" />
+                        ) : normalizedStatus === 'DELIVERED' ? (
+                          <Ionicons name="checkmark-done" size={13} color={isMine ? 'rgba(255,255,255,0.85)' : colors.textSecondary} />
+                        ) : (
+                          <Ionicons name="checkmark" size={13} color={isMine ? 'rgba(255,255,255,0.85)' : colors.textSecondary} />
+                        )
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <AdminListState
+                mode="empty"
+                title="No messages yet"
+                subtitle="Start the conversation by sending a message."
+                colors={colors}
+                emptySource={ADMIN_EMPTY_ANIMATION}
+              />
+            )}
+          </ScrollView>
+
+          {isPeerTyping ? (
+            <View style={{ alignItems: 'flex-start', marginBottom: 6 }}>
+              <View
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  borderRadius: 12,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5
+                }}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{`typing${typingDots}`}</Text>
+              </View>
+            </View>
+          ) : null}
+
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingBottom: 8 }}>
+            <TextInput
+              value={chatInput}
+              onChangeText={(value) => {
+                setChatInput(value);
+                if (activeChatSession?.jobId && activeChatSession?.peerId && socketRef.current) {
+                  socketRef.current.emit('typing_start', {
+                    jobId: activeChatSession.jobId,
+                    receiverId: activeChatSession.peerId
+                  });
+                  if (typingStopTimerRef.current) {
+                    clearTimeout(typingStopTimerRef.current);
+                  }
+                  typingStopTimerRef.current = setTimeout(() => {
+                    if (socketRef.current) {
+                      socketRef.current.emit('typing_stop', {
+                        jobId: activeChatSession.jobId,
+                        receiverId: activeChatSession.peerId
+                      });
+                    }
+                    typingStopTimerRef.current = null;
+                  }, 900);
+                }
+              }}
+              onSubmitEditing={sendChatMessage}
+              onKeyPress={(event) => {
+                const key = event?.nativeEvent?.key;
+                const shiftKey = Boolean(event?.nativeEvent?.shiftKey);
+                if (Platform.OS === 'web' && key === 'Enter' && !shiftKey) {
+                  event?.preventDefault?.();
+                  sendChatMessage();
+                }
+              }}
+              placeholder="Type a message..."
+              placeholderTextColor={colors.textSecondary}
+              multiline
+              blurOnSubmit={false}
+              returnKeyType="send"
+              submitBehavior="submit"
+              style={[
+                styles.createFieldInput,
+                {
+                  flex: 1,
+                  minHeight: 42,
+                  maxHeight: 120,
+                  marginBottom: 0,
+                  paddingTop: 10,
+                  textAlignVertical: 'top'
+                }
+              ]}
+            />
+            <Pressable
+              style={[
+                {
+                  width: 46,
+                  height: 46,
+                  borderRadius: 23,
+                  backgroundColor: colors.primary,
+                  paddingHorizontal: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 2,
+                  shadowColor: '#0B141A',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.22,
+                  shadowRadius: 4,
+                  elevation: 4
+                },
+                isSendingChatMessage ? styles.modalBtnDisabled : null
+              ]}
+              disabled={isSendingChatMessage}
+              onPress={sendChatMessage}
+            >
+              <Ionicons name="send" size={18} color="#FFFFFF" />
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

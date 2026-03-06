@@ -356,3 +356,12 @@ export async function rejectApplication({ token, applicationId }) {
     }
   });
 }
+
+export async function getChatMessagesByJob({ token, jobId }) {
+  return apiRequest(`/chat/job/${jobId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}

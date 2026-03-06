@@ -17,6 +17,7 @@ export function ExploreTab({
   onApproveJobApplication,
   onRejectJobApplication,
   onEditMyJob,
+  onOpenChatWithApplicant,
   pickerJobs,
   isPickerJobsLoading,
   onRefreshPickerJobs,
@@ -38,6 +39,12 @@ export function ExploreTab({
           onApproveApplication={onApproveJobApplication}
           onRejectApplication={onRejectJobApplication}
           onEditJob={() => onEditMyJob(selectedMyJob)}
+          onOpenChatWithApplicant={(application) =>
+            onOpenChatWithApplicant({
+              job: selectedMyJob,
+              applicant: application?.applicant
+            })
+          }
           styles={styles}
           colors={colors}
         />

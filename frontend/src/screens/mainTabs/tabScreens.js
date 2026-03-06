@@ -2494,6 +2494,7 @@ function MyJobDetailsPage({
   onRefreshApplications,
   onApproveApplication,
   onRejectApplication,
+  onOpenChatWithApplicant,
   onEditJob,
   styles,
   colors
@@ -2583,6 +2584,7 @@ function MyJobDetailsPage({
             const status = String(item?.status || 'PENDING').toUpperCase();
             const disabledApprove = status !== 'PENDING' || remainingSlots <= 0 || isUpdatingApplicationStatus;
             const disabledReject = status !== 'PENDING' || isUpdatingApplicationStatus;
+            const isAccepted = status === 'ACCEPTED';
             return (
               <View key={item.id} style={styles.myJobCard}>
                 <Pressable onPress={() => setSelectedApplicantRecord(item)}>
@@ -2609,20 +2611,32 @@ function MyJobDetailsPage({
                   <Text style={styles.myJobMeta}>Applied: {item?.createdAt ? String(item.createdAt).slice(0, 10) : '-'}</Text>
                 </Pressable>
                 <View style={styles.optionActionsRow}>
-                  <Pressable
-                    style={[styles.optionCancel, styles.optionActionBtn, disabledReject ? styles.modalBtnDisabled : null]}
-                    disabled={disabledReject}
-                    onPress={() => onRejectApplication(item.id)}
-                  >
-                    <Text style={styles.optionCancelText}>Reject</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.modalBtnPrimary, styles.optionActionBtn, disabledApprove ? styles.modalBtnDisabled : null]}
-                    disabled={disabledApprove}
-                    onPress={() => onApproveApplication(item.id)}
-                  >
-                    <Text style={styles.modalBtnPrimaryText}>{remainingSlots <= 0 && status === 'PENDING' ? 'Filled' : 'Approve'}</Text>
-                  </Pressable>
+                  {isAccepted ? (
+                    <Pressable
+                      style={[styles.modalBtnPrimary, styles.optionActionBtn]}
+                      onPress={() => onOpenChatWithApplicant(item)}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={14} color="#FFFFFF" />
+                      <Text style={styles.modalBtnPrimaryText}>Chat</Text>
+                    </Pressable>
+                  ) : (
+                    <>
+                      <Pressable
+                        style={[styles.optionCancel, styles.optionActionBtn, disabledReject ? styles.modalBtnDisabled : null]}
+                        disabled={disabledReject}
+                        onPress={() => onRejectApplication(item.id)}
+                      >
+                        <Text style={styles.optionCancelText}>Reject</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.modalBtnPrimary, styles.optionActionBtn, disabledApprove ? styles.modalBtnDisabled : null]}
+                        disabled={disabledApprove}
+                        onPress={() => onApproveApplication(item.id)}
+                      >
+                        <Text style={styles.modalBtnPrimaryText}>{remainingSlots <= 0 && status === 'PENDING' ? 'Filled' : 'Approve'}</Text>
+                      </Pressable>
+                    </>
+                  )}
                 </View>
               </View>
             );
@@ -2933,7 +2947,7 @@ function PickerJobsPage({ jobs, isLoading, onRefresh, onApplyJob, isApplying, st
   );
 }
 
-function MyApplicationsPage({ applications, isLoading, onRefresh, styles, colors }) {
+function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, styles, colors }) {
   const [searchText, setSearchText] = useState('');
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('ALL');
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -3007,7 +3021,17 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, styles, colors
               </View>
               <View style={styles.myJobOpenRow}>
                 <Text style={styles.myJobOpenText}>Tap to open details</Text>
-                <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primary} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {String(item?.status || '').toUpperCase() === 'ACCEPTED' ? (
+                    <Pressable
+                      style={[styles.settingsNavIconBtn, { backgroundColor: colors.primarySoft }]}
+                      onPress={() => onOpenChat(item)}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={15} color={colors.primary} />
+                    </Pressable>
+                  ) : null}
+                  <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primary} />
+                </View>
               </View>
             </Pressable>
           ))
@@ -3073,9 +3097,23 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, styles, colors
               <Text style={styles.myJobMeta}>Applied On: {selectedApplication?.createdAt ? String(selectedApplication.createdAt).slice(0, 10) : '-'}</Text>
             </View>
             <JobLocationCard job={selectedApplication?.job} title="Job Location" styles={styles} colors={colors} />
-            <Pressable style={styles.optionCancel} onPress={() => setSelectedApplication(null)}>
-              <Text style={styles.optionCancelText}>Close</Text>
-            </Pressable>
+            <View style={styles.optionActionsRow}>
+              <Pressable style={[styles.optionCancel, styles.optionActionBtn]} onPress={() => setSelectedApplication(null)}>
+                <Text style={styles.optionCancelText}>Close</Text>
+              </Pressable>
+              {String(selectedApplication?.status || '').toUpperCase() === 'ACCEPTED' ? (
+                <Pressable
+                  style={[styles.modalBtnPrimary, styles.optionActionBtn]}
+                  onPress={() => {
+                    onOpenChat(selectedApplication);
+                    setSelectedApplication(null);
+                  }}
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={14} color="#FFFFFF" />
+                  <Text style={styles.modalBtnPrimaryText}>Chat</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         </View>
       </Modal>

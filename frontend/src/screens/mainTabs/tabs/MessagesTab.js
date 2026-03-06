@@ -3,7 +3,16 @@ import { View } from 'react-native';
 import { MyApplicationsPage } from '../tabScreens';
 import { PageCard } from '../components/SharedBlocks';
 
-export function MessagesTab({ userRole, userMode, myApplications, isMyApplicationsLoading, onRefreshMyApplications, styles, colors }) {
+export function MessagesTab({
+  userRole,
+  userMode,
+  myApplications,
+  isMyApplicationsLoading,
+  onRefreshMyApplications,
+  onOpenChatWithJobPoster,
+  styles,
+  colors
+}) {
   const title = userRole === 'ADMIN' ? 'Reports' : userMode === 'JOB_POSTER' ? 'Applicants' : 'Applications';
   const subtitle =
     userRole === 'ADMIN'
@@ -18,6 +27,7 @@ export function MessagesTab({ userRole, userMode, myApplications, isMyApplicatio
         applications={myApplications}
         isLoading={isMyApplicationsLoading}
         onRefresh={onRefreshMyApplications}
+        onOpenChat={onOpenChatWithJobPoster}
         styles={styles}
         colors={colors}
       />
