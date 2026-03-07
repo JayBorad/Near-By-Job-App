@@ -365,3 +365,12 @@ export async function getChatMessagesByJob({ token, jobId }) {
     }
   });
 }
+
+export async function getChatConversations({ token }) {
+  return apiRequest('/chat/conversations', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}

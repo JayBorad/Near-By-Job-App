@@ -35,7 +35,7 @@ const BASE_TABS_BY_ROLE = {
     { key: 'dashboard', label: 'Home', icon: 'home-outline', activeIcon: 'home' },
     { key: 'explore', label: 'Jobs', icon: 'briefcase-outline', activeIcon: 'briefcase' },
     { key: 'create', label: '', icon: 'add', activeIcon: 'add' },
-    { key: 'messages', label: 'Applications', icon: 'document-text-outline', activeIcon: 'document-text' },
+    { key: 'messages', label: 'Chats', icon: 'chatbubble-ellipses-outline', activeIcon: 'chatbubble-ellipses' },
     { key: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' }
   ],
   ADMIN: [
@@ -61,9 +61,9 @@ export const getTabsByRoleAndMode = (role, mode) => {
     createTab.activeIcon = mode === 'JOB_POSTER' ? 'add' : 'search';
   }
   if (messagesTab) {
-    messagesTab.label = mode === 'JOB_POSTER' ? 'Applicants' : 'Applications';
-    messagesTab.icon = mode === 'JOB_POSTER' ? 'people-outline' : 'document-text-outline';
-    messagesTab.activeIcon = mode === 'JOB_POSTER' ? 'people' : 'document-text';
+    messagesTab.label = 'Chats';
+    messagesTab.icon = 'chatbubble-ellipses-outline';
+    messagesTab.activeIcon = 'chatbubble-ellipses';
   }
   return tabs;
 };
