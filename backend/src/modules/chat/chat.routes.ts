@@ -6,6 +6,7 @@ import { jobIdParamValidator } from './chat.validator.js';
 
 const router = express.Router();
 
+router.get('/conversations', authenticate, controller.getConversationsByUser);
 router.get('/job/:jobId', authenticate, jobIdParamValidator, validate, controller.getMessagesByJob);
 
 export default router;
