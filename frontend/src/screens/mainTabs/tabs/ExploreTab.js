@@ -1,8 +1,11 @@
 import React from 'react';
-import { MyJobDetailsPage, MyJobsPage, PickerJobsPage } from '../tabScreens';
+import { MyApplicationsPage, MyJobDetailsPage, MyJobsPage, PickerJobsPage } from '../tabScreens';
 
 export function ExploreTab({
   userMode,
+  pickerExplorePage,
+  onOpenPickerApplications,
+  onBackFromPickerApplications,
   myJobs,
   myJobsPage,
   isMyJobsLoading,
@@ -21,6 +24,10 @@ export function ExploreTab({
   pickerJobs,
   isPickerJobsLoading,
   onRefreshPickerJobs,
+  myApplications,
+  isMyApplicationsLoading,
+  onRefreshMyApplications,
+  onOpenChatWithJobPoster,
   onApplyJob,
   isApplyingJob,
   styles,
@@ -63,11 +70,26 @@ export function ExploreTab({
     );
   }
 
+  if (pickerExplorePage === 'applications') {
+    return (
+      <MyApplicationsPage
+        applications={myApplications}
+        isLoading={isMyApplicationsLoading}
+        onRefresh={onRefreshMyApplications}
+        onOpenChat={onOpenChatWithJobPoster}
+        onBack={onBackFromPickerApplications}
+        styles={styles}
+        colors={colors}
+      />
+    );
+  }
+
   return (
     <PickerJobsPage
       jobs={pickerJobs}
       isLoading={isPickerJobsLoading}
       onRefresh={onRefreshPickerJobs}
+      onOpenMyApplications={onOpenPickerApplications}
       onApplyJob={onApplyJob}
       isApplying={isApplyingJob}
       styles={styles}
