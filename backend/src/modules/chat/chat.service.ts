@@ -88,6 +88,77 @@ export const createMessage = async ({ jobId, senderId, receiverId, message }) =>
   });
 };
 
+export const getConversationsByUser = async (userId) => {
+  const messages = await prisma.chatMessage.findMany({
+    where: {
+      OR: [{ senderId: userId }, { receiverId: userId }]
+    },
+    include: {
+      job: {
+        select: {
+          id: true,
+          title: true,
+          status: true
+        }
+      },
+      sender: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          avatar: true,
+          userMode: true
+        }
+      },
+      receiver: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          avatar: true,
+          userMode: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const conversationsMap = new Map();
+
+  messages.forEach((message) => {
+    const isSentByMe = message.senderId === userId;
+    const peer = isSentByMe ? message.receiver : message.sender;
+    const conversationKey = `${message.jobId}:${peer.id}`;
+    const current = conversationsMap.get(conversationKey);
+    const isUnreadForMe = message.receiverId === userId && message.status !== 'SEEN';
+
+    if (!current) {
+      conversationsMap.set(conversationKey, {
+        job: message.job,
+        peer,
+        lastMessage: {
+          id: message.id,
+          message: message.message,
+          createdAt: message.createdAt,
+          senderId: message.senderId,
+          receiverId: message.receiverId,
+          status: message.status
+        },
+        unreadCount: isUnreadForMe ? 1 : 0
+      });
+      return;
+    }
+
+    if (isUnreadForMe) {
+      current.unreadCount += 1;
+    }
+  });
+
+  return Array.from(conversationsMap.values()).sort(
+    (a, b) => new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime()
+  );
+};
+
 export const markMessagesDelivered = async ({ jobId, receiverId }) => {
   const pending = await prisma.chatMessage.findMany({
     where: {
