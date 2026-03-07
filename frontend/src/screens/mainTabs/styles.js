@@ -117,6 +117,28 @@ export const createStyles = (colors) =>
       alignItems: 'center',
       justifyContent: 'center'
     },
+    tabIconWrap: {
+      position: 'relative'
+    },
+    tabUnreadBadge: {
+      position: 'absolute',
+      right: -11,
+      top: -5,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      paddingHorizontal: 5,
+      backgroundColor: colors.danger,
+      borderWidth: 1,
+      borderColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    tabUnreadBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '800'
+    },
     tabLabel: {
       marginTop: 4,
       fontSize: 11,
@@ -1282,6 +1304,48 @@ export const createStyles = (colors) =>
       marginTop: 4,
       color: colors.textSecondary,
       fontSize: 12
+    },
+    chatConversationUnreadCard: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    chatConversationTime: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    chatConversationFooter: {
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8
+    },
+    chatConversationPreview: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    chatConversationPreviewUnread: {
+      color: colors.textMain,
+      fontWeight: '700'
+    },
+    chatConversationBadge: {
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      paddingHorizontal: 6,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    chatConversationBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '800'
     },
     myJobStatusPill: {
       borderRadius: 999,

@@ -2688,7 +2688,16 @@ function MyJobDetailsPage({
   );
 }
 
-function PickerJobsPage({ jobs, isLoading, onRefresh, onApplyJob, isApplying, styles, colors }) {
+function PickerJobsPage({
+  jobs,
+  isLoading,
+  onRefresh,
+  onApplyJob,
+  isApplying,
+  onOpenMyApplications,
+  styles,
+  colors
+}) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [minBudget, setMinBudget] = useState('');
@@ -2748,7 +2757,11 @@ function PickerJobsPage({ jobs, isLoading, onRefresh, onApplyJob, isApplying, st
   return (
     <View style={styles.settingsScreen}>
       <View style={styles.settingsNav}>
-        <View style={styles.settingsNavRight} />
+        <View style={styles.settingsNavRight}>
+          <Pressable style={[styles.settingsNavIconBtn, { alignSelf: 'flex-start' }]} onPress={onOpenMyApplications}>
+            <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+          </Pressable>
+        </View>
         <Text style={styles.settingsNavTitle}>All Jobs</Text>
         <View style={styles.settingsNavRight}>
           <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
@@ -2947,7 +2960,7 @@ function PickerJobsPage({ jobs, isLoading, onRefresh, onApplyJob, isApplying, st
   );
 }
 
-function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, styles, colors }) {
+function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, onBack, styles, colors }) {
   const [searchText, setSearchText] = useState('');
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('ALL');
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -2971,7 +2984,13 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, st
   return (
     <View style={styles.settingsScreen}>
       <View style={styles.settingsNav}>
-        <View style={styles.settingsNavRight} />
+        <View style={styles.settingsNavRight}>
+          {onBack ? (
+            <Pressable style={[styles.settingsNavIconBtn, { alignSelf: 'flex-start' }]} onPress={onBack}>
+              <Ionicons name="chevron-back" size={20} color={colors.primary} />
+            </Pressable>
+          ) : null}
+        </View>
         <Text style={styles.settingsNavTitle}>My Applications</Text>
         <View style={styles.settingsNavRight}>
           <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
