@@ -42,6 +42,61 @@ const userSelect = {
   updatedAt: true
 };
 
+const adminJobSelect = {
+  id: true,
+  title: true,
+  description: true,
+  requiredWorkers: true,
+  budget: true,
+  jobType: true,
+  latitude: true,
+  longitude: true,
+  address: true,
+  status: true,
+  dueDate: true,
+  createdAt: true,
+  updatedAt: true,
+  category: {
+    select: {
+      id: true,
+      name: true,
+      status: true
+    }
+  },
+  owner: {
+    select: {
+      id: true,
+      name: true,
+      email: true
+    }
+  }
+} satisfies Prisma.JobSelect;
+
+const adminUserSelect = {
+  ...userSelect,
+  jobs: {
+    where: { deletedAt: null },
+    orderBy: { createdAt: 'desc' },
+    select: adminJobSelect
+  },
+  applications: {
+    where: {
+      status: 'ACCEPTED',
+      job: { deletedAt: null }
+    },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      job: {
+        select: adminJobSelect
+      }
+    }
+  }
+} satisfies Prisma.UserSelect;
+
 const ensureAvatarBucket = async () => {
   if (isAvatarBucketChecked) return;
 
@@ -280,22 +335,7 @@ export const getAllUsers = async (query) => {
       skip,
       take: limit,
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        email: true,
-        phone: true,
-        age: true,
-        gender: true,
-        address: true,
-        avatar: true,
-        role: true,
-        userMode: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true
-      }
+      select: adminUserSelect
     }),
     prisma.user.count({ where })
   ]);
@@ -407,6 +447,6 @@ export const updateUserByAdmin = async (adminId, userId, payload) => {
   return prisma.user.update({
     where: { id: userId },
     data,
-    select: userSelect
+    select: adminUserSelect
   });
 };
