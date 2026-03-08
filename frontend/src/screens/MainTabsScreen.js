@@ -1183,7 +1183,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         showPopup('Update Failed', 'Unable to update user details.', 'error');
         return null;
       }
-      setAdminUsers((prev) => prev.map((item) => (item.id === userId ? updatedUser : item)));
+      setAdminUsers((prev) => prev.map((item) => (item.id === userId ? { ...item, ...updatedUser } : item)));
       showPopup('User Updated', 'User details updated successfully.', 'success');
       return updatedUser;
     } catch (error) {
@@ -1201,7 +1201,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         showPopup('Update Failed', 'Unable to update user avatar.', 'error');
         return null;
       }
-      setAdminUsers((prev) => prev.map((item) => (item.id === userId ? updatedUser : item)));
+      setAdminUsers((prev) => prev.map((item) => (item.id === userId ? { ...item, ...updatedUser } : item)));
       showPopup('User Updated', 'User profile image updated successfully.', 'success');
       return updatedUser;
     } catch (error) {
