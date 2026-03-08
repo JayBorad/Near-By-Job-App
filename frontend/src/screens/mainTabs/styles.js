@@ -1122,6 +1122,35 @@ export const createStyles = (colors) =>
       color: colors.textSecondary,
       fontSize: 14
     },
+    adminDetailRow: {
+      minHeight: 52,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      justifyContent: 'center',
+      gap: 3
+    },
+    adminDetailRowBlock: {
+      minHeight: 72,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingTop: 10,
+      paddingBottom: 10,
+      gap: 5
+    },
+    adminDetailRowLast: {
+      borderBottomWidth: 0,
+      minHeight: 84
+    },
+    adminDetailLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textSecondary
+    },
+    adminDetailValue: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.textMain
+    },
     adminPanelTabs: {
       flexDirection: 'row',
       marginBottom: 10,
