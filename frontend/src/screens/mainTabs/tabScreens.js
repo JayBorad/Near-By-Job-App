@@ -466,6 +466,9 @@ function CategoryPage({
 
 function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSaveUserAvatar, styles, colors }) {
   const [selectedUser, setSelectedUser] = useState(null);
+  const [userDetailPage, setUserDetailPage] = useState('details');
+  const [jobTab, setJobTab] = useState('POSTED');
+  const [selectedUserJob, setSelectedUserJob] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [showAvatarOptions, setShowAvatarOptions] = useState(false);
@@ -492,6 +495,9 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
 
   const openUserDetail = (user) => {
     setSelectedUser(user);
+    setUserDetailPage('details');
+    setJobTab('POSTED');
+    setSelectedUserJob(null);
     setForm({
       name: String(user?.name || ''),
       username: String(user?.username || ''),
@@ -522,6 +528,17 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
     [users, searchText, roleFilter, modeFilter, statusFilter, genderFilter]
   );
   const activeFilterCount = [roleFilter, modeFilter, statusFilter, genderFilter].filter((value) => value !== 'ALL').length;
+  const isEditingUser = userDetailPage === 'edit';
+  const postedJobs = selectedUser?.jobs || [];
+  const pickedJobs = (selectedUser?.applications || [])
+    .map((application) => ({
+      ...(application?.job || {}),
+      applicationId: application?.id,
+      applicationStatus: application?.status,
+      pickedAt: application?.createdAt
+    }))
+    .filter((job) => Boolean(job?.id));
+  const activeUserJobs = jobTab === 'POSTED' ? postedJobs : pickedJobs;
 
   const saveDetails = async () => {
     if (!selectedUser?.id) return;
@@ -541,7 +558,13 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
         status: form.status
       });
       if (updated) {
-        setSelectedUser(updated);
+        setSelectedUser((prev) => ({
+          ...(prev || {}),
+          ...updated,
+          jobs: updated?.jobs || prev?.jobs || [],
+          applications: updated?.applications || prev?.applications || []
+        }));
+        setUserDetailPage('details');
       }
     } finally {
       setIsSaving(false);
@@ -554,7 +577,12 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
       setIsUploadingAvatar(true);
       const updated = await onSaveUserAvatar(selectedUser.id, payload);
       if (updated) {
-        setSelectedUser(updated);
+        setSelectedUser((prev) => ({
+          ...(prev || {}),
+          ...updated,
+          jobs: updated?.jobs || prev?.jobs || [],
+          applications: updated?.applications || prev?.applications || []
+        }));
       }
     } finally {
       setIsUploadingAvatar(false);
@@ -616,161 +644,301 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
     return (
       <View style={styles.settingsScreen}>
         <View style={styles.settingsNav}>
-          <Pressable style={styles.settingsBackBtn} onPress={() => setSelectedUser(null)}>
+          <Pressable style={styles.settingsBackBtn} onPress={() => {
+            if (isEditingUser) {
+              setUserDetailPage('details');
+            } else {
+              setSelectedUser(null);
+              setSelectedUserJob(null);
+              setUserDetailPage('details');
+            }
+          }}>
             <Ionicons name="chevron-back" size={22} color={colors.primary} />
-            <Text style={styles.settingsBackText}>Users</Text>
+            <Text style={styles.settingsBackText}>{isEditingUser ? 'User Details' : 'Users'}</Text>
           </Pressable>
-          <Text style={styles.settingsNavTitle}>User Details</Text>
-          <View style={styles.settingsNavRight} />
+          <Text style={styles.settingsNavTitle}>{isEditingUser ? 'Edit User' : 'User Details'}</Text>
+          <View style={styles.settingsNavRight}>
+            {!isEditingUser ? (
+              <Pressable
+                style={styles.settingsNavIconBtn}
+                onPress={() => setUserDetailPage('edit')}
+                disabled={isSaving || isUploadingAvatar}
+              >
+                <Ionicons name="create-outline" size={18} color={colors.primary} />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
           <View style={styles.adminUserDetailHero}>
             <Pressable style={styles.avatarWrap} onPress={() => setShowAvatarPreview(true)}>
               <AvatarView imageUrl={selectedUser?.avatar || DEFAULT_AVATAR_URL} size={88} colors={colors} showBorder />
-              <Pressable
-                style={styles.avatarBadge}
-                onPress={() => setShowAvatarOptions(true)}
-                disabled={isUploadingAvatar}
-              >
-                {isUploadingAvatar ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Ionicons name="camera" size={14} color="#FFFFFF" />
-                )}
-              </Pressable>
+              {isEditingUser ? (
+                <Pressable
+                  style={styles.avatarBadge}
+                  onPress={() => setShowAvatarOptions(true)}
+                  disabled={isUploadingAvatar}
+                >
+                  {isUploadingAvatar ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Ionicons name="camera" size={14} color="#FFFFFF" />
+                  )}
+                </Pressable>
+              ) : null}
             </Pressable>
             <Text style={styles.adminUserDetailName}>{selectedUser?.name || '-'}</Text>
             <Text style={styles.adminUserDetailEmail}>{selectedUser?.email || '-'}</Text>
-            <Text style={styles.profileHint}>Tap camera icon to change profile photo.</Text>
+            <Text style={styles.profileHint}>
+              {isEditingUser
+                ? 'Edit user details and save.'
+                : 'Read-only details. Tap edit icon to update.'}
+            </Text>
           </View>
 
-          <View style={styles.adminUserDetailCard}>
-            <Text style={styles.createFieldLabel}>Full Name</Text>
-            <TextInput
-              value={form.name}
-              onChangeText={(value) => setForm((prev) => ({ ...prev, name: value }))}
-              style={styles.createFieldInput}
-              placeholder="Full name"
-              placeholderTextColor={colors.textSecondary}
-            />
+          {isEditingUser ? (
+            <View style={styles.adminUserDetailCard}>
+              <Text style={styles.createFieldLabel}>Full Name</Text>
+              <TextInput
+                value={form.name}
+                onChangeText={(value) => setForm((prev) => ({ ...prev, name: value }))}
+                style={styles.createFieldInput}
+                placeholder="Full name"
+                placeholderTextColor={colors.textSecondary}
+              />
 
-            <Text style={styles.createFieldLabel}>Username</Text>
-            <TextInput
-              value={form.username}
-              onChangeText={(value) => setForm((prev) => ({ ...prev, username: value }))}
-              style={styles.createFieldInput}
-              placeholder="username"
-              placeholderTextColor={colors.textSecondary}
-            />
+              <Text style={styles.createFieldLabel}>Username</Text>
+              <TextInput
+                value={form.username}
+                onChangeText={(value) => setForm((prev) => ({ ...prev, username: value }))}
+                style={styles.createFieldInput}
+                placeholder="username"
+                placeholderTextColor={colors.textSecondary}
+              />
 
-            <Text style={styles.createFieldLabel}>Email (read only)</Text>
-            <View style={[styles.createFieldInput, styles.adminReadOnlyWrap]}>
-              <Text style={styles.adminReadOnlyText}>{selectedUser?.email || '-'}</Text>
-            </View>
-
-            <Text style={styles.createFieldLabel}>Phone</Text>
-            <TextInput
-              value={form.phone}
-              onChangeText={(value) => setForm((prev) => ({ ...prev, phone: value }))}
-              style={styles.createFieldInput}
-              placeholder="Phone"
-              placeholderTextColor={colors.textSecondary}
-            />
-
-            <Text style={styles.createFieldLabel}>Age</Text>
-            <TextInput
-              value={form.age}
-              onChangeText={(value) => setForm((prev) => ({ ...prev, age: value.replace(/[^0-9]/g, '') }))}
-              style={styles.createFieldInput}
-              keyboardType="number-pad"
-              placeholder="Age"
-              placeholderTextColor={colors.textSecondary}
-            />
-
-            <Text style={styles.createFieldLabel}>Gender</Text>
-            <View style={styles.createPillRow}>
-              {['MALE', 'FEMALE', 'OTHER'].map((g) => (
-                <Pressable
-                  key={`admin-gender-${g}`}
-                  style={[styles.createPill, form.gender === g && styles.createPillActive]}
-                  onPress={() => setForm((prev) => ({ ...prev, gender: g }))}
-                >
-                  <Text style={[styles.createPillText, form.gender === g && styles.createPillTextActive]}>{g}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Text style={styles.createFieldLabel}>Role</Text>
-            <View style={styles.createPillRow}>
-              {['USER', 'ADMIN'].map((r) => (
-                <Pressable
-                  key={`admin-role-${r}`}
-                  style={[styles.createPill, form.role === r && styles.createPillActive]}
-                  onPress={() => setForm((prev) => ({ ...prev, role: r }))}
-                >
-                  <Text style={[styles.createPillText, form.role === r && styles.createPillTextActive]}>{r}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Text style={styles.createFieldLabel}>User Mode</Text>
-            {form.role === 'ADMIN' ? (
+              <Text style={styles.createFieldLabel}>Email (read only)</Text>
               <View style={[styles.createFieldInput, styles.adminReadOnlyWrap]}>
-                <Text style={styles.adminReadOnlyText}>N/A for admin</Text>
+                <Text style={styles.adminReadOnlyText}>{selectedUser?.email || '-'}</Text>
               </View>
-            ) : (
+
+              <Text style={styles.createFieldLabel}>Phone</Text>
+              <TextInput
+                value={form.phone}
+                onChangeText={(value) => setForm((prev) => ({ ...prev, phone: value }))}
+                style={styles.createFieldInput}
+                placeholder="Phone"
+                placeholderTextColor={colors.textSecondary}
+              />
+
+              <Text style={styles.createFieldLabel}>Age</Text>
+              <TextInput
+                value={form.age}
+                onChangeText={(value) => setForm((prev) => ({ ...prev, age: value.replace(/[^0-9]/g, '') }))}
+                style={styles.createFieldInput}
+                keyboardType="number-pad"
+                placeholder="Age"
+                placeholderTextColor={colors.textSecondary}
+              />
+
+              <Text style={styles.createFieldLabel}>Gender</Text>
               <View style={styles.createPillRow}>
-                {['JOB_PICKER', 'JOB_POSTER'].map((m) => (
+                {['MALE', 'FEMALE', 'OTHER'].map((g) => (
                   <Pressable
-                    key={`admin-mode-${m}`}
-                    style={[styles.createPill, form.userMode === m && styles.createPillActive]}
-                    onPress={() => setForm((prev) => ({ ...prev, userMode: m }))}
+                    key={`admin-gender-${g}`}
+                    style={[styles.createPill, form.gender === g && styles.createPillActive]}
+                    onPress={() => setForm((prev) => ({ ...prev, gender: g }))}
                   >
-                    <Text style={[styles.createPillText, form.userMode === m && styles.createPillTextActive]}>{m}</Text>
+                    <Text style={[styles.createPillText, form.gender === g && styles.createPillTextActive]}>{g}</Text>
                   </Pressable>
                 ))}
               </View>
-            )}
 
-            <Text style={styles.createFieldLabel}>Status</Text>
-            <View style={styles.createPillRow}>
-              {['ACTIVE', 'DELETED'].map((s) => (
-                <Pressable
-                  key={`admin-status-${s}`}
-                  style={[styles.createPill, form.status === s && styles.createPillActive]}
-                  onPress={() => setForm((prev) => ({ ...prev, status: s }))}
-                >
-                  <Text style={[styles.createPillText, form.status === s && styles.createPillTextActive]}>{s}</Text>
-                </Pressable>
-              ))}
+              <Text style={styles.createFieldLabel}>Role</Text>
+              <View style={styles.createPillRow}>
+                {['USER', 'ADMIN'].map((r) => (
+                  <Pressable
+                    key={`admin-role-${r}`}
+                    style={[styles.createPill, form.role === r && styles.createPillActive]}
+                    onPress={() => setForm((prev) => ({ ...prev, role: r }))}
+                  >
+                    <Text style={[styles.createPillText, form.role === r && styles.createPillTextActive]}>{r}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.createFieldLabel}>User Mode</Text>
+              {form.role === 'ADMIN' ? (
+                <View style={[styles.createFieldInput, styles.adminReadOnlyWrap]}>
+                  <Text style={styles.adminReadOnlyText}>N/A for admin</Text>
+                </View>
+              ) : (
+                <View style={styles.createPillRow}>
+                  {['JOB_PICKER', 'JOB_POSTER'].map((m) => (
+                    <Pressable
+                      key={`admin-mode-${m}`}
+                      style={[styles.createPill, form.userMode === m && styles.createPillActive]}
+                      onPress={() => setForm((prev) => ({ ...prev, userMode: m }))}
+                    >
+                      <Text style={[styles.createPillText, form.userMode === m && styles.createPillTextActive]}>{m}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              <Text style={styles.createFieldLabel}>Status</Text>
+              <View style={styles.createPillRow}>
+                {['ACTIVE', 'DELETED'].map((s) => (
+                  <Pressable
+                    key={`admin-status-${s}`}
+                    style={[styles.createPill, form.status === s && styles.createPillActive]}
+                    onPress={() => setForm((prev) => ({ ...prev, status: s }))}
+                  >
+                    <Text style={[styles.createPillText, form.status === s && styles.createPillTextActive]}>{s}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.createFieldLabel}>Address</Text>
+              <TextInput
+                value={form.address}
+                onChangeText={(value) => setForm((prev) => ({ ...prev, address: value }))}
+                style={[styles.createFieldInput, styles.createFieldArea]}
+                multiline
+                placeholder="Address"
+                placeholderTextColor={colors.textSecondary}
+              />
+
+              <Text style={styles.createFieldLabel}>Bio</Text>
+              <TextInput
+                value={form.bio}
+                onChangeText={(value) => setForm((prev) => ({ ...prev, bio: value }))}
+                style={[styles.createFieldInput, styles.createFieldArea]}
+                multiline
+                placeholder="Bio"
+                placeholderTextColor={colors.textSecondary}
+              />
+
+              <Pressable style={[styles.createSubmitBtn, isSaving ? styles.createSubmitBtnDisabled : null]} onPress={saveDetails} disabled={isSaving}>
+                <Ionicons name="save-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.createSubmitBtnText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
+              </Pressable>
             </View>
+          ) : (
+            <View style={styles.adminUserDetailCard}>
+              <View style={styles.adminDetailRow}>
+                <Text style={styles.adminDetailLabel}>Full Name</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.name || '-'}</Text>
+              </View>
 
-            <Text style={styles.createFieldLabel}>Address</Text>
-            <TextInput
-              value={form.address}
-              onChangeText={(value) => setForm((prev) => ({ ...prev, address: value }))}
-              style={[styles.createFieldInput, styles.createFieldArea]}
-              multiline
-              placeholder="Address"
-              placeholderTextColor={colors.textSecondary}
-            />
+              <View style={styles.adminDetailRow}>
+                <Text style={styles.adminDetailLabel}>Username</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.username || '-'}</Text>
+              </View>
 
-            <Text style={styles.createFieldLabel}>Bio</Text>
-            <TextInput
-              value={form.bio}
-              onChangeText={(value) => setForm((prev) => ({ ...prev, bio: value }))}
-              style={[styles.createFieldInput, styles.createFieldArea]}
-              multiline
-              placeholder="Bio"
-              placeholderTextColor={colors.textSecondary}
-            />
+              <View style={styles.adminDetailRow}>
+                <Text style={styles.adminDetailLabel}>Email</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.email || '-'}</Text>
+              </View>
 
-            <Pressable style={[styles.createSubmitBtn, isSaving ? styles.createSubmitBtnDisabled : null]} onPress={saveDetails} disabled={isSaving}>
-              <Ionicons name="save-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.createSubmitBtnText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
-            </Pressable>
-          </View>
+              <View style={styles.adminDetailRow}>
+                <Text style={styles.adminDetailLabel}>Phone</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.phone || '-'}</Text>
+              </View>
+
+              <View style={styles.adminDetailRow}>
+                <Text style={styles.adminDetailLabel}>Age</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.age ? String(selectedUser.age) : '-'}</Text>
+              </View>
+
+              <View style={styles.adminDetailRow}>
+                <Text style={styles.adminDetailLabel}>Gender</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.gender || '-'}</Text>
+              </View>
+
+              <View style={styles.adminDetailRow}>
+                <Text style={styles.adminDetailLabel}>Role</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.role || '-'}</Text>
+              </View>
+
+              <View style={styles.adminDetailRow}>
+                <Text style={styles.adminDetailLabel}>User Mode</Text>
+                <Text style={styles.adminDetailValue}>
+                  {selectedUser?.role === 'ADMIN' ? 'N/A for admin' : (selectedUser?.userMode || '-')}
+                </Text>
+              </View>
+
+              <View style={styles.adminDetailRow}>
+                <Text style={styles.adminDetailLabel}>Status</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.status || '-'}</Text>
+              </View>
+
+              <View style={styles.adminDetailRowBlock}>
+                <Text style={styles.adminDetailLabel}>Address</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.address || '-'}</Text>
+              </View>
+
+              <View style={[styles.adminDetailRowBlock, styles.adminDetailRowLast]}>
+                <Text style={styles.adminDetailLabel}>Bio</Text>
+                <Text style={styles.adminDetailValue}>{selectedUser?.bio || '-'}</Text>
+              </View>
+            </View>
+          )}
+
+          {!isEditingUser ? (
+            <View style={styles.adminUserDetailCard}>
+              <Text style={styles.createFieldLabel}>User Jobs</Text>
+              <View style={styles.createPillRow}>
+                <Pressable
+                  style={[styles.createPill, jobTab === 'POSTED' && styles.createPillActive]}
+                  onPress={() => setJobTab('POSTED')}
+                >
+                  <Text style={[styles.createPillText, jobTab === 'POSTED' && styles.createPillTextActive]}>
+                    Posted ({postedJobs.length})
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.createPill, jobTab === 'PICKED' && styles.createPillActive]}
+                  onPress={() => setJobTab('PICKED')}
+                >
+                  <Text style={[styles.createPillText, jobTab === 'PICKED' && styles.createPillTextActive]}>
+                    Picked ({pickedJobs.length})
+                  </Text>
+                </Pressable>
+              </View>
+
+              {activeUserJobs.length ? (
+                activeUserJobs.map((job) => (
+                  <Pressable key={`${jobTab}-${job.id}`} style={styles.adminJobCard} onPress={() => setSelectedUserJob(job)}>
+                    <View style={styles.adminJobTop}>
+                      <Text style={styles.adminJobTitle} numberOfLines={1}>
+                        {job?.title || '-'}
+                      </Text>
+                      <View style={styles.adminJobStatusPill}>
+                        <Text style={styles.adminJobStatusText}>{String(job?.status || 'OPEN').replace('_', ' ')}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.adminJobMeta} numberOfLines={1}>By: {job?.owner?.name || '-'}</Text>
+                    <Text style={styles.adminJobMeta} numberOfLines={1}>Category: {job?.category?.name || '-'}</Text>
+                    <View style={styles.adminJobBottomRow}>
+                      <Text style={styles.adminJobBudget}>₹{job?.budget || '-'}</Text>
+                      <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primary} />
+                    </View>
+                  </Pressable>
+                ))
+              ) : (
+                <AdminListState
+                  mode="empty"
+                  title={jobTab === 'POSTED' ? 'No posted jobs' : 'No picked jobs'}
+                  subtitle={jobTab === 'POSTED'
+                    ? 'This user has not posted any jobs yet.'
+                    : 'This user has not picked any jobs yet.'}
+                  colors={colors}
+                  emptySource={ADMIN_EMPTY_ANIMATION}
+                />
+              )}
+            </View>
+          ) : null}
         </ScrollView>
 
         <Modal visible={showAvatarOptions} transparent animationType="fade" onRequestClose={() => setShowAvatarOptions(false)}>
@@ -847,15 +1015,48 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
               </View>
               <Text style={styles.previewName}>{selectedUser?.name || 'User'}</Text>
               <Text style={styles.previewEmail}>{selectedUser?.email || '-'}</Text>
-              <Pressable
-                style={styles.previewEditBtn}
-                onPress={() => {
-                  setShowAvatarPreview(false);
-                  setShowAvatarOptions(true);
-                }}
-              >
-                <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.previewEditText}>Edit Photo</Text>
+              {isEditingUser ? (
+                <Pressable
+                  style={styles.previewEditBtn}
+                  onPress={() => {
+                    setShowAvatarPreview(false);
+                    setShowAvatarOptions(true);
+                  }}
+                >
+                  <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.previewEditText}>Edit Photo</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={Boolean(selectedUserJob)} transparent animationType="fade" onRequestClose={() => setSelectedUserJob(null)}>
+          <View style={styles.modalBackdrop}>
+            <View style={styles.adminJobDetailModal}>
+              <View style={styles.adminJobDetailHeader}>
+                <Text style={styles.adminJobDetailTitle}>{selectedUserJob?.title || 'Job Details'}</Text>
+                <View style={styles.adminJobStatusPill}>
+                  <Text style={styles.adminJobStatusText}>{String(selectedUserJob?.status || 'OPEN').replace('_', ' ')}</Text>
+                </View>
+              </View>
+              <Text style={styles.adminJobDetailDescription}>{selectedUserJob?.description || 'No description provided.'}</Text>
+              <View style={styles.adminJobDetailGrid}>
+                <Text style={styles.adminJobMeta}>Category: {selectedUserJob?.category?.name || '-'}</Text>
+                <Text style={styles.adminJobMeta}>Posted By: {selectedUserJob?.owner?.name || '-'}</Text>
+                <Text style={styles.adminJobMeta}>Email: {selectedUserJob?.owner?.email || '-'}</Text>
+                <Text style={styles.adminJobMeta}>Budget: ₹{selectedUserJob?.budget || '-'}</Text>
+                <Text style={styles.adminJobMeta}>Type: {String(selectedUserJob?.jobType || '').replace('_', ' ') || '-'}</Text>
+                <Text style={styles.adminJobMeta}>
+                  Due Date: {selectedUserJob?.dueDate ? String(selectedUserJob.dueDate).slice(0, 10) : '-'}
+                </Text>
+                {selectedUserJob?.pickedAt ? (
+                  <Text style={styles.adminJobMeta}>Picked At: {String(selectedUserJob.pickedAt).slice(0, 10)}</Text>
+                ) : null}
+              </View>
+              <JobLocationCard job={selectedUserJob} title="Job Location" styles={styles} colors={colors} />
+              <Pressable style={styles.optionCancel} onPress={() => setSelectedUserJob(null)}>
+                <Text style={styles.optionCancelText}>Close</Text>
               </Pressable>
             </View>
           </View>
