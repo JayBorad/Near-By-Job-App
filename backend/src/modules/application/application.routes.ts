@@ -43,11 +43,17 @@ router.get(
   '/job/:jobId',
   authenticate,
   authorizeRoles('USER', 'ADMIN'),
-  authorizeUserModes('JOB_POSTER'),
+  authorizeUserModes('JOB_POSTER', 'JOB_PICKER'),
   jobIdParamValidator,
   validate,
   controller.getApplicationsByJob
 );
-router.get('/me', authenticate, authorizeRoles('USER', 'ADMIN'), authorizeUserModes('JOB_PICKER'), controller.getAppliedJobsByUser);
+router.get(
+  '/me',
+  authenticate,
+  authorizeRoles('USER', 'ADMIN'),
+  authorizeUserModes('JOB_PICKER', 'JOB_POSTER'),
+  controller.getAppliedJobsByUser
+);
 
 export default router;
