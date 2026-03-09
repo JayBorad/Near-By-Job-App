@@ -33,12 +33,13 @@ const TYPE_STYLES = {
 export function AnimatedPopup({ visible, title, message, type = 'error', onClose, duration = 3000 }) {
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastTranslateY = useRef(new Animated.Value(-24)).current;
+  const useNativeDriver = Platform.OS !== 'web';
 
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.timing(toastOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.timing(toastTranslateY, { toValue: 0, duration: 220, useNativeDriver: true })
+        Animated.timing(toastOpacity, { toValue: 1, duration: 180, useNativeDriver }),
+        Animated.timing(toastTranslateY, { toValue: 0, duration: 220, useNativeDriver })
       ]).start();
       const timer = setTimeout(() => {
         if (onClose) onClose();
@@ -48,7 +49,7 @@ export function AnimatedPopup({ visible, title, message, type = 'error', onClose
 
     toastOpacity.setValue(0);
     toastTranslateY.setValue(-24);
-  }, [visible, toastOpacity, toastTranslateY, onClose, duration]);
+  }, [visible, toastOpacity, toastTranslateY, onClose, duration, useNativeDriver]);
 
   if (!visible) return null;
 
@@ -105,10 +106,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 8px 12px rgba(15, 23, 42, 0.20)' }
+      : {
+          shadowColor: '#0F172A',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.2,
+          shadowRadius: 12
+        }),
     elevation: 10
   },
   content: {

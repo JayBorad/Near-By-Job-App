@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 function LoaderVisual({ size = 86 }) {
   const ringSize = Math.max(56, size);
@@ -65,10 +65,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D1D5DB',
     alignItems: 'center',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 10px 18px rgba(15, 23, 42, 0.22)' }
+      : {
+          shadowColor: '#0F172A',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.22,
+          shadowRadius: 18
+        }),
     elevation: 14
   },
   inlineCard: {
