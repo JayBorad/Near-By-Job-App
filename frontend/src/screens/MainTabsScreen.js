@@ -688,7 +688,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   };
 
   const fetchMyJobs = async ({ forceLoader = false } = {}) => {
-    if (!token || userRole !== 'USER' || userMode !== 'JOB_POSTER') return;
+    if (!token || userRole !== 'USER') return;
     try {
       if (forceLoader || !myJobs.length) {
         setIsMyJobsLoading(true);
@@ -798,7 +798,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   };
 
   const fetchMyApplications = async ({ forceLoader = false } = {}) => {
-    if (!token || userRole !== 'USER' || userMode !== 'JOB_PICKER') return;
+    if (!token || userRole !== 'USER') return;
     try {
       if (forceLoader || !myApplications.length) {
         setIsMyApplicationsLoading(true);
@@ -1370,6 +1370,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   }, [activeTab, token, userRole, userMode]);
 
   useEffect(() => {
+    if (!token || userRole !== 'USER' || activeTab !== 'dashboard') return;
+    fetchMyJobs();
+  }, [activeTab, token, userRole]);
+
+  useEffect(() => {
     if (!token || userRole !== 'USER' || userMode !== 'JOB_PICKER' || activeTab !== 'explore') return;
     fetchPickerJobs();
   }, [activeTab, token, userRole, userMode]);
@@ -1383,6 +1388,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     if (!token || userRole !== 'USER' || userMode !== 'JOB_PICKER' || activeTab !== 'explore' || pickerExplorePage !== 'applications') return;
     fetchMyApplications({ forceLoader: true });
   }, [activeTab, token, userRole, userMode, pickerExplorePage]);
+
+  useEffect(() => {
+    if (!token || userRole !== 'USER' || activeTab !== 'dashboard') return;
+    fetchMyApplications({ forceLoader: false });
+  }, [activeTab, token, userRole]);
 
   useEffect(() => {
     if (!token || userRole !== 'USER') return;
