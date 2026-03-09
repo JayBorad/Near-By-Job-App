@@ -17,12 +17,15 @@
     "countries-list": "^3.2.2",
     "expo": "^54.0.0",
     "expo-image-picker": "^55.0.10",
+    "expo-linear-gradient": "^55.0.8",
     "lottie-react-native": "^7.3.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-easy-crop": "^5.5.6",
     "react-native": "0.81.5",
+    "react-native-gifted-charts": "^1.4.76",
     "react-native-maps": "^1.27.1",
+    "react-native-svg": "^15.15.3",
     "react-native-web": "^0.21.0",
     "socket.io-client": "^4.8.3"
   }
