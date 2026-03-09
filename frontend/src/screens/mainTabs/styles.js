@@ -86,6 +86,1074 @@ export const createStyles = (colors) =>
       textAlign: 'center',
       lineHeight: 22
     },
+    dashboardHeroCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 18,
+      paddingHorizontal: 16,
+      marginBottom: 12,
+      overflow: 'hidden'
+    },
+    dashboardBudgetHero: {
+      borderRadius: 24,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      marginBottom: 10
+    },
+    dashboardBudgetTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    dashboardBudgetTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    dashboardBudgetAvatar: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: '#F5D0FE',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 8
+    },
+    dashboardBudgetTitle: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      fontWeight: '800'
+    },
+    dashboardBudgetSub: {
+      color: '#E9D5FF',
+      fontSize: 11,
+      fontWeight: '600'
+    },
+    dashboardBudgetMonthPill: {
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5
+    },
+    dashboardBudgetMonthText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardBudgetAmount: {
+      marginTop: 14,
+      color: '#FFFFFF',
+      fontSize: 36,
+      fontWeight: '800'
+    },
+    dashboardBudgetCaption: {
+      color: '#F5D0FE',
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    dashboardBudgetMeta: {
+      marginTop: 8,
+      color: '#EDE9FE',
+      fontSize: 11,
+      fontWeight: '600'
+    },
+    dashboardStatsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8
+    },
+    dashboardStatCard: {
+      width: '49%',
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 10,
+      paddingVertical: 12
+    },
+    dashboardStatLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardStatValue: {
+      marginTop: 6,
+      color: colors.textMain,
+      fontSize: 18,
+      fontWeight: '800'
+    },
+    dashboardStatSub: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '600'
+    },
+    dashboardHeroBlobA: {
+      position: 'absolute',
+      width: 168,
+      height: 168,
+      borderRadius: 84,
+      backgroundColor: colors.primarySoft,
+      right: -54,
+      top: -40
+    },
+    dashboardHeroBlobB: {
+      position: 'absolute',
+      width: 110,
+      height: 110,
+      borderRadius: 55,
+      backgroundColor: colors.sheet,
+      left: -24,
+      bottom: -26
+    },
+    dashboardHeroEyebrow: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+      textTransform: 'uppercase'
+    },
+    dashboardHeaderSubtitle: {
+      marginTop: 8,
+      color: colors.textMain,
+      fontSize: 16,
+      fontWeight: '700',
+      lineHeight: 20
+    },
+    dashboardLoadingRow: {
+      marginTop: 10,
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    dashboardLoadingText: {
+      marginLeft: 8,
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '600'
+    },
+    dashboardKpiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      marginBottom: 12
+    },
+    dashboardKpiCard: {
+      width: '49%',
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 10,
+      paddingVertical: 12,
+      marginBottom: 8
+    },
+    dashboardKpiIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    dashboardKpiToneBlue: {
+      backgroundColor: '#0EA5E9'
+    },
+    dashboardKpiToneIndigo: {
+      backgroundColor: '#4F46E5'
+    },
+    dashboardKpiToneTeal: {
+      backgroundColor: '#0D9488'
+    },
+    dashboardKpiToneGreen: {
+      backgroundColor: '#16A34A'
+    },
+    dashboardKpiLabel: {
+      marginTop: 9,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardKpiValue: {
+      marginTop: 5,
+      color: colors.textMain,
+      fontSize: 16,
+      fontWeight: '800'
+    },
+    dashboardKpiNote: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '600'
+    },
+    dashboardChartCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      marginBottom: 12
+    },
+    dashboardStatusCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      marginBottom: 12
+    },
+    dashboardSectionHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    dashboardStatusTitle: {
+      color: colors.textMain,
+      fontSize: 15,
+      fontWeight: '800'
+    },
+    dashboardGraphHint: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardLegendRow: {
+      marginTop: 10,
+      marginBottom: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap'
+    },
+    dashboardLegendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginRight: 14,
+      marginBottom: 4
+    },
+    dashboardLegendDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: 6
+    },
+    dashboardLegendText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardAxisText: {
+      color: colors.textSecondary,
+      fontSize: 10
+    },
+    dashboardPointerCard: {
+      width: 132,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 10,
+      paddingVertical: 8
+    },
+    dashboardPointerStage: {
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '800',
+      marginBottom: 4
+    },
+    dashboardPointerRow: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardSelectedBarCard: {
+      marginTop: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 10,
+      paddingVertical: 8
+    },
+    dashboardSelectedBarTitle: {
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    dashboardSelectedBarValue: {
+      marginTop: 3,
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    dashboardWebBarWrap: {
+      marginTop: 10,
+      minHeight: 192,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between'
+    },
+    dashboardWebBarCol: {
+      flex: 1,
+      alignItems: 'center',
+      paddingHorizontal: 3
+    },
+    dashboardWebBarTopText: {
+      color: colors.textMain,
+      fontSize: 11,
+      fontWeight: '700',
+      marginBottom: 6
+    },
+    dashboardWebBarTrack: {
+      width: '100%',
+      maxWidth: 38,
+      height: 148,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      justifyContent: 'flex-end',
+      overflow: 'hidden'
+    },
+    dashboardWebBarFill: {
+      width: '100%',
+      borderRadius: 10
+    },
+    dashboardWebBarLabel: {
+      marginTop: 7,
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700',
+      textAlign: 'center'
+    },
+    dashboardDateChipRow: {
+      marginTop: 10,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6
+    },
+    dashboardDateChip: {
+      height: 28,
+      paddingHorizontal: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    dashboardDateChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    dashboardDateChipText: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontWeight: '700'
+    },
+    dashboardDateChipTextActive: {
+      color: colors.primary
+    },
+    dashboardGroupBarWrap: {
+      marginTop: 10,
+      minHeight: 172,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between'
+    },
+    dashboardGroupBarDay: {
+      flex: 1,
+      alignItems: 'center',
+      paddingHorizontal: 2
+    },
+    dashboardGroupBarPair: {
+      width: '100%',
+      maxWidth: 38,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between'
+    },
+    dashboardGroupBarTrack: {
+      width: 16,
+      height: 132,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      justifyContent: 'flex-end',
+      overflow: 'hidden'
+    },
+    dashboardGroupBarFill: {
+      width: '100%',
+      borderRadius: 8
+    },
+    dashboardGroupBarLabel: {
+      marginTop: 8,
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    dashboardReferenceCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      marginBottom: 12
+    },
+    dashboardReferenceHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10
+    },
+    dashboardReferenceTitle: {
+      color: colors.textMain,
+      fontSize: 16,
+      fontWeight: '800'
+    },
+    dashboardReferenceMonth: {
+      height: 28,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.sheet
+    },
+    dashboardReferenceMonthText: {
+      marginLeft: 5,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardStackChart: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      minHeight: 140
+    },
+    dashboardStackChartWrap: {
+      flexDirection: 'row',
+      alignItems: 'flex-end'
+    },
+    dashboardYAxisCol: {
+      width: 30,
+      height: 120,
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginRight: 6,
+      marginBottom: 20
+    },
+    dashboardYAxisText: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    dashboardStackMain: {
+      flex: 1
+    },
+    dashboardStackGrid: {
+      height: 112,
+      justifyContent: 'space-between',
+      marginBottom: 2
+    },
+    dashboardStackGridLine: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border
+    },
+    dashboardStackBarsRow: {
+      marginTop: -112,
+      height: 132,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between'
+    },
+    dashboardStackCol: {
+      flex: 1,
+      alignItems: 'center'
+    },
+    dashboardStackBar: {
+      width: 30,
+      height: 112,
+      borderRadius: 8,
+      justifyContent: 'flex-end',
+      overflow: 'hidden'
+    },
+    dashboardStackSegment: {
+      width: '100%'
+    },
+    dashboardStackLabel: {
+      marginTop: 8,
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    dashboardRefLegendRow: {
+      marginTop: 12,
+      flexDirection: 'row',
+      justifyContent: 'space-around'
+    },
+    dashboardRefLegendBlue: {
+      color: '#2563EB',
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardRefLegendOrange: {
+      color: '#F97316',
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardRefLegendYellow: {
+      color: '#CA8A04',
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardStackMonthRow: {
+      marginTop: -8,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingHorizontal: 6
+    },
+    dashboardStackMonthText: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    dashboardProfitCard: {
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingTop: 12,
+      paddingBottom: 8,
+      marginBottom: 12
+    },
+    dashboardProfitTitle: {
+      color: '#FFEDD5',
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    dashboardProfitValue: {
+      marginTop: 6,
+      color: '#FFFFFF',
+      fontSize: 34,
+      fontWeight: '900'
+    },
+    dashboardProfitMeta: {
+      marginTop: 2,
+      color: '#FFEDD5',
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    dashboardProfitBadge: {
+      marginTop: 4,
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    dashboardProfitBadgeText: {
+      backgroundColor: '#D9F99D',
+      color: '#166534',
+      fontSize: 10,
+      fontWeight: '800',
+      borderRadius: 999,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      marginRight: 6
+    },
+    dashboardFilterRow: {
+      flexDirection: 'row',
+      marginBottom: 10,
+      gap: 8
+    },
+    dashboardHeaderOnlyWrap: {
+      flex: 1,
+      paddingHorizontal: 0,
+      paddingTop: 0,
+      position: 'relative'
+    },
+    dashboardHeaderOnlyContent: {
+      paddingBottom: TAB_BAR_HEIGHT + 16
+    },
+    dashboardHeaderShell: {
+      backgroundColor: colors.surface,
+      borderRadius: 0,
+      borderBottomLeftRadius: 18,
+      borderBottomRightRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderTopWidth: 0,
+      paddingHorizontal: 14,
+      paddingVertical: 12
+    },
+    dashboardTopHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 0
+    },
+    dashboardTopLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1
+    },
+    dashboardProfileImage: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    dashboardProfileFallback: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    dashboardProfileFallbackText: {
+      color: colors.primary,
+      fontSize: 14,
+      fontWeight: '800'
+    },
+    dashboardTopMeta: {
+      marginLeft: 10
+    },
+    dashboardWelcomeText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '600'
+    },
+    dashboardNameText: {
+      color: colors.textMain,
+      fontSize: 20,
+      fontWeight: '800'
+    },
+    dashboardNotificationBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative'
+    },
+    dashboardNotificationDot: {
+      position: 'absolute',
+      right: 8,
+      top: 8,
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: '#EF4444'
+    },
+    dashboardUserProfitCard: {
+      marginTop: 14,
+      marginHorizontal: 12,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingTop: 14,
+      paddingBottom: 12,
+      overflow: 'hidden'
+    },
+    dashboardUserProfitGlowA: {
+      position: 'absolute',
+      right: -30,
+      top: -20,
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: 'rgba(255,255,255,0.12)'
+    },
+    dashboardUserProfitGlowB: {
+      position: 'absolute',
+      left: -26,
+      bottom: -28,
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: 'rgba(255,255,255,0.09)'
+    },
+    dashboardUserProfitCardLabel: {
+      color: 'rgba(255,255,255,0.86)',
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    dashboardUserProfitCardAmount: {
+      marginTop: 4,
+      color: '#FFFFFF',
+      fontSize: 34,
+      fontWeight: '900'
+    },
+    dashboardUserProfitCardTrendRow: {
+      marginTop: 4,
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    dashboardUserProfitCardTrendBadge: {
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      color: '#FFFFFF',
+      borderRadius: 999,
+      fontSize: 10,
+      fontWeight: '800',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      marginRight: 6
+    },
+    dashboardUserProfitCardTrendText: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    dashboardUserProfitChartWrap: {
+      marginTop: 8,
+      minHeight: 128
+    },
+    dashboardUserProfitPointTap: {
+      position: 'absolute',
+      width: 32,
+      height: 32,
+      borderRadius: 16
+    },
+    dashboardUserProfitTooltip: {
+      marginTop: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.16)'
+    },
+    dashboardUserProfitTooltipDate: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardUserProfitTooltipAmount: {
+      marginTop: 3,
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '900'
+    },
+    dashboardSalesCard: {
+      marginTop: 12,
+      marginHorizontal: 12,
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 12
+    },
+    dashboardSalesHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    dashboardSalesTitle: {
+      color: colors.textMain,
+      fontSize: 15,
+      fontWeight: '800'
+    },
+    dashboardSalesTotal: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    dashboardSalesPeriodWrap: {
+      position: 'relative',
+      zIndex: 80
+    },
+    dashboardSalesDropdownTrigger: {
+      height: 28,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 9,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 5,
+      zIndex: 90
+    },
+    dashboardSalesDropdownTriggerText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardSalesDropdownMenu: {
+      position: 'absolute',
+      top: 32,
+      right: 0,
+      width: 104,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      overflow: 'hidden',
+      zIndex: 95
+    },
+    dashboardSalesDropdownItem: {
+      height: 32,
+      paddingHorizontal: 10,
+      justifyContent: 'center'
+    },
+    dashboardSalesDropdownItemActive: {
+      backgroundColor: colors.primarySoft
+    },
+    dashboardSalesDropdownItemText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    dashboardSalesDropdownItemTextActive: {
+      color: colors.primary
+    },
+    dashboardGlobalDismissLayer: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 70
+    },
+    dashboardSalesGraphWrap: {
+      marginTop: 8,
+      minHeight: 180
+    },
+    dashboardSalesYAxisWrap: {
+      position: 'absolute',
+      left: 0,
+      top: 8,
+      height: 142,
+      justifyContent: 'space-between'
+    },
+    dashboardSalesXAxisWrap: {
+      marginTop: -16,
+      marginLeft: 28,
+      marginRight: 8,
+      flexDirection: 'row',
+      justifyContent: 'space-between'
+    },
+    dashboardSalesAxisText: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700',
+      minWidth: 18,
+      textAlign: 'center'
+    },
+    dashboardTypeFilterRow: {
+      marginTop: 12,
+      marginHorizontal: 12,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8
+    },
+    dashboardTypeFilterChip: {
+      height: 32,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    dashboardTypeFilterChipIcon: {
+      marginRight: 5
+    },
+    dashboardTypeFilterChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    dashboardTypeFilterChipText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    dashboardTypeFilterChipTextActive: {
+      color: colors.primary
+    },
+    dashboardStatusMiniGrid: {
+      marginTop: 10,
+      marginHorizontal: 12,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      marginBottom: 12
+    },
+    dashboardStatusMiniCardWrap: {
+      width: '48.8%',
+      marginBottom: 8
+    },
+    dashboardStatusMiniCard: {
+      backgroundColor: colors.sheet,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      overflow: 'hidden'
+    },
+    dashboardStatusMiniHead: {
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    dashboardStatusMiniIcon: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.75)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 6
+    },
+    dashboardStatusMiniLabel: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardStatusMiniValue: {
+      marginTop: 8,
+      color: colors.textMain,
+      fontSize: 30,
+      fontWeight: '900'
+    },
+    dashboardStatusMiniMeta: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '600'
+    },
+    dashboardFilterChip: {
+      height: 30,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 10,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    dashboardFilterChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    dashboardFilterChipText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    dashboardFilterChipTextActive: {
+      color: colors.primary
+    },
+    dashboardTotalPill: {
+      minHeight: 24,
+      paddingHorizontal: 10,
+      borderRadius: 999,
+      backgroundColor: colors.primarySoft,
+      justifyContent: 'center'
+    },
+    dashboardTotalPillText: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    dashboardStatusSubtitle: {
+      marginTop: 6,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    dashboardStatusList: {
+      marginTop: 12,
+      gap: 10
+    },
+    dashboardStatusRow: {
+      gap: 6
+    },
+    dashboardStatusRowTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    dashboardStatusLabelWrap: {
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    dashboardStatusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: 7
+    },
+    dashboardStatusLabel: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '700'
+    },
+    dashboardStatusValue: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    dashboardStatusTrack: {
+      width: '100%',
+      height: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      overflow: 'hidden'
+    },
+    dashboardStatusFill: {
+      height: '100%',
+      minWidth: 4,
+      borderRadius: 999
+    },
+    dashboardEarningBars: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      marginTop: 12,
+      minHeight: 170
+    },
+    dashboardEarningCol: {
+      flex: 1,
+      alignItems: 'center',
+      paddingHorizontal: 2
+    },
+    dashboardEarningValue: {
+      color: colors.textSecondary,
+      fontSize: 9,
+      fontWeight: '700',
+      textAlign: 'center',
+      marginBottom: 6
+    },
+    dashboardEarningTrack: {
+      width: '100%',
+      maxWidth: 54,
+      height: 120,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      justifyContent: 'flex-end',
+      overflow: 'hidden'
+    },
+    dashboardEarningFill: {
+      width: '100%',
+      borderRadius: 10
+    },
+    dashboardEarningLabel: {
+      marginTop: 7,
+      color: colors.textSecondary,
+      fontSize: 9,
+      fontWeight: '700',
+      textAlign: 'center'
+    },
     tabBarOuter: {
       position: 'absolute',
       left: 0,
