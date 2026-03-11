@@ -3,6 +3,7 @@ import { supabaseAdmin } from '../../config/supabase.js';
 import ApiError from '../../utils/ApiError.js';
 import { parsePagination } from '../../utils/pagination.js';
 import { Prisma, Role, UserMode, UserStatus } from '@prisma/client';
+import { withUserReviewSummary, withUsersReviewSummary } from '../../utils/review-summary.js';
 
 const ALLOWED_ROLES = new Set([Role.USER, Role.ADMIN]);
 const ALLOWED_USER_MODES = new Set([UserMode.JOB_PICKER, UserMode.JOB_POSTER]);
@@ -147,7 +148,7 @@ export const getProfile = async (userId) => {
     throw new ApiError(404, 'User not found');
   }
 
-  return user;
+  return withUserReviewSummary(user);
 };
 
 export const updateProfile = async (userId, payload) => {
@@ -207,11 +208,12 @@ export const updateProfile = async (userId, payload) => {
   }
 
   try {
-    return prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: payload,
       select: userSelect
     });
+    return withUserReviewSummary(updatedUser);
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       throw new ApiError(409, 'Email or phone already exists');
@@ -287,7 +289,7 @@ const updateAvatarForUser = async (userId, payload) => {
     await supabaseAdmin.storage.from(AVATAR_BUCKET).remove([oldAvatarPath]);
   }
 
-  return updatedUser;
+  return withUserReviewSummary(updatedUser);
 };
 
 export const updateAvatar = async (userId, payload) => updateAvatarForUser(userId, payload);
@@ -339,9 +341,10 @@ export const getAllUsers = async (query) => {
     }),
     prisma.user.count({ where })
   ]);
+  const usersWithReviewSummary = await withUsersReviewSummary(users);
 
   return {
-    users,
+    users: usersWithReviewSummary,
     meta: {
       total,
       page,
@@ -373,11 +376,12 @@ export const updateUserAccess = async (adminId, userId, payload) => {
     throw new ApiError(404, 'User not found');
   }
 
-  return prisma.user.update({
+  const updatedUser = await prisma.user.update({
     where: { id: userId },
     data,
     select: userSelect
   });
+  return withUserReviewSummary(updatedUser);
 };
 
 export const updateUserByAdmin = async (adminId, userId, payload) => {
@@ -444,9 +448,10 @@ export const updateUserByAdmin = async (adminId, userId, payload) => {
     throw new ApiError(400, 'No valid fields provided for update');
   }
 
-  return prisma.user.update({
+  const updatedUser = await prisma.user.update({
     where: { id: userId },
     data,
     select: adminUserSelect
   });
+  return withUserReviewSummary(updatedUser);
 };

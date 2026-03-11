@@ -1,5 +1,7 @@
 import prisma from '../../config/prisma.js';
 import ApiError from '../../utils/ApiError.js';
+import { getReviewSummaryMapForUsers, isMissingReviewTableError } from '../../utils/review-summary.js';
+import { emptyApplicationStats, getApplicationStatsMapForJobs } from '../../utils/application-stats.js';
 
 export const applyJob = async (userId, jobId) => {
   const job = await prisma.job.findFirst({
@@ -114,7 +116,7 @@ export const getApplicationsByJob = async (ownerId, ownerRole, jobId) => {
     throw new ApiError(403, 'Only job owner can view applications');
   }
 
-  return prisma.jobApplication.findMany({
+  const applications = await prisma.jobApplication.findMany({
     where: { jobId },
     include: {
       applicant: {
@@ -123,10 +125,43 @@ export const getApplicationsByJob = async (ownerId, ownerRole, jobId) => {
     },
     orderBy: { createdAt: 'desc' }
   });
+
+  const applicantIds = applications.map((item) => item?.applicant?.id).filter(Boolean);
+  const applicantRatingMap = await getReviewSummaryMapForUsers(applicantIds);
+
+  let ownerReviews = [];
+  try {
+    ownerReviews = await prisma.review.findMany({
+      where: {
+        jobId,
+        reviewerId: job.createdBy
+      },
+      select: {
+        id: true,
+        revieweeId: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+  } catch (error) {
+    if (!isMissingReviewTableError(error)) throw error;
+  }
+  const ownerReviewMap = new Map(ownerReviews.map((item) => [item.revieweeId, item]));
+
+  return applications.map((application) => ({
+    ...application,
+    applicant: {
+      ...application.applicant,
+      ratingSummary: applicantRatingMap.get(application?.applicant?.id) || { averageRating: null, totalReviews: 0 }
+    },
+    ownerReview: ownerReviewMap.get(application?.applicant?.id) || null
+  }));
 };
 
 export const getAppliedJobsByUser = async (userId) => {
-  return prisma.jobApplication.findMany({
+  const applications = await prisma.jobApplication.findMany({
     where: { applicantId: userId },
     include: {
       job: {
@@ -138,4 +173,21 @@ export const getAppliedJobsByUser = async (userId) => {
     },
     orderBy: { createdAt: 'desc' }
   });
+
+  const ownerIds = applications.map((item) => item?.job?.owner?.id).filter(Boolean);
+  const jobIds = applications.map((item) => item?.job?.id).filter(Boolean);
+  const ownerRatingMap = await getReviewSummaryMapForUsers(ownerIds);
+  const applicationStatsMap = await getApplicationStatsMapForJobs(jobIds);
+
+  return applications.map((application) => ({
+    ...application,
+    job: {
+      ...application.job,
+      applicationStats: applicationStatsMap.get(application?.job?.id) || { ...emptyApplicationStats },
+      owner: {
+        ...application.job.owner,
+        ratingSummary: ownerRatingMap.get(application?.job?.owner?.id) || { averageRating: null, totalReviews: 0 }
+      }
+    }
+  }));
 };

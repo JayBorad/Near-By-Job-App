@@ -48,6 +48,7 @@ export const setupChatSocket = (io) => {
 
   io.on('connection', (socket) => {
     const currentUserId = socket.user.id;
+    const currentUserRole = socket.user.role;
     addConnectedUserSocket(currentUserId, socket.id);
 
     socket.on('join_job_room', async ({ jobId, peerId }, ack) => {
@@ -56,7 +57,7 @@ export const setupChatSocket = (io) => {
         return;
       }
       try {
-        await validateChatParticipants(jobId, currentUserId, peerId);
+        await validateChatParticipants(jobId, currentUserId, peerId, currentUserRole);
       } catch (error) {
         if (ack) ack({ success: false, message: error.message });
         return;
@@ -80,7 +81,7 @@ export const setupChatSocket = (io) => {
     socket.on('typing_start', async ({ jobId, receiverId }) => {
       if (!jobId || !receiverId) return;
       try {
-        await validateChatParticipants(jobId, currentUserId, receiverId);
+        await validateChatParticipants(jobId, currentUserId, receiverId, currentUserRole);
       } catch (_error) {
         return;
       }
@@ -90,7 +91,7 @@ export const setupChatSocket = (io) => {
     socket.on('typing_stop', async ({ jobId, receiverId }) => {
       if (!jobId || !receiverId) return;
       try {
-        await validateChatParticipants(jobId, currentUserId, receiverId);
+        await validateChatParticipants(jobId, currentUserId, receiverId, currentUserRole);
       } catch (_error) {
         return;
       }
@@ -103,7 +104,7 @@ export const setupChatSocket = (io) => {
         return;
       }
       try {
-        await validateChatParticipants(jobId, currentUserId, peerId);
+        await validateChatParticipants(jobId, currentUserId, peerId, currentUserRole);
         const seenIds = await markMessagesSeen({ jobId, viewerId: currentUserId });
         if (seenIds.length) {
           io.to(jobId).emit('message_status_updated', {
@@ -123,7 +124,8 @@ export const setupChatSocket = (io) => {
           jobId: payload.jobId,
           senderId: currentUserId,
           receiverId: payload.receiverId,
-          message: payload.message
+          message: payload.message,
+          senderRole: currentUserRole
         });
 
         io.to(payload.jobId).emit('new_message', message);
