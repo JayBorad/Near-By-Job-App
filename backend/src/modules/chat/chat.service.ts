@@ -28,8 +28,29 @@ const isAcceptedApplicant = async (jobId, userId) => {
   return Boolean(application);
 };
 
-export const validateChatParticipants = async (jobId, senderId, receiverId) => {
+const hasAppliedToJob = async (jobId, userId) => {
+  const application = await prisma.jobApplication.findFirst({
+    where: {
+      jobId,
+      applicantId: userId
+    },
+    select: { id: true }
+  });
+
+  return Boolean(application);
+};
+
+export const validateChatParticipants = async (jobId, senderId, receiverId, senderRole = 'USER') => {
   const job = await getJobContext(jobId);
+
+  if (senderRole === 'ADMIN') {
+    if (receiverId === job.createdBy) return job;
+    const isApplicant = await hasAppliedToJob(jobId, receiverId);
+    if (!isApplicant) {
+      throw new ApiError(403, 'Admin can only chat with job owner or job applicants');
+    }
+    return job;
+  }
 
   const senderIsOwner = job.createdBy === senderId;
   const receiverIsOwner = job.createdBy === receiverId;
@@ -48,8 +69,32 @@ export const validateChatParticipants = async (jobId, senderId, receiverId) => {
   return job;
 };
 
-export const getMessagesByJob = async (jobId, userId) => {
+export const getMessagesByJob = async (jobId, userId, userRole = 'USER', peerId) => {
   const job = await getJobContext(jobId);
+
+  if (userRole === 'ADMIN') {
+    if (!peerId) {
+      throw new ApiError(400, 'peerId is required for admin chat');
+    }
+    const peerIsOwner = peerId === job.createdBy;
+    if (!peerIsOwner) {
+      const isApplicant = await hasAppliedToJob(jobId, peerId);
+      if (!isApplicant) {
+        throw new ApiError(403, 'Admin can only view chats with job owner or applicants');
+      }
+    }
+
+    return prisma.chatMessage.findMany({
+      where: {
+        jobId,
+        OR: [
+          { senderId: userId, receiverId: peerId },
+          { senderId: peerId, receiverId: userId }
+        ]
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+  }
 
   if (job.createdBy === userId) {
     return prisma.chatMessage.findMany({
@@ -75,8 +120,8 @@ export const getMessagesByJob = async (jobId, userId) => {
   });
 };
 
-export const createMessage = async ({ jobId, senderId, receiverId, message }) => {
-  await validateChatParticipants(jobId, senderId, receiverId);
+export const createMessage = async ({ jobId, senderId, receiverId, message, senderRole = 'USER' }) => {
+  await validateChatParticipants(jobId, senderId, receiverId, senderRole);
 
   return prisma.chatMessage.create({
     data: {
