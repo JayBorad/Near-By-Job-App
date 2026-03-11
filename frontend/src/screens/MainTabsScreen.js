@@ -32,9 +32,12 @@ import {
   getApplicationsByJob,
   getChatConversations,
   getChatMessagesByJob,
+  getMyReceivedReviews,
+  getReceivedReviewsByUser,
   getMyApplications,
   getApprovedCategories,
   getMyCategories,
+  createOrUpdateReview,
   updateCategoryStatus,
   updateJob,
   updateUserAvatarByAdmin,
@@ -133,6 +136,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     requiredWorkers: '1',
     categoryId: '',
     budget: '',
+    budgetType: 'TOTAL',
     jobType: 'ONE_TIME',
     locationLink: '',
     address: '',
@@ -157,6 +161,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [isPickerJobsLoading, setIsPickerJobsLoading] = useState(false);
   const [myApplications, setMyApplications] = useState([]);
   const [isMyApplicationsLoading, setIsMyApplicationsLoading] = useState(false);
+  const [myReceivedReviews, setMyReceivedReviews] = useState(null);
+  const [isMyReceivedReviewsLoading, setIsMyReceivedReviewsLoading] = useState(false);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isUpdatingMyJobStatus, setIsUpdatingMyJobStatus] = useState(false);
   const [isApplyingJob, setIsApplyingJob] = useState(false);
   const [selectedMyJob, setSelectedMyJob] = useState(null);
   const [myJobsPage, setMyJobsPage] = useState('list');
@@ -183,6 +191,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     requiredWorkers: '1',
     categoryId: '',
     budget: '',
+    budgetType: 'TOTAL',
     jobType: 'ONE_TIME',
     latitude: '',
     longitude: '',
@@ -198,6 +207,9 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [allCategories, setAllCategories] = useState([]);
   const [myCategories, setMyCategories] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
+  const [adminSelectedUserId, setAdminSelectedUserId] = useState(null);
+  const [adminUserDetailsReturnTarget, setAdminUserDetailsReturnTarget] = useState(null);
+  const [adminReturnJobId, setAdminReturnJobId] = useState(null);
   const [isAdminUsersLoading, setIsAdminUsersLoading] = useState(false);
   const [adminJobs, setAdminJobs] = useState([]);
   const [adminCategories, setAdminCategories] = useState([]);
@@ -812,6 +824,101 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
+  const fetchMyReceivedReviews = async ({ forceLoader = false } = {}) => {
+    if (!token || userRole !== 'USER') return;
+    try {
+      if (forceLoader || !myReceivedReviews) {
+        setIsMyReceivedReviewsLoading(true);
+      }
+      const response = await getMyReceivedReviews({ token });
+      setMyReceivedReviews(response?.data || null);
+      if (response?.data?.summary) {
+        setLocalUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                ratingSummary: response.data.summary
+              }
+            : prev
+        );
+      }
+    } catch (error) {
+      showPopup('Reviews Failed', error?.message || 'Unable to load your reviews.', 'error');
+    } finally {
+      setIsMyReceivedReviewsLoading(false);
+    }
+  };
+
+  const submitReviewForJobPicker = async ({ jobId, revieweeId, rating, comment }) => {
+    if (!token) return;
+    try {
+      setIsSubmittingReview(true);
+      await createOrUpdateReview({
+        token,
+        payload: {
+          jobId,
+          revieweeId,
+          rating,
+          comment: String(comment || '').trim()
+        }
+      });
+      showPopup('Review Saved', 'Review submitted successfully.', 'success');
+      if (selectedMyJob?.id) {
+        await fetchApplicationsForMySelectedJob(selectedMyJob.id, { forceLoader: false });
+      }
+    } catch (error) {
+      showPopup('Review Failed', error?.message || 'Unable to submit review.', 'error');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const changeMyJobStatus = async (nextStatus) => {
+    if (!token || !selectedMyJob?.id) return;
+    const normalizedStatus = String(nextStatus || '').trim().toUpperCase();
+    if (!['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(normalizedStatus)) return;
+    if (String(selectedMyJob?.status || '').toUpperCase() === normalizedStatus) return;
+
+    try {
+      setIsUpdatingMyJobStatus(true);
+      await updateJob({
+        token,
+        jobId: selectedMyJob.id,
+        payload: { status: normalizedStatus }
+      });
+      showPopup('Status Updated', `Job status changed to ${normalizedStatus.replace('_', ' ')}.`, 'success');
+      await Promise.all([
+        fetchMyJobs({ forceLoader: false }),
+        fetchApplicationsForMySelectedJob(selectedMyJob.id, { forceLoader: false })
+      ]);
+      setSelectedMyJob((prev) => (prev ? { ...prev, status: normalizedStatus } : prev));
+    } catch (error) {
+      showPopup('Update Failed', error?.message || 'Unable to update job status.', 'error');
+    } finally {
+      setIsUpdatingMyJobStatus(false);
+    }
+  };
+
+  const changeAdminJobStatus = async (jobId, nextStatus) => {
+    if (!token || userRole !== 'ADMIN' || !jobId) return false;
+    const normalizedStatus = String(nextStatus || '').trim().toUpperCase();
+    if (!['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(normalizedStatus)) return false;
+
+    try {
+      await updateJob({
+        token,
+        jobId,
+        payload: { status: normalizedStatus }
+      });
+      showPopup('Status Updated', `Job status changed to ${normalizedStatus.replace('_', ' ')}.`, 'success');
+      await fetchAdminJobs({ forceLoader: false });
+      return true;
+    } catch (error) {
+      showPopup('Update Failed', error?.message || 'Unable to update job status.', 'error');
+      return false;
+    }
+  };
+
   const handleApplyJob = async (jobId) => {
     if (!token || !jobId) return;
     try {
@@ -856,6 +963,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       requiredWorkers: String(job.requiredWorkers || 1),
       categoryId: String(job.categoryId || ''),
       budget: String(job.budget || ''),
+      budgetType: String(job.budgetType || 'TOTAL'),
       jobType: String(job.jobType || 'ONE_TIME'),
       latitude: String(toNumberOrNull(job.latitude) ?? ''),
       longitude: String(toNumberOrNull(job.longitude) ?? ''),
@@ -995,6 +1103,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           requiredWorkers,
           categoryId: editJobForm.categoryId,
           budget: Number(editJobForm.budget),
+          budgetType: editJobForm.budgetType,
           jobType: editJobForm.jobType,
           latitude,
           longitude,
@@ -1009,7 +1118,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       setShowEditDueDatePicker(false);
       setEditingJobId(null);
       showPopup('Job Updated', 'Job details updated successfully.', 'success');
-      await fetchMyJobs({ forceLoader: false });
+      if (userRole === 'ADMIN') {
+        await fetchAdminJobs({ forceLoader: false });
+      } else {
+        await fetchMyJobs({ forceLoader: false });
+      }
     } catch (error) {
       showPopup('Update Failed', error?.message || 'Unable to update job.', 'error');
     } finally {
@@ -1032,6 +1145,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         requiredWorkers: '1',
         categoryId: '',
         budget: '',
+        budgetType: 'TOTAL',
         jobType: 'ONE_TIME',
         locationLink: '',
         address: '',
@@ -1062,6 +1176,17 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       showPopup('Jobs Failed', error?.message || 'Unable to load admin jobs.', 'error');
     } finally {
       setIsAdminPanelLoading(false);
+    }
+  };
+
+  const getApplicationsByJobForAdmin = async (jobId) => {
+    if (!token || !jobId) return [];
+    try {
+      const response = await getApplicationsByJob({ token, jobId });
+      return Array.isArray(response?.data) ? response.data : [];
+    } catch (error) {
+      showPopup('Applications Failed', error?.message || 'Unable to load job applications.', 'error');
+      return [];
     }
   };
 
@@ -1174,6 +1299,59 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
+  const getReceivedReviewsByUserForAdmin = async (userId) => {
+    if (!token || userRole !== 'ADMIN' || !userId) return null;
+    try {
+      const response = await getReceivedReviewsByUser({ token, userId });
+      return response?.data || null;
+    } catch (error) {
+      showPopup('Reviews Failed', error?.message || 'Unable to load user reviews.', 'error');
+      return null;
+    }
+  };
+
+  const openAdminUserDetailsById = (userId, options = null) => {
+    if (!userId) return;
+    const fallbackTarget = {
+      tab: activeTab,
+      settingsPage
+    };
+    const requestedTarget = options && options.tab ? options : fallbackTarget;
+    if (requestedTarget?.tab && requestedTarget.tab !== 'users') {
+      setAdminUserDetailsReturnTarget({
+        tab: requestedTarget.tab,
+        settingsPage: requestedTarget.settingsPage || 'main',
+        adminJobId: requestedTarget.adminJobId || null
+      });
+    } else {
+      setAdminUserDetailsReturnTarget(null);
+    }
+    setAdminSelectedUserId(userId);
+    setSettingsPage('main');
+    setActiveTab('users');
+  };
+
+  const clearAdminSelectedUserId = () => {
+    setAdminSelectedUserId(null);
+  };
+
+  const exitAdminUserDetails = () => {
+    if (!adminUserDetailsReturnTarget?.tab) return false;
+    setActiveTab(adminUserDetailsReturnTarget.tab);
+    if (adminUserDetailsReturnTarget.tab === 'create' && adminUserDetailsReturnTarget.adminJobId) {
+      setAdminReturnJobId(adminUserDetailsReturnTarget.adminJobId);
+    }
+    if (adminUserDetailsReturnTarget.tab === 'settings') {
+      setSettingsPage(adminUserDetailsReturnTarget.settingsPage || 'main');
+    }
+    setAdminUserDetailsReturnTarget(null);
+    return true;
+  };
+
+  const clearAdminReturnJobId = () => {
+    setAdminReturnJobId(null);
+  };
+
   const handleUpdateUserDetails = async (userId, payload) => {
     if (!token || userRole !== 'ADMIN') return null;
     try {
@@ -1210,11 +1388,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
-  const loadChatMessages = async (jobId) => {
+  const loadChatMessages = async (jobId, peerId) => {
     if (!token || !jobId) return;
     try {
       setIsChatMessagesLoading(true);
-      const response = await getChatMessagesByJob({ token, jobId });
+      const response = await getChatMessagesByJob({ token, jobId, peerId });
       setChatMessages(Array.isArray(response?.data) ? response.data : []);
     } catch (error) {
       showPopup('Chat Failed', error?.message || 'Unable to load chat messages.', 'error');
@@ -1271,7 +1449,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     };
     setActiveChatSession(nextSession);
     setShowChatModal(true);
-    await loadChatMessages(job.id);
+    await loadChatMessages(job.id, peer.id);
     markConversationReadLocally(job.id, peer.id);
   };
 
@@ -1365,6 +1543,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   }, [activeTab, settingsPage, categorySearch, categoryFilter, categoriesTab, token, allCategories.length, userRole]);
 
   useEffect(() => {
+    if (!token || userRole !== 'USER' || activeTab !== 'settings' || settingsPage !== 'reviews') return;
+    fetchMyReceivedReviews({ forceLoader: true });
+  }, [activeTab, settingsPage, token, userRole]);
+
+  useEffect(() => {
     if (!token || userRole !== 'USER' || userMode !== 'JOB_POSTER' || activeTab !== 'explore') return;
     fetchMyJobs();
   }, [activeTab, token, userRole, userMode]);
@@ -1400,7 +1583,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   }, [token, userRole]);
 
   useEffect(() => {
-    if (!token || userRole !== 'USER') return;
+    if (!token || !['USER', 'ADMIN'].includes(userRole)) return;
     const socket = io(SOCKET_BASE_URL, {
       transports: ['websocket'],
       auth: { token }
@@ -1651,8 +1834,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           setThemeMode={setThemeMode}
           onOpenProfile={() => switchSettingsPage('profile')}
           onOpenMode={() => switchSettingsPage('mode')}
+          onOpenReviews={() => switchSettingsPage('reviews')}
           onBackFromProfile={() => switchSettingsPage('main')}
           onBackFromMode={() => switchSettingsPage('main')}
+          onBackFromReviews={() => switchSettingsPage('main')}
           onBackFromCategories={() => switchSettingsPage('main')}
           onRequestLogout={() => setShowLogoutConfirm(true)}
           onOpenAvatarOptions={() => setShowAvatarOptions(true)}
@@ -1688,12 +1873,16 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           selectedMyJobApplications={selectedMyJobApplications}
           isSelectedMyJobApplicationsLoading={isSelectedMyJobApplicationsLoading}
           isUpdatingJobApplicationStatus={isUpdatingJobApplicationStatus}
+          isSubmittingReview={isSubmittingReview}
+          isUpdatingJobStatus={isUpdatingMyJobStatus}
           onBackFromMyJobDetail={backFromMyJobDetailPage}
           onRefreshSelectedMyJobApplications={() =>
             fetchApplicationsForMySelectedJob(selectedMyJob?.id, { forceLoader: true })
           }
           onApproveJobApplication={(applicationId) => updateSelectedJobApplicationStatus(applicationId, 'ACCEPTED')}
           onRejectJobApplication={(applicationId) => updateSelectedJobApplicationStatus(applicationId, 'REJECTED')}
+          onSubmitReview={submitReviewForJobPicker}
+          onChangeJobStatus={changeMyJobStatus}
           onEditMyJob={openEditJobModal}
           pickerExplorePage={pickerExplorePage}
           onOpenPickerApplications={openPickerApplicationsPage}
@@ -1706,6 +1895,9 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           myApplications={myApplications}
           isMyApplicationsLoading={isMyApplicationsLoading}
           onRefreshMyApplications={() => fetchMyApplications({ forceLoader: true })}
+          myReceivedReviews={myReceivedReviews}
+          isMyReceivedReviewsLoading={isMyReceivedReviewsLoading}
+          onRefreshMyReceivedReviews={() => fetchMyReceivedReviews({ forceLoader: true })}
           onOpenChatWithJobPoster={(application) =>
             openChatSession({
               job: application?.job,
@@ -1722,6 +1914,18 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
               peer: payload?.applicant
             })
           }
+          onOpenChatWithUser={(payload) =>
+            openChatSession({
+              job: payload?.job,
+              peer: payload?.applicant
+            })
+          }
+          onOpenAdminUserDetails={openAdminUserDetailsById}
+          onGetApplicationsByJob={getApplicationsByJobForAdmin}
+          onChangeAdminJobStatus={changeAdminJobStatus}
+          onEditAdminJob={openEditJobModal}
+          adminReturnJobId={adminReturnJobId}
+          onAdminReturnJobHandled={clearAdminReturnJobId}
           adminJobs={adminJobs}
           adminCategories={adminCategories}
           isAdminPanelLoading={isAdminPanelLoading}
@@ -1738,6 +1942,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           adminUsers={adminUsers}
           isAdminUsersLoading={isAdminUsersLoading}
           onRefreshAdminUsers={() => fetchAdminUsers({ forceLoader: true })}
+          onGetUserReviews={getReceivedReviewsByUserForAdmin}
+          selectedAdminUserId={adminSelectedUserId}
+          onAdminUserDetailOpened={clearAdminSelectedUserId}
+          onExitAdminUserDetails={exitAdminUserDetails}
           onSaveUserDetails={handleUpdateUserDetails}
           onSaveUserAvatar={handleUpdateUserAvatar}
           isUploadingAvatar={isUploadingAvatar}
@@ -1869,6 +2077,21 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
                 keyboardType="decimal-pad"
                 placeholderTextColor={colors.textSecondary}
               />
+
+              <Text style={styles.createFieldLabel}>Budget Distribution</Text>
+              <View style={styles.createPillRow}>
+                {['TOTAL', 'PER_PERSON'].map((type) => (
+                  <Pressable
+                    key={`edit-budget-type-${type}`}
+                    style={[styles.createPill, editJobForm.budgetType === type && styles.createPillActive]}
+                    onPress={() => setEditJobForm((prev) => ({ ...prev, budgetType: type }))}
+                  >
+                    <Text style={[styles.createPillText, editJobForm.budgetType === type && styles.createPillTextActive]}>
+                      {type === 'TOTAL' ? 'Total Budget' : 'Per Person'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
 
               <Text style={styles.createFieldLabel}>Latitude *</Text>
               <TextInput

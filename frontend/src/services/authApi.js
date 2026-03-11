@@ -357,8 +357,10 @@ export async function rejectApplication({ token, applicationId }) {
   });
 }
 
-export async function getChatMessagesByJob({ token, jobId }) {
-  return apiRequest(`/chat/job/${jobId}`, {
+export async function getChatMessagesByJob({ token, jobId, peerId }) {
+  const query = new URLSearchParams();
+  if (peerId) query.set('peerId', peerId);
+  return apiRequest(`/chat/job/${jobId}${query.toString() ? `?${query.toString()}` : ''}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`
@@ -368,6 +370,34 @@ export async function getChatMessagesByJob({ token, jobId }) {
 
 export async function getChatConversations({ token }) {
   return apiRequest('/chat/conversations', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function createOrUpdateReview({ token, payload }) {
+  return apiRequest('/reviews', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: payload
+  });
+}
+
+export async function getMyReceivedReviews({ token }) {
+  return apiRequest('/reviews/received/me', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function getReceivedReviewsByUser({ token, userId }) {
+  return apiRequest(`/reviews/received/${userId}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`
