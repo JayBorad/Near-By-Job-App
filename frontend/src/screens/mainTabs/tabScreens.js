@@ -50,6 +50,33 @@ const STATIC_AVATARS = [
 ];
 const ADMIN_EMPTY_ANIMATION = require('../../../assets/lottie/no-result-found.json');
 
+const getRatingSummaryText = (summary) => {
+  const total = Number(summary?.totalReviews || 0);
+  const average = summary?.averageRating;
+  if (!total || average === null || average === undefined) {
+    return 'No ratings yet';
+  }
+  return `${Number(average).toFixed(1)} / 5 (${total} review${total === 1 ? '' : 's'})`;
+};
+
+const getApplicationStats = (job) => ({
+  appliedCount: Number(job?.applicationStats?.appliedCount || 0),
+  acceptedCount: Number(job?.applicationStats?.acceptedCount || 0),
+  pendingCount: Number(job?.applicationStats?.pendingCount || 0),
+  rejectedCount: Number(job?.applicationStats?.rejectedCount || 0)
+});
+
+const getBudgetDisplay = (job) => {
+  const budget = Number(job?.budget || 0);
+  const requiredWorkers = Math.max(1, Number(job?.requiredWorkers || 1));
+  const budgetType = String(job?.budgetType || 'TOTAL').toUpperCase();
+  if (!Number.isFinite(budget) || budget <= 0) return '₹-';
+  if (budgetType === 'PER_PERSON') {
+    return `₹${budget} per person (₹${budget * requiredWorkers} total)`;
+  }
+  return `₹${budget} total (₹${(budget / requiredWorkers).toFixed(2)} per person)`;
+};
+
 function ProfilePage({
   user,
   onBack,
@@ -123,6 +150,9 @@ function ProfilePage({
 
           <Text style={styles.profileName}>{user?.name || 'User'}</Text>
           <Text style={styles.profileEmail}>{user?.email || 'No email available'}</Text>
+          {user?.role !== 'ADMIN' ? (
+            <Text style={styles.profileHint}>Rating: {getRatingSummaryText(user?.ratingSummary)}</Text>
+          ) : null}
           <Text style={styles.profileHint}>Tap photo to view profile. Tap camera icon to edit.</Text>
         </View>
 
@@ -464,7 +494,19 @@ function CategoryPage({
   );
 }
 
-function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSaveUserAvatar, styles, colors }) {
+function AdminUsersPage({
+  users,
+  isLoading,
+  onRefresh,
+  onGetUserReviews,
+  selectedUserId,
+  onSelectedUserHandled,
+  onExitUserDetails,
+  onSaveUserDetails,
+  onSaveUserAvatar,
+  styles,
+  colors
+}) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userDetailPage, setUserDetailPage] = useState('details');
   const [jobTab, setJobTab] = useState('POSTED');
@@ -480,6 +522,9 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
   const [modeFilter, setModeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [genderFilter, setGenderFilter] = useState('ALL');
+  const [userDetailHistory, setUserDetailHistory] = useState([]);
+  const [selectedUserReviews, setSelectedUserReviews] = useState(null);
+  const [isSelectedUserReviewsLoading, setIsSelectedUserReviewsLoading] = useState(false);
   const [form, setForm] = useState({
     name: '',
     username: '',
@@ -493,7 +538,8 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
     status: 'ACTIVE'
   });
 
-  const openUserDetail = (user) => {
+  const applyUserDetailState = (user) => {
+    if (!user) return;
     setSelectedUser(user);
     setUserDetailPage('details');
     setJobTab('POSTED');
@@ -511,6 +557,76 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
       status: String(user?.status || 'ACTIVE')
     });
   };
+
+  const openUserDetail = (user) => {
+    if (!user) return;
+    setUserDetailHistory([]);
+    applyUserDetailState(user);
+  };
+
+  const openUserDetailById = (userId) => {
+    if (!userId) return;
+    const targetUser = users.find((item) => item?.id === userId);
+    if (!targetUser || targetUser?.id === selectedUser?.id) return;
+    if (selectedUser?.id) {
+      setUserDetailHistory((prev) => [...prev, selectedUser.id]);
+    }
+    applyUserDetailState(targetUser);
+  };
+
+  const handleBackFromUserDetail = () => {
+    if (isEditingUser) {
+      setUserDetailPage('details');
+      return;
+    }
+    if (userDetailHistory.length) {
+      const previousId = userDetailHistory[userDetailHistory.length - 1];
+      const previousUser = users.find((item) => item?.id === previousId);
+      setUserDetailHistory((prev) => prev.slice(0, -1));
+      if (previousUser) {
+        applyUserDetailState(previousUser);
+        return;
+      }
+    }
+    const didHandleOutside = onExitUserDetails?.();
+    if (didHandleOutside) {
+      setSelectedUser(null);
+      setSelectedUserJob(null);
+      setUserDetailPage('details');
+      setUserDetailHistory([]);
+      return;
+    }
+    setSelectedUser(null);
+    setSelectedUserJob(null);
+    setUserDetailPage('details');
+  };
+
+  useEffect(() => {
+    if (!selectedUserId) return;
+    const matchedUser = users.find((item) => item?.id === selectedUserId);
+    if (matchedUser) {
+      setUserDetailHistory([]);
+      openUserDetail(matchedUser);
+    }
+    onSelectedUserHandled?.();
+  }, [selectedUserId, users, onSelectedUserHandled]);
+
+  useEffect(() => {
+    const loadReviews = async () => {
+      if (!selectedUser?.id || !onGetUserReviews) {
+        setSelectedUserReviews(null);
+        return;
+      }
+      try {
+        setIsSelectedUserReviewsLoading(true);
+        const data = await onGetUserReviews(selectedUser.id);
+        setSelectedUserReviews(data || null);
+      } finally {
+        setIsSelectedUserReviewsLoading(false);
+      }
+    };
+    loadReviews();
+  }, [selectedUser?.id, onGetUserReviews]);
 
   const filteredUsers = useMemo(
     () =>
@@ -644,17 +760,11 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
     return (
       <View style={styles.settingsScreen}>
         <View style={styles.settingsNav}>
-          <Pressable style={styles.settingsBackBtn} onPress={() => {
-            if (isEditingUser) {
-              setUserDetailPage('details');
-            } else {
-              setSelectedUser(null);
-              setSelectedUserJob(null);
-              setUserDetailPage('details');
-            }
-          }}>
+          <Pressable style={styles.settingsBackBtn} onPress={handleBackFromUserDetail}>
             <Ionicons name="chevron-back" size={22} color={colors.primary} />
-            <Text style={styles.settingsBackText}>{isEditingUser ? 'User Details' : 'Users'}</Text>
+            <Text style={styles.settingsBackText}>
+              {isEditingUser ? 'User Details' : userDetailHistory.length ? 'Back' : 'Users'}
+            </Text>
           </Pressable>
           <Text style={styles.settingsNavTitle}>{isEditingUser ? 'Edit User' : 'User Details'}</Text>
           <View style={styles.settingsNavRight}>
@@ -690,6 +800,7 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
             </Pressable>
             <Text style={styles.adminUserDetailName}>{selectedUser?.name || '-'}</Text>
             <Text style={styles.adminUserDetailEmail}>{selectedUser?.email || '-'}</Text>
+            <Text style={styles.profileHint}>Rating: {getRatingSummaryText(selectedUser?.ratingSummary)}</Text>
             <Text style={styles.profileHint}>
               {isEditingUser
                 ? 'Edit user details and save.'
@@ -887,6 +998,47 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
 
           {!isEditingUser ? (
             <View style={styles.adminUserDetailCard}>
+              <Text style={styles.createFieldLabel}>
+                Reviews ({Number(selectedUserReviews?.summary?.totalReviews || 0)})
+              </Text>
+              <Text style={styles.profileHint}>
+                Average: {getRatingSummaryText(selectedUserReviews?.summary || selectedUser?.ratingSummary)}
+              </Text>
+              {isSelectedUserReviewsLoading ? (
+                <Text style={styles.adminJobMeta}>Loading reviews...</Text>
+              ) : Array.isArray(selectedUserReviews?.reviews) && selectedUserReviews.reviews.length ? (
+                selectedUserReviews.reviews.map((review) => (
+                  <View key={review.id} style={styles.adminJobCard}>
+                    <View style={styles.adminJobTop}>
+                      <Text style={styles.adminJobTitle} numberOfLines={1}>
+                        {review?.job?.title || 'Job'}
+                      </Text>
+                      <View style={styles.adminJobStatusPill}>
+                        <Text style={styles.adminJobStatusText}>{Number(review?.rating || 0)} / 5</Text>
+                      </View>
+                    </View>
+                    <Pressable onPress={() => openUserDetailById(review?.reviewer?.id)}>
+                      <Text style={styles.adminJobMeta} numberOfLines={1}>
+                        Reviewer: {review?.reviewer?.name || '-'}
+                      </Text>
+                    </Pressable>
+                    <Text style={styles.adminJobMeta} numberOfLines={1}>
+                      Reviewer Role: {getUserModeLabel(review?.reviewer?.role, review?.reviewer?.userMode)}
+                    </Text>
+                    <Text style={styles.adminJobMeta}>Comment: {review?.comment || '-'}</Text>
+                    <Text style={styles.adminJobMeta}>
+                      Reviewed On: {review?.createdAt ? String(review.createdAt).slice(0, 10) : '-'}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.adminJobMeta}>No reviews yet for this user.</Text>
+              )}
+            </View>
+          ) : null}
+
+          {!isEditingUser ? (
+            <View style={styles.adminUserDetailCard}>
               <Text style={styles.createFieldLabel}>User Jobs</Text>
               <View style={styles.createPillRow}>
                 <Pressable
@@ -921,7 +1073,7 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
                     <Text style={styles.adminJobMeta} numberOfLines={1}>By: {job?.owner?.name || '-'}</Text>
                     <Text style={styles.adminJobMeta} numberOfLines={1}>Category: {job?.category?.name || '-'}</Text>
                     <View style={styles.adminJobBottomRow}>
-                      <Text style={styles.adminJobBudget}>₹{job?.budget || '-'}</Text>
+                      <Text style={styles.adminJobBudget}>{getBudgetDisplay(job)}</Text>
                       <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primary} />
                     </View>
                   </Pressable>
@@ -1045,7 +1197,7 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
                 <Text style={styles.adminJobMeta}>Category: {selectedUserJob?.category?.name || '-'}</Text>
                 <Text style={styles.adminJobMeta}>Posted By: {selectedUserJob?.owner?.name || '-'}</Text>
                 <Text style={styles.adminJobMeta}>Email: {selectedUserJob?.owner?.email || '-'}</Text>
-                <Text style={styles.adminJobMeta}>Budget: ₹{selectedUserJob?.budget || '-'}</Text>
+                <Text style={styles.adminJobMeta}>Budget: {getBudgetDisplay(selectedUserJob)}</Text>
                 <Text style={styles.adminJobMeta}>Type: {String(selectedUserJob?.jobType || '').replace('_', ' ') || '-'}</Text>
                 <Text style={styles.adminJobMeta}>
                   Due Date: {selectedUserJob?.dueDate ? String(selectedUserJob.dueDate).slice(0, 10) : '-'}
@@ -1145,6 +1297,9 @@ function AdminUsersPage({ users, isLoading, onRefresh, onSaveUserDetails, onSave
                   </View>
                   <Text style={styles.adminUserCardEmail} numberOfLines={1}>
                     {item.email || '-'}
+                  </Text>
+                  <Text style={styles.myJobMeta} numberOfLines={1}>
+                    Rating: {getRatingSummaryText(item?.ratingSummary)}
                   </Text>
                 </View>
               </View>
@@ -1317,13 +1472,26 @@ function AdminModerationPage({
   jobs,
   isLoading,
   onRefresh,
+  onGetApplicationsByJob,
+  onOpenChatWithUser,
+  onOpenUserDetails,
+  onChangeJobStatus,
+  onEditJob,
+  openJobIdOnMount,
+  onOpenJobIdHandled,
   styles,
   colors
 }) {
   const [jobSearch, setJobSearch] = useState('');
   const [jobStatusFilter, setJobStatusFilter] = useState('ALL');
   const [showJobFilterModal, setShowJobFilterModal] = useState(false);
+  const [detailPage, setDetailPage] = useState('list');
   const [selectedJob, setSelectedJob] = useState(null);
+  const [selectedJobApplications, setSelectedJobApplications] = useState([]);
+  const [isSelectedJobApplicationsLoading, setIsSelectedJobApplicationsLoading] = useState(false);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState(null);
+  const [isUpdatingJobStatus, setIsUpdatingJobStatus] = useState(false);
   const jobFilterOptions = ['ALL', 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
   const filteredJobs = useMemo(
     () =>
@@ -1338,6 +1506,254 @@ function AdminModerationPage({
       }),
     [jobs, jobSearch, jobStatusFilter]
   );
+  const selectedJobStats = getApplicationStats(selectedJob);
+  const currentJobStatus = String(selectedJob?.status || 'OPEN').toUpperCase();
+  const jobStatusOptions = ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+
+  useEffect(() => {
+    if (!selectedJob?.id) return;
+    const updatedJob = jobs.find((item) => item?.id === selectedJob.id);
+    if (updatedJob) {
+      setSelectedJob(updatedJob);
+    }
+  }, [jobs, selectedJob?.id]);
+
+  const openJobDetails = async (job) => {
+    if (!job?.id) return;
+    setSelectedJob(job);
+    setDetailPage('detail');
+    setSelectedJobApplications([]);
+    setPendingStatusChange(null);
+    setShowStatusPicker(false);
+    try {
+      setIsSelectedJobApplicationsLoading(true);
+      const data = onGetApplicationsByJob ? await onGetApplicationsByJob(job.id) : [];
+      setSelectedJobApplications(Array.isArray(data) ? data : []);
+    } finally {
+      setIsSelectedJobApplicationsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!openJobIdOnMount) return;
+    const targetJob = jobs.find((item) => item?.id === openJobIdOnMount);
+    if (!targetJob) return;
+    openJobDetails(targetJob).finally(() => {
+      onOpenJobIdHandled?.();
+    });
+  }, [openJobIdOnMount, jobs]);
+
+  const backToJobList = () => {
+    setDetailPage('list');
+    setSelectedJob(null);
+    setSelectedJobApplications([]);
+    setPendingStatusChange(null);
+    setShowStatusPicker(false);
+  };
+
+  if (detailPage === 'detail' && selectedJob) {
+    return (
+      <View style={styles.settingsScreen}>
+        <View style={styles.settingsNav}>
+          <Pressable style={[styles.settingsBackBtn, { width: 96 }]} onPress={backToJobList}>
+            <Ionicons name="chevron-back" size={22} color={colors.primary} />
+            <Text style={styles.settingsBackText} numberOfLines={1}>Admin Panel</Text>
+          </Pressable>
+          <Text style={[styles.settingsNavTitle, { flex: 1, textAlign: 'center' }]}>Job Details</Text>
+          <View style={[styles.settingsNavRight, { width: 96, alignItems: 'flex-end' }]}>
+            <Pressable
+              style={styles.settingsNavIconBtn}
+              onPress={async () => {
+                if (!selectedJob?.id) return;
+                try {
+                  setIsSelectedJobApplicationsLoading(true);
+                  const data = onGetApplicationsByJob ? await onGetApplicationsByJob(selectedJob.id) : [];
+                  setSelectedJobApplications(Array.isArray(data) ? data : []);
+                } finally {
+                  setIsSelectedJobApplicationsLoading(false);
+                }
+              }}
+            >
+              <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+            </Pressable>
+          </View>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+          <View style={styles.adminJobCard}>
+            <View style={styles.adminJobTop}>
+              <Text style={styles.adminJobDetailTitle}>{selectedJob?.title || 'Job Details'}</Text>
+              <View style={styles.myJobDetailHeaderActions}>
+                <Pressable
+                  style={[styles.myJobStatusPill, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                  onPress={() => setShowStatusPicker(true)}
+                  disabled={isUpdatingJobStatus}
+                >
+                  <Text style={styles.myJobStatusPillText}>{currentJobStatus.replace('_', ' ')}</Text>
+                  <Ionicons name="chevron-down" size={12} color={colors.primary} />
+                </Pressable>
+                <Pressable
+                  style={[styles.settingsNavIconBtn, { backgroundColor: colors.primarySoft }]}
+                  onPress={() => onEditJob?.(selectedJob)}
+                >
+                  <Ionicons name="create-outline" size={16} color={colors.primary} />
+                </Pressable>
+              </View>
+            </View>
+            <Text style={styles.adminJobDetailDescription}>{selectedJob?.description || 'No description provided.'}</Text>
+            <View style={styles.adminJobDetailGrid}>
+              <Text style={styles.adminJobMeta}>Category: {selectedJob?.category?.name || '-'}</Text>
+              <Text style={styles.adminJobMeta}>Posted By: {selectedJob?.owner?.name || '-'}</Text>
+              <Text style={styles.adminJobMeta}>Email: {selectedJob?.owner?.email || '-'}</Text>
+              <Text style={styles.adminJobMeta}>Budget: {getBudgetDisplay(selectedJob)}</Text>
+              <Text style={styles.adminJobMeta}>Type: {String(selectedJob?.jobType || '').replace('_', ' ') || '-'}</Text>
+              <Text style={styles.adminJobMeta}>Required Workers: {selectedJob?.requiredWorkers || 1}</Text>
+              <Text style={styles.adminJobMeta}>Applied Users: {selectedJobStats.appliedCount}</Text>
+              <Text style={styles.adminJobMeta}>Accepted Users: {selectedJobStats.acceptedCount}</Text>
+              <Text style={styles.adminJobMeta}>Pending Users: {selectedJobStats.pendingCount}</Text>
+              <Text style={styles.adminJobMeta}>Due Date: {selectedJob?.dueDate ? String(selectedJob.dueDate).slice(0, 10) : '-'}</Text>
+            </View>
+            <JobLocationCard job={selectedJob} title="Job Location" styles={styles} colors={colors} />
+          </View>
+
+          <View style={styles.adminJobCard}>
+            <Text style={styles.optionTitle}>Applied Users</Text>
+            <Text style={styles.optionSubtitle}>Tap any user to open full user details and start chat.</Text>
+          </View>
+
+          {isSelectedJobApplicationsLoading ? (
+            <AdminListState mode="loading" title="Loading applicants..." subtitle="Please wait..." colors={colors} />
+          ) : selectedJobApplications.length ? (
+            selectedJobApplications.map((application) => (
+              <View key={application.id} style={styles.myJobCard}>
+                <Pressable
+                  onPress={() =>
+                    onOpenUserDetails?.(application?.applicant?.id, {
+                      tab: 'create',
+                      settingsPage: 'main',
+                      adminJobId: selectedJob?.id
+                    })
+                  }
+                >
+                  <View style={styles.adminUserCardLead}>
+                    <AvatarView imageUrl={application?.applicant?.avatar || DEFAULT_AVATAR_URL} size={44} colors={colors} showBorder />
+                    <View style={styles.adminUserCardBody}>
+                      <View style={styles.adminUserCardTop}>
+                        <Text style={styles.adminUserCardName} numberOfLines={1}>
+                          {application?.applicant?.name || 'Unknown User'}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                      </View>
+                      <Text style={styles.adminUserCardEmail} numberOfLines={1}>{application?.applicant?.email || '-'}</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.myJobHead, { marginTop: 10 }]}>
+                    <Text style={styles.myJobMeta}>Phone: {application?.applicant?.phone || '-'}</Text>
+                    <View style={styles.myJobStatusPill}>
+                      <Text style={styles.myJobStatusPillText}>{String(application?.status || 'PENDING')}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.myJobMeta}>Rating: {getRatingSummaryText(application?.applicant?.ratingSummary)}</Text>
+                  {application?.ownerReview ? (
+                    <Text style={styles.myJobMeta}>
+                      Poster Review: {Number(application.ownerReview.rating || 0)}/5
+                      {application.ownerReview.comment ? ` - ${application.ownerReview.comment}` : ''}
+                    </Text>
+                  ) : null}
+                </Pressable>
+                <View style={styles.optionActionsRow}>
+                  <Pressable
+                    style={[styles.modalBtnPrimary, styles.optionActionBtn, styles.modalBtnPrimaryInline]}
+                    onPress={() =>
+                      onOpenChatWithUser?.({
+                        job: selectedJob,
+                        applicant: application?.applicant
+                      })
+                    }
+                  >
+                    <Ionicons name="chatbubble-ellipses-outline" size={14} color="#FFFFFF" />
+                    <Text style={styles.modalBtnPrimaryText} numberOfLines={1}>Chat</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))
+          ) : (
+            <AdminListState
+              mode="empty"
+              title="No applicants found"
+              subtitle="No user has applied to this job yet."
+              colors={colors}
+              emptySource={ADMIN_EMPTY_ANIMATION}
+            />
+          )}
+        </ScrollView>
+
+        <Modal visible={showStatusPicker} transparent animationType="fade" onRequestClose={() => setShowStatusPicker(false)}>
+          <Pressable style={styles.filterBackdrop} onPress={() => setShowStatusPicker(false)}>
+            <Pressable style={styles.categoryFilterModal} onPress={() => {}}>
+              <Text style={styles.optionTitle}>Change Job Status</Text>
+              <Text style={styles.categoryFilterHint}>Select new status for this job</Text>
+              {jobStatusOptions.map((option) => (
+                <Pressable
+                  key={`admin-job-status-${option}`}
+                  style={[styles.categoryFilterOption, currentJobStatus === option && styles.categoryFilterOptionActive]}
+                  onPress={() => {
+                    setShowStatusPicker(false);
+                    if (option === currentJobStatus) return;
+                    setPendingStatusChange(option);
+                  }}
+                >
+                  <View style={styles.categoryFilterOptionLeft}>
+                    <Ionicons
+                      name={option === 'COMPLETED' ? 'checkmark-circle-outline' : option === 'CANCELLED' ? 'close-circle-outline' : option === 'IN_PROGRESS' ? 'time-outline' : 'radio-button-on-outline'}
+                      size={16}
+                      color={currentJobStatus === option ? colors.primary : colors.textSecondary}
+                    />
+                    <Text style={[styles.categoryFilterOptionText, currentJobStatus === option && styles.categoryFilterOptionTextActive]}>
+                      {option.replace('_', ' ')}
+                    </Text>
+                  </View>
+                  {currentJobStatus === option ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+                </Pressable>
+              ))}
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        <Modal visible={Boolean(pendingStatusChange)} transparent animationType="fade" onRequestClose={() => setPendingStatusChange(null)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setPendingStatusChange(null)}>
+            <Pressable style={styles.optionModal} onPress={() => {}}>
+              <Text style={styles.optionTitle}>Confirm Status Change</Text>
+              <Text style={styles.optionMessage}>
+                Change status from {currentJobStatus.replace('_', ' ')} to {String(pendingStatusChange || '').replace('_', ' ')}?
+              </Text>
+              <View style={styles.optionActionsRow}>
+                <Pressable style={[styles.optionCancel, styles.optionActionBtn]} onPress={() => setPendingStatusChange(null)}>
+                  <Text style={styles.optionCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.modalBtnPrimary, styles.optionActionBtn, isUpdatingJobStatus ? styles.modalBtnDisabled : null]}
+                  disabled={isUpdatingJobStatus}
+                  onPress={async () => {
+                    if (!pendingStatusChange || !selectedJob?.id || !onChangeJobStatus) return;
+                    setIsUpdatingJobStatus(true);
+                    const didUpdate = await onChangeJobStatus(selectedJob.id, pendingStatusChange);
+                    setIsUpdatingJobStatus(false);
+                    if (didUpdate) {
+                      setSelectedJob((prev) => (prev ? { ...prev, status: pendingStatusChange } : prev));
+                      setPendingStatusChange(null);
+                    }
+                  }}
+                >
+                  <Text style={styles.modalBtnPrimaryText}>{isUpdatingJobStatus ? 'Updating...' : 'Confirm'}</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.settingsScreen}>
@@ -1377,7 +1793,7 @@ function AdminModerationPage({
           />
         ) : filteredJobs.length ? (
           filteredJobs.map((job) => (
-            <Pressable key={job.id} style={styles.adminJobCard} onPress={() => setSelectedJob(job)}>
+            <Pressable key={job.id} style={styles.adminJobCard} onPress={() => openJobDetails(job)}>
               <View style={styles.adminJobTop}>
                 <Text style={styles.adminJobTitle} numberOfLines={1}>
                   {job.title}
@@ -1388,8 +1804,9 @@ function AdminModerationPage({
               </View>
               <Text style={styles.adminJobMeta} numberOfLines={1}>By: {job?.owner?.name || '-'}</Text>
               <Text style={styles.adminJobMeta} numberOfLines={1}>Category: {job?.category?.name || '-'}</Text>
+              <Text style={styles.adminJobMeta} numberOfLines={1}>Applied: {Number(job?.applicationStats?.appliedCount || 0)}</Text>
               <View style={styles.adminJobBottomRow}>
-                <Text style={styles.adminJobBudget}>₹{job?.budget || '-'}</Text>
+                <Text style={styles.adminJobBudget}>{getBudgetDisplay(job)}</Text>
                 <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primary} />
               </View>
             </Pressable>
@@ -1436,33 +1853,6 @@ function AdminModerationPage({
         </Pressable>
       </Modal>
 
-      <Modal visible={Boolean(selectedJob)} transparent animationType="fade" onRequestClose={() => setSelectedJob(null)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.adminJobDetailModal}>
-            <View style={styles.adminJobDetailHeader}>
-              <Text style={styles.adminJobDetailTitle}>{selectedJob?.title || 'Job Details'}</Text>
-              <View style={styles.adminJobStatusPill}>
-                <Text style={styles.adminJobStatusText}>{String(selectedJob?.status || 'OPEN').replace('_', ' ')}</Text>
-              </View>
-            </View>
-            <Text style={styles.adminJobDetailDescription}>{selectedJob?.description || 'No description provided.'}</Text>
-            <View style={styles.adminJobDetailGrid}>
-              <Text style={styles.adminJobMeta}>Category: {selectedJob?.category?.name || '-'}</Text>
-              <Text style={styles.adminJobMeta}>Posted By: {selectedJob?.owner?.name || '-'}</Text>
-              <Text style={styles.adminJobMeta}>Email: {selectedJob?.owner?.email || '-'}</Text>
-              <Text style={styles.adminJobMeta}>Budget: ₹{selectedJob?.budget || '-'}</Text>
-              <Text style={styles.adminJobMeta}>Type: {String(selectedJob?.jobType || '').replace('_', ' ') || '-'}</Text>
-              <Text style={styles.adminJobMeta}>
-                Due Date: {selectedJob?.dueDate ? String(selectedJob.dueDate).slice(0, 10) : '-'}
-              </Text>
-            </View>
-            <JobLocationCard job={selectedJob} title="Job Location" styles={styles} colors={colors} />
-            <Pressable style={styles.optionCancel} onPress={() => setSelectedJob(null)}>
-              <Text style={styles.optionCancelText}>Close</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -2128,6 +2518,7 @@ function CreateJobPage({
       description: jobForm.description.trim(),
       categoryId: jobForm.categoryId,
       budget: Number(jobForm.budget),
+      budgetType: jobForm.budgetType || 'TOTAL',
       requiredWorkers: Number.parseInt(jobForm.requiredWorkers, 10),
       jobType: jobForm.jobType,
       latitude: jobForm.latitude,
@@ -2398,6 +2789,21 @@ function CreateJobPage({
           />
           {errors.budget ? <Text style={styles.createFieldErrorText}>{errors.budget}</Text> : null}
 
+          <Text style={styles.createFieldLabel}>Budget Distribution</Text>
+          <View style={styles.createPillRow}>
+            {['TOTAL', 'PER_PERSON'].map((type) => (
+              <Pressable
+                key={`budget-type-${type}`}
+                style={[styles.createPill, jobForm.budgetType === type && styles.createPillActive]}
+                onPress={() => setJobForm((prev) => ({ ...prev, budgetType: type }))}
+              >
+                <Text style={[styles.createPillText, jobForm.budgetType === type && styles.createPillTextActive]}>
+                  {type === 'TOTAL' ? 'Total Budget' : 'Per Person'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
           <View onLayout={registerFieldY('requiredWorkers')}>
             <Text style={styles.createFieldLabel}>Required Workers *</Text>
           </View>
@@ -2641,7 +3047,7 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
                 </View>
                 <View style={styles.myJobMetaPill}>
                   <Ionicons name="cash-outline" size={13} color={colors.primary} />
-                  <Text style={styles.myJobMetaPillText}>₹{item?.budget || '-'}</Text>
+                  <Text style={styles.myJobMetaPillText}>{getBudgetDisplay(item)}</Text>
                 </View>
                 <View style={styles.myJobMetaPill}>
                   <Ionicons name="briefcase-outline" size={13} color={colors.primary} />
@@ -2691,20 +3097,32 @@ function MyJobDetailsPage({
   applications,
   isLoadingApplications,
   isUpdatingApplicationStatus,
+  isSubmittingReview,
+  isUpdatingJobStatus,
   onBack,
   onRefreshApplications,
   onApproveApplication,
   onRejectApplication,
+  onSubmitReview,
+  onChangeJobStatus,
   onOpenChatWithApplicant,
   onEditJob,
   styles,
   colors
 }) {
   const [selectedApplicantRecord, setSelectedApplicantRecord] = useState(null);
+  const [reviewTarget, setReviewTarget] = useState(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState(null);
   const requiredWorkers = Number(job?.requiredWorkers || 1);
   const acceptedCount = applications.filter((item) => String(item?.status || '').toUpperCase() === 'ACCEPTED').length;
   const pendingCount = applications.filter((item) => String(item?.status || '').toUpperCase() === 'PENDING').length;
   const remainingSlots = Math.max(requiredWorkers - acceptedCount, 0);
+  const isJobCompleted = String(job?.status || '').toUpperCase() === 'COMPLETED';
+  const currentJobStatus = String(job?.status || 'OPEN').toUpperCase();
+  const jobStatusOptions = ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 
   return (
     <View style={styles.settingsScreen}>
@@ -2715,8 +3133,8 @@ function MyJobDetailsPage({
             My Jobs
           </Text>
         </Pressable>
-        <Text style={styles.settingsNavTitle}>Job Details</Text>
-        <View style={styles.settingsNavRight}>
+        <Text style={[styles.settingsNavTitle, { flex: 1, textAlign: 'center' }]}>Job Details</Text>
+        <View style={[styles.settingsNavRight, { width: 96, alignItems: 'flex-end' }]}>
           <Pressable style={styles.settingsNavIconBtn} onPress={onRefreshApplications}>
             <Ionicons name="refresh-outline" size={18} color={colors.primary} />
           </Pressable>
@@ -2730,9 +3148,14 @@ function MyJobDetailsPage({
               {job?.title || '-'}
             </Text>
             <View style={styles.myJobDetailHeaderActions}>
-              <View style={styles.myJobStatusPill}>
-                <Text style={styles.myJobStatusPillText}>{String(job?.status || 'OPEN').replace('_', ' ')}</Text>
-              </View>
+              <Pressable
+                style={[styles.myJobStatusPill, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                onPress={() => setShowStatusPicker(true)}
+                disabled={isUpdatingJobStatus}
+              >
+                <Text style={styles.myJobStatusPillText}>{currentJobStatus.replace('_', ' ')}</Text>
+                <Ionicons name="chevron-down" size={12} color={colors.primary} />
+              </Pressable>
               <Pressable style={[styles.settingsNavIconBtn, { backgroundColor: colors.primarySoft }]} onPress={onEditJob}>
                 <Ionicons name="create-outline" size={16} color={colors.primary} />
               </Pressable>
@@ -2746,7 +3169,7 @@ function MyJobDetailsPage({
             </View>
             <View style={styles.myJobMetaPill}>
               <Ionicons name="cash-outline" size={13} color={colors.primary} />
-              <Text style={styles.myJobMetaPillText}>₹{job?.budget || '-'}</Text>
+              <Text style={styles.myJobMetaPillText}>{getBudgetDisplay(job)}</Text>
             </View>
             <View style={styles.myJobMetaPill}>
               <Ionicons name="people-outline" size={13} color={colors.primary} />
@@ -2769,7 +3192,7 @@ function MyJobDetailsPage({
         <View style={styles.myJobCard}>
           <Text style={styles.optionTitle}>Applied Users</Text>
           <Text style={styles.optionSubtitle}>
-            Approve or reject pending applications. Fields stay read-only until you tap Edit Job.
+            Approve or reject pending applications. Set job status to Completed to submit reviews for accepted pickers.
           </Text>
         </View>
 
@@ -2786,6 +3209,7 @@ function MyJobDetailsPage({
             const disabledApprove = status !== 'PENDING' || remainingSlots <= 0 || isUpdatingApplicationStatus;
             const disabledReject = status !== 'PENDING' || isUpdatingApplicationStatus;
             const isAccepted = status === 'ACCEPTED';
+            const hasExistingReview = Boolean(item?.ownerReview?.id);
             return (
               <View key={item.id} style={styles.myJobCard}>
                 <Pressable onPress={() => setSelectedApplicantRecord(item)}>
@@ -2809,17 +3233,33 @@ function MyJobDetailsPage({
                       <Text style={styles.myJobStatusPillText}>{status}</Text>
                     </View>
                   </View>
+                  <Text style={styles.myJobMeta}>Rating: {getRatingSummaryText(item?.applicant?.ratingSummary)}</Text>
                   <Text style={styles.myJobMeta}>Applied: {item?.createdAt ? String(item.createdAt).slice(0, 10) : '-'}</Text>
                 </Pressable>
                 <View style={styles.optionActionsRow}>
                   {isAccepted ? (
-                    <Pressable
-                      style={[styles.modalBtnPrimary, styles.optionActionBtn]}
-                      onPress={() => onOpenChatWithApplicant(item)}
-                    >
-                      <Ionicons name="chatbubble-ellipses-outline" size={14} color="#FFFFFF" />
-                      <Text style={styles.modalBtnPrimaryText}>Chat</Text>
-                    </Pressable>
+                    <>
+                      <Pressable
+                        style={[styles.modalBtnPrimary, styles.optionActionBtn, styles.modalBtnPrimaryInline]}
+                        onPress={() => onOpenChatWithApplicant(item)}
+                      >
+                        <Ionicons name="chatbubble-ellipses-outline" size={14} color="#FFFFFF" />
+                        <Text style={styles.modalBtnPrimaryText} numberOfLines={1}>Chat</Text>
+                      </Pressable>
+                      {isJobCompleted ? (
+                        <Pressable
+                          style={[styles.optionCancel, styles.optionActionBtn, isSubmittingReview ? styles.modalBtnDisabled : null]}
+                          disabled={isSubmittingReview}
+                          onPress={() => {
+                            setReviewTarget(item);
+                            setReviewRating(Number(item?.ownerReview?.rating || 5));
+                            setReviewComment(String(item?.ownerReview?.comment || ''));
+                          }}
+                        >
+                          <Text style={styles.optionCancelText}>{hasExistingReview ? 'Update Review' : 'Add Review'}</Text>
+                        </Pressable>
+                      ) : null}
+                    </>
                   ) : (
                     <>
                       <Pressable
@@ -2875,13 +3315,134 @@ function MyJobDetailsPage({
 
             <View style={styles.adminUserDetailCard}>
               <Text style={styles.myJobMeta}>Phone: {selectedApplicantRecord?.applicant?.phone || '-'}</Text>
+              <Text style={styles.myJobMeta}>Rating: {getRatingSummaryText(selectedApplicantRecord?.applicant?.ratingSummary)}</Text>
               <Text style={styles.myJobMeta}>Application Status: {selectedApplicantRecord?.status || '-'}</Text>
+              {selectedApplicantRecord?.ownerReview ? (
+                <Text style={styles.myJobMeta}>
+                  Your Review: {selectedApplicantRecord.ownerReview.rating}/5
+                  {selectedApplicantRecord.ownerReview.comment ? ` - ${selectedApplicantRecord.ownerReview.comment}` : ''}
+                </Text>
+              ) : null}
               <Text style={styles.myJobMeta}>
                 Applied On: {selectedApplicantRecord?.createdAt ? String(selectedApplicantRecord.createdAt).slice(0, 10) : '-'}
               </Text>
               <Text style={styles.myJobMeta}>Applicant ID: {selectedApplicantRecord?.applicant?.id || '-'}</Text>
             </View>
 
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={showStatusPicker} transparent animationType="fade" onRequestClose={() => setShowStatusPicker(false)}>
+        <Pressable style={styles.filterBackdrop} onPress={() => setShowStatusPicker(false)}>
+          <Pressable style={styles.categoryFilterModal} onPress={() => {}}>
+            <Text style={styles.optionTitle}>Change Job Status</Text>
+            <Text style={styles.categoryFilterHint}>Select new status for this job</Text>
+            {jobStatusOptions.map((option) => (
+              <Pressable
+                key={`job-status-${option}`}
+                style={[styles.categoryFilterOption, currentJobStatus === option && styles.categoryFilterOptionActive]}
+                onPress={() => {
+                  setShowStatusPicker(false);
+                  if (option === currentJobStatus) return;
+                  setPendingStatusChange(option);
+                }}
+              >
+                <View style={styles.categoryFilterOptionLeft}>
+                  <Ionicons
+                    name={option === 'COMPLETED' ? 'checkmark-circle-outline' : option === 'CANCELLED' ? 'close-circle-outline' : option === 'IN_PROGRESS' ? 'time-outline' : 'radio-button-on-outline'}
+                    size={16}
+                    color={currentJobStatus === option ? colors.primary : colors.textSecondary}
+                  />
+                  <Text style={[styles.categoryFilterOptionText, currentJobStatus === option && styles.categoryFilterOptionTextActive]}>
+                    {option.replace('_', ' ')}
+                  </Text>
+                </View>
+                {currentJobStatus === option ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={Boolean(pendingStatusChange)} transparent animationType="fade" onRequestClose={() => setPendingStatusChange(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setPendingStatusChange(null)}>
+          <Pressable style={styles.optionModal} onPress={() => {}}>
+            <Text style={styles.optionTitle}>Confirm Status Change</Text>
+            <Text style={styles.optionMessage}>
+              Change status from {currentJobStatus.replace('_', ' ')} to {String(pendingStatusChange || '').replace('_', ' ')}?
+            </Text>
+            <View style={styles.optionActionsRow}>
+              <Pressable style={[styles.optionCancel, styles.optionActionBtn]} onPress={() => setPendingStatusChange(null)}>
+                <Text style={styles.optionCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtnPrimary, styles.optionActionBtn, isUpdatingJobStatus ? styles.modalBtnDisabled : null]}
+                disabled={isUpdatingJobStatus}
+                onPress={async () => {
+                  if (!pendingStatusChange) return;
+                  await onChangeJobStatus(pendingStatusChange);
+                  setPendingStatusChange(null);
+                }}
+              >
+                <Text style={styles.modalBtnPrimaryText}>{isUpdatingJobStatus ? 'Updating...' : 'Confirm'}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={Boolean(reviewTarget)} transparent animationType="fade" onRequestClose={() => setReviewTarget(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setReviewTarget(null)}>
+          <Pressable style={styles.optionModal} onPress={() => {}}>
+            <Text style={styles.optionTitle}>Review Job Picker</Text>
+            <Text style={styles.optionSubtitle}>
+              {reviewTarget?.applicant?.name || 'User'} for "{job?.title || 'Job'}"
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 12 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Pressable key={`star-${star}`} onPress={() => setReviewRating(star)}>
+                  <Ionicons
+                    name={star <= reviewRating ? 'star' : 'star-outline'}
+                    size={26}
+                    color={star <= reviewRating ? '#F59E0B' : colors.textSecondary}
+                  />
+                </Pressable>
+              ))}
+            </View>
+
+            <TextInput
+              style={[styles.createFieldInput, styles.createFieldArea, { marginTop: 4 }]}
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              placeholder="Write review comment (optional)"
+              placeholderTextColor={colors.textSecondary}
+              multiline
+              maxLength={500}
+            />
+
+            <View style={styles.optionActionsRow}>
+              <Pressable style={[styles.optionCancel, styles.optionActionBtn]} onPress={() => setReviewTarget(null)}>
+                <Text style={styles.optionCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtnPrimary, styles.optionActionBtn, isSubmittingReview ? styles.modalBtnDisabled : null]}
+                disabled={isSubmittingReview}
+                onPress={async () => {
+                  if (!reviewTarget?.applicant?.id || !job?.id) return;
+                  await onSubmitReview({
+                    jobId: job.id,
+                    revieweeId: reviewTarget.applicant.id,
+                    rating: reviewRating,
+                    comment: reviewComment
+                  });
+                  setReviewTarget(null);
+                }}
+              >
+                <Text style={styles.modalBtnPrimaryText}>{isSubmittingReview ? 'Submitting...' : 'Submit Review'}</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -3008,6 +3569,10 @@ function PickerJobsPage({
         ) : filteredJobs.length ? (
           filteredJobs.map((item) => (
             <Pressable key={item.id} style={styles.myJobCard} onPress={() => setSelectedJob(item)}>
+              {(() => {
+                const stats = getApplicationStats(item);
+                return (
+                  <>
               <View style={styles.myJobHead}>
                 <Text style={styles.myJobTitle} numberOfLines={1}>
                   {item.title}
@@ -3026,9 +3591,24 @@ function PickerJobsPage({
                 </View>
                 <View style={styles.myJobMetaPill}>
                   <Ionicons name="cash-outline" size={13} color={colors.primary} />
-                  <Text style={styles.myJobMetaPillText}>₹{item?.budget || '-'}</Text>
+                  <Text style={styles.myJobMetaPillText}>{getBudgetDisplay(item)}</Text>
+                </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="people-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>Applied: {stats.appliedCount}</Text>
+                </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="checkmark-done-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>Accepted: {stats.acceptedCount}</Text>
+                </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="time-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>Pending: {stats.pendingCount}</Text>
                 </View>
               </View>
+                  </>
+                );
+              })()}
             </Pressable>
           ))
         ) : (
@@ -3132,10 +3712,20 @@ function PickerJobsPage({
             </View>
             <Text style={styles.myJobDetailDescription}>{selectedJob?.description || 'No description provided.'}</Text>
             <View style={styles.myJobInfoCard}>
+              {(() => {
+                const stats = getApplicationStats(selectedJob);
+                return (
+                  <>
               <Text style={styles.myJobMeta}>Category: {selectedJob?.category?.name || '-'}</Text>
               <Text style={styles.myJobMeta}>Posted By: {selectedJob?.owner?.name || '-'}</Text>
-              <Text style={styles.myJobMeta}>Budget: ₹{selectedJob?.budget || '-'}</Text>
+              <Text style={styles.myJobMeta}>Budget: {getBudgetDisplay(selectedJob)}</Text>
+              <Text style={styles.myJobMeta}>Applied Users: {stats.appliedCount}</Text>
+              <Text style={styles.myJobMeta}>Accepted Users: {stats.acceptedCount}</Text>
+              <Text style={styles.myJobMeta}>Pending Users: {stats.pendingCount}</Text>
               <Text style={styles.myJobMeta}>Due Date: {selectedJob?.dueDate ? String(selectedJob.dueDate).slice(0, 10) : '-'}</Text>
+                  </>
+                );
+              })()}
             </View>
             <JobLocationCard job={selectedJob} title="Job Location" styles={styles} colors={colors} />
             <View style={styles.optionActionsRow}>
@@ -3222,6 +3812,10 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
         ) : filteredApplications.length ? (
           filteredApplications.map((item) => (
             <Pressable key={item.id} style={styles.myJobCard} onPress={() => setSelectedApplication(item)}>
+              {(() => {
+                const stats = getApplicationStats(item?.job);
+                return (
+                  <>
               <View style={styles.myJobHead}>
                 <Text style={styles.myJobTitle} numberOfLines={1}>{item?.job?.title || '-'}</Text>
                 <View style={styles.myJobStatusPill}>
@@ -3238,6 +3832,18 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
                   <Ionicons name="person-outline" size={13} color={colors.primary} />
                   <Text style={styles.myJobMetaPillText}>{item?.job?.owner?.name || '-'}</Text>
                 </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="people-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>Applied: {stats.appliedCount}</Text>
+                </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="checkmark-done-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>Accepted: {stats.acceptedCount}</Text>
+                </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="time-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>Pending: {stats.pendingCount}</Text>
+                </View>
               </View>
               <View style={styles.myJobOpenRow}>
                 <Text style={styles.myJobOpenText}>Tap to open details</Text>
@@ -3253,6 +3859,9 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
                   <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primary} />
                 </View>
               </View>
+                  </>
+                );
+              })()}
             </Pressable>
           ))
         ) : (
@@ -3310,11 +3919,22 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
             </View>
             <Text style={styles.myJobDetailDescription}>{selectedApplication?.job?.description || 'No description provided.'}</Text>
             <View style={styles.myJobInfoCard}>
+              {(() => {
+                const stats = getApplicationStats(selectedApplication?.job);
+                return (
+                  <>
               <Text style={styles.myJobMeta}>Category: {selectedApplication?.job?.category?.name || '-'}</Text>
               <Text style={styles.myJobMeta}>Posted By: {selectedApplication?.job?.owner?.name || '-'}</Text>
-              <Text style={styles.myJobMeta}>Budget: ₹{selectedApplication?.job?.budget || '-'}</Text>
+              <Text style={styles.myJobMeta}>Poster Rating: {getRatingSummaryText(selectedApplication?.job?.owner?.ratingSummary)}</Text>
+              <Text style={styles.myJobMeta}>Budget: {getBudgetDisplay(selectedApplication?.job)}</Text>
+              <Text style={styles.myJobMeta}>Applied Users: {stats.appliedCount}</Text>
+              <Text style={styles.myJobMeta}>Accepted Users: {stats.acceptedCount}</Text>
+              <Text style={styles.myJobMeta}>Pending Users: {stats.pendingCount}</Text>
               <Text style={styles.myJobMeta}>Due Date: {selectedApplication?.job?.dueDate ? String(selectedApplication.job.dueDate).slice(0, 10) : '-'}</Text>
               <Text style={styles.myJobMeta}>Applied On: {selectedApplication?.createdAt ? String(selectedApplication.createdAt).slice(0, 10) : '-'}</Text>
+                  </>
+                );
+              })()}
             </View>
             <JobLocationCard job={selectedApplication?.job} title="Job Location" styles={styles} colors={colors} />
             <View style={styles.optionActionsRow}>
@@ -3337,6 +3957,72 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
           </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+function ReviewsPage({ reviewsData, isLoading, onBack, onRefresh, styles, colors }) {
+  const summary = reviewsData?.summary || { averageRating: null, totalReviews: 0 };
+  const reviews = Array.isArray(reviewsData?.reviews) ? reviewsData.reviews : [];
+  const distribution = reviewsData?.distribution || {};
+
+  return (
+    <View style={styles.settingsScreen}>
+      <View style={styles.settingsNav}>
+        <Pressable style={styles.settingsBackBtn} onPress={onBack}>
+          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          <Text style={styles.settingsBackText}>Settings</Text>
+        </Pressable>
+        <Text style={styles.settingsNavTitle}>My Reviews</Text>
+        <View style={styles.settingsNavRight}>
+          <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
+            <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+          </Pressable>
+        </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        <View style={styles.myJobCard}>
+          <Text style={styles.optionTitle}>Overall Rating</Text>
+          <Text style={styles.profileHint}>{getRatingSummaryText(summary)}</Text>
+          <View style={styles.myJobMetaRow}>
+            {[5, 4, 3, 2, 1].map((rating) => (
+              <View key={`rating-dist-${rating}`} style={styles.myJobMetaPill}>
+                <Ionicons name="star" size={13} color="#F59E0B" />
+                <Text style={styles.myJobMetaPillText}>{rating}: {Number(distribution?.[rating] || 0)}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {isLoading ? (
+          <AdminListState mode="loading" title="Loading reviews..." subtitle="Please wait..." colors={colors} />
+        ) : reviews.length ? (
+          reviews.map((review) => (
+            <View key={review.id} style={styles.myJobCard}>
+              <View style={styles.myJobHead}>
+                <Text style={styles.myJobTitle} numberOfLines={1}>{review?.job?.title || 'Job'}</Text>
+                <View style={styles.myJobStatusPill}>
+                  <Text style={styles.myJobStatusPillText}>{Number(review?.rating || 0)}/5</Text>
+                </View>
+              </View>
+              <Text style={styles.myJobMeta}>By: {review?.reviewer?.name || '-'}</Text>
+              <Text style={styles.myJobMeta}>Date: {review?.createdAt ? String(review.createdAt).slice(0, 10) : '-'}</Text>
+              <Text style={styles.myJobDescription}>
+                {String(review?.comment || '').trim() || 'No comment added.'}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <AdminListState
+            mode="empty"
+            title="No reviews yet"
+            subtitle="Complete jobs to receive ratings from job posters."
+            colors={colors}
+            emptySource={ADMIN_EMPTY_ANIMATION}
+          />
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -3384,7 +4070,18 @@ function UserModePage({ user, onBack, onChangeMode, isChangingMode, styles, colo
   );
 }
 
-function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenMode, onOpenCategories, onRequestLogout, styles, colors }) {
+function SettingsPage({
+  user,
+  themeMode,
+  setThemeMode,
+  onOpenProfile,
+  onOpenMode,
+  onOpenCategories,
+  onOpenReviews,
+  onRequestLogout,
+  styles,
+  colors
+}) {
   return (
     <View style={styles.settingsScreen}>
       <View style={styles.settingsNav}>
@@ -3400,6 +4097,9 @@ function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenMode
             <Text style={styles.settingsHeaderName}>{user?.name || 'User'}</Text>
             <Text style={styles.settingsHeaderEmail}>{user?.email || 'No email available'}</Text>
             <Text style={styles.settingsRolePill}>{getRoleLabel(user?.role, user?.userMode)}</Text>
+            {user?.role !== 'ADMIN' ? (
+              <Text style={styles.profileHint}>Rating: {getRatingSummaryText(user?.ratingSummary)}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -3448,6 +4148,16 @@ function SettingsPage({ user, themeMode, setThemeMode, onOpenProfile, onOpenMode
           styles={styles}
           colors={colors}
         />
+        {user?.role !== 'ADMIN' ? (
+          <SettingsOption
+            icon="star-outline"
+            title="My Reviews"
+            subtitle="View all ratings and comments received"
+            onPress={onOpenReviews}
+            styles={styles}
+            colors={colors}
+          />
+        ) : null}
           <SettingsOption
             icon="notifications-outline"
             title="Notifications"
@@ -3504,5 +4214,6 @@ export {
   MyJobDetailsPage,
   PickerJobsPage,
   MyApplicationsPage,
+  ReviewsPage,
   SettingsPage
 };

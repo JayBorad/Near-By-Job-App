@@ -10,6 +10,13 @@ export function CreateTab({
   adminJobs,
   isAdminPanelLoading,
   onRefreshAdminJobs,
+  onGetApplicationsByJob,
+  onOpenChatWithUser,
+  onOpenAdminUserDetails,
+  onChangeAdminJobStatus,
+  onEditAdminJob,
+  adminReturnJobId,
+  onAdminReturnJobHandled,
   jobForm,
   setJobForm,
   approvedCategoryOptions,
@@ -21,7 +28,20 @@ export function CreateTab({
 }) {
   if (userRole === 'ADMIN') {
     return (
-      <AdminModerationPage jobs={adminJobs} isLoading={isAdminPanelLoading} onRefresh={onRefreshAdminJobs} styles={styles} colors={colors} />
+      <AdminModerationPage
+        jobs={adminJobs}
+        isLoading={isAdminPanelLoading}
+        onRefresh={onRefreshAdminJobs}
+        onGetApplicationsByJob={onGetApplicationsByJob}
+        onOpenChatWithUser={onOpenChatWithUser}
+        onOpenUserDetails={onOpenAdminUserDetails}
+        onChangeJobStatus={onChangeAdminJobStatus}
+        onEditJob={onEditAdminJob}
+        openJobIdOnMount={adminReturnJobId}
+        onOpenJobIdHandled={onAdminReturnJobHandled}
+        styles={styles}
+        colors={colors}
+      />
     );
   }
 

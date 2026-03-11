@@ -15,10 +15,14 @@ export function ExploreTab({
   selectedMyJobApplications,
   isSelectedMyJobApplicationsLoading,
   isUpdatingJobApplicationStatus,
+  isSubmittingReview,
+  isUpdatingJobStatus,
   onBackFromMyJobDetail,
   onRefreshSelectedMyJobApplications,
   onApproveJobApplication,
   onRejectJobApplication,
+  onSubmitReview,
+  onChangeJobStatus,
   onEditMyJob,
   onOpenChatWithApplicant,
   pickerJobs,
@@ -41,10 +45,14 @@ export function ExploreTab({
           applications={selectedMyJobApplications}
           isLoadingApplications={isSelectedMyJobApplicationsLoading}
           isUpdatingApplicationStatus={isUpdatingJobApplicationStatus}
+          isSubmittingReview={isSubmittingReview}
+          isUpdatingJobStatus={isUpdatingJobStatus}
           onBack={onBackFromMyJobDetail}
           onRefreshApplications={onRefreshSelectedMyJobApplications}
           onApproveApplication={onApproveJobApplication}
           onRejectApplication={onRejectJobApplication}
+          onSubmitReview={onSubmitReview}
+          onChangeJobStatus={onChangeJobStatus}
           onEditJob={() => onEditMyJob(selectedMyJob)}
           onOpenChatWithApplicant={(application) =>
             onOpenChatWithApplicant({

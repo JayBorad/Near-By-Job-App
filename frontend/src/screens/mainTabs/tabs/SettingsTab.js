@@ -1,5 +1,5 @@
 import React from 'react';
-import { AdminCategoriesPage, CategoryPage, ProfilePage, SettingsPage, UserModePage } from '../tabScreens';
+import { AdminCategoriesPage, CategoryPage, ProfilePage, ReviewsPage, SettingsPage, UserModePage } from '../tabScreens';
 
 export function SettingsTab({
   settingsPage,
@@ -18,6 +18,8 @@ export function SettingsTab({
   onSaveProfile,
   onChangeMode,
   onOpenCategories,
+  onOpenReviews,
+  onBackFromReviews,
   isSavingProfile,
   isChangingMode,
   isUploadingAvatar,
@@ -43,6 +45,9 @@ export function SettingsTab({
   setAdminCategoryDraft,
   onCreateAdminCategory,
   onUpdateAdminCategoryStatus,
+  myReceivedReviews,
+  isMyReceivedReviewsLoading,
+  onRefreshMyReceivedReviews,
   styles,
   colors
 }) {
@@ -117,6 +122,19 @@ export function SettingsTab({
     );
   }
 
+  if (settingsPage === 'reviews' && userRole !== 'ADMIN') {
+    return (
+      <ReviewsPage
+        reviewsData={myReceivedReviews}
+        isLoading={isMyReceivedReviewsLoading}
+        onBack={onBackFromReviews}
+        onRefresh={onRefreshMyReceivedReviews}
+        styles={styles}
+        colors={colors}
+      />
+    );
+  }
+
   return (
     <SettingsPage
       user={user}
@@ -125,6 +143,7 @@ export function SettingsTab({
       onOpenProfile={onOpenProfile}
       onOpenMode={onOpenMode}
       onOpenCategories={onOpenCategories}
+      onOpenReviews={onOpenReviews}
       onRequestLogout={onRequestLogout}
       styles={styles}
       colors={colors}
