@@ -2,6 +2,8 @@ import { JobStatus, Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import ApiError from '../../utils/ApiError.js';
 import { parsePagination } from '../../utils/pagination.js';
+import { getReviewSummaryMapForUsers } from '../../utils/review-summary.js';
+import { emptyApplicationStats, getApplicationStatsMapForJobs } from '../../utils/application-stats.js';
 
 const isBrokenJobLocationTriggerError = (error) =>
   String(error?.message || '').toLowerCase().includes('column `new` does not exist') ||
@@ -57,6 +59,7 @@ export const createJob = async (userId, payload) => {
       : 1,
     categoryId: payload.categoryId,
     budget: new Prisma.Decimal(payload.budget),
+    budgetType: payload.budgetType || 'TOTAL',
     jobType: payload.jobType,
     latitude: new Prisma.Decimal(payload.latitude),
     longitude: new Prisma.Decimal(payload.longitude),
@@ -88,6 +91,7 @@ export const updateJob = async (jobId, payload) => {
     updateData.requiredWorkers = normalizedRequiredWorkers;
   }
   if (payload.budget !== undefined) updateData.budget = new Prisma.Decimal(payload.budget);
+  if (payload.budgetType !== undefined) updateData.budgetType = payload.budgetType;
   if (payload.latitude !== undefined) updateData.latitude = new Prisma.Decimal(payload.latitude);
   if (payload.longitude !== undefined) updateData.longitude = new Prisma.Decimal(payload.longitude);
 
@@ -146,9 +150,19 @@ export const getAllJobs = async (query) => {
     }),
     prisma.job.count({ where })
   ]);
+  const ownerRatingMap = await getReviewSummaryMapForUsers(jobs.map((item) => item?.owner?.id));
+  const applicationStatsMap = await getApplicationStatsMapForJobs(jobs.map((item) => item?.id));
+  const jobsWithOwnerRating = jobs.map((job) => ({
+    ...job,
+    applicationStats: applicationStatsMap.get(job?.id) || { ...emptyApplicationStats },
+    owner: {
+      ...job.owner,
+      ratingSummary: ownerRatingMap.get(job?.owner?.id) || { averageRating: null, totalReviews: 0 }
+    }
+  }));
 
   return {
-    jobs,
+    jobs: jobsWithOwnerRating,
     meta: {
       total,
       page,
@@ -171,7 +185,16 @@ export const getJobById = async (jobId) => {
     throw new ApiError(404, 'Job not found');
   }
 
-  return job;
+  const ownerRatingMap = await getReviewSummaryMapForUsers([job?.owner?.id]);
+  const applicationStatsMap = await getApplicationStatsMapForJobs([job?.id]);
+  return {
+    ...job,
+    applicationStats: applicationStatsMap.get(job?.id) || { ...emptyApplicationStats },
+    owner: {
+      ...job.owner,
+      ratingSummary: ownerRatingMap.get(job?.owner?.id) || { averageRating: null, totalReviews: 0 }
+    }
+  };
 };
 
 export const findNearbyJobs = async ({ latitude, longitude, radiusKm = 10 }) => {
