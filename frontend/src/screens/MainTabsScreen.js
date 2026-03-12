@@ -801,7 +801,12 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       }
       const response = await getAllJobs({ token, page: 1, limit: 200, status: 'ALL' });
       const jobs = response?.data?.jobs || [];
-      setPickerJobs(jobs.filter((item) => item?.createdBy !== localUser?.id));
+      setPickerJobs(
+        jobs.filter((item) => {
+          const status = String(item?.status || '').toUpperCase();
+          return item?.createdBy !== localUser?.id && (status === 'OPEN' || status === 'IN_PROGRESS');
+        })
+      );
     } catch (error) {
       showPopup('Jobs Failed', error?.message || 'Unable to load jobs.', 'error');
     } finally {
