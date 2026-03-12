@@ -163,6 +163,7 @@ export function DashboardTab({ user, userRole, myApplications, styles, colors })
   const [selectedJobType, setSelectedJobType] = useState('ALL');
   const [earnPeriod, setEarnPeriod] = useState('MONTH');
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
+  const salesGradientId = useMemo(() => `salesArea-${String(userRole || 'user').toLowerCase()}`, [userRole]);
 
   const displayName = useMemo(() => {
     const candidate = String(user?.name || user?.username || user?.email || 'User').trim();
@@ -461,8 +462,11 @@ export function DashboardTab({ user, userRole, myApplications, styles, colors })
   );
 
   return (
-    <ScrollView style={styles.dashboardHeaderOnlyWrap} contentContainerStyle={styles.dashboardHeaderOnlyContent}>
-      {showPeriodDropdown ? <Pressable style={styles.dashboardGlobalDismissLayer} onPress={() => setShowPeriodDropdown(false)} /> : null}
+    <ScrollView
+      style={styles.dashboardHeaderOnlyWrap}
+      contentContainerStyle={styles.dashboardHeaderOnlyContent}
+      stickyHeaderIndices={[0]}
+    >
       <View style={styles.dashboardHeaderShell}>
         <View style={styles.dashboardTopHeader}>
           <View style={styles.dashboardTopLeft}>
@@ -494,6 +498,7 @@ export function DashboardTab({ user, userRole, myApplications, styles, colors })
           </Pressable>
         </View>
       </View>
+      {showPeriodDropdown ? <Pressable style={styles.dashboardGlobalDismissLayer} onPress={() => setShowPeriodDropdown(false)} /> : null}
 
       {isUserDashboard ? (
         <>
@@ -637,13 +642,13 @@ export function DashboardTab({ user, userRole, myApplications, styles, colors })
                 ))}
 
                 <Defs>
-                  <SvgLinearGradient id="salesArea" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0%" stopColor={hexToRgba(statsLineColor, 0.24)} />
-                    <Stop offset="100%" stopColor={hexToRgba(statsLineColor, 0.02)} />
+                  <SvgLinearGradient id={salesGradientId} x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0%" stopColor={statsLineColor} stopOpacity={0.24} />
+                    <Stop offset="100%" stopColor={statsLineColor} stopOpacity={0.02} />
                   </SvgLinearGradient>
                 </Defs>
 
-                <Path d={earningsGraph.areaPath} fill="url(#salesArea)" />
+                <Path d={earningsGraph.areaPath} fill={`url(#${salesGradientId})`} />
                 <Path d={earningsGraph.path} stroke={statsLineColor} strokeWidth={2.6} fill="none" />
               </Svg>
 

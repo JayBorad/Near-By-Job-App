@@ -77,6 +77,16 @@ const getBudgetDisplay = (job) => {
   return `₹${budget} total (₹${(budget / requiredWorkers).toFixed(2)} per person)`;
 };
 
+const getPerWorkerBudget = (job) => {
+  const budget = Number(job?.budget || 0);
+  const requiredWorkers = Math.max(1, Number(job?.requiredWorkers || 1));
+  const budgetType = String(job?.budgetType || 'TOTAL').toUpperCase();
+  if (!Number.isFinite(budget) || budget <= 0) return 0;
+  return budgetType === 'PER_PERSON' ? budget : budget / requiredWorkers;
+};
+
+const formatCurrency = (value) => `₹${Math.round(Number(value) || 0).toLocaleString('en-IN')}`;
+
 function ProfilePage({
   user,
   onBack,
@@ -522,9 +532,15 @@ function AdminUsersPage({
   const [modeFilter, setModeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [genderFilter, setGenderFilter] = useState('ALL');
+  const [userJobSearch, setUserJobSearch] = useState('');
+  const [userJobStatusFilter, setUserJobStatusFilter] = useState('ALL');
+  const [userJobMinBudget, setUserJobMinBudget] = useState('');
+  const [userJobMaxBudget, setUserJobMaxBudget] = useState('');
+  const [showUserJobFilterSheet, setShowUserJobFilterSheet] = useState(false);
   const [userDetailHistory, setUserDetailHistory] = useState([]);
   const [selectedUserReviews, setSelectedUserReviews] = useState(null);
   const [isSelectedUserReviewsLoading, setIsSelectedUserReviewsLoading] = useState(false);
+  const detailScrollRef = useRef(null);
   const [form, setForm] = useState({
     name: '',
     username: '',
@@ -544,6 +560,11 @@ function AdminUsersPage({
     setUserDetailPage('details');
     setJobTab('POSTED');
     setSelectedUserJob(null);
+    setUserJobSearch('');
+    setUserJobStatusFilter('ALL');
+    setUserJobMinBudget('');
+    setUserJobMaxBudget('');
+    setShowUserJobFilterSheet(false);
     setForm({
       name: String(user?.name || ''),
       username: String(user?.username || ''),
@@ -628,6 +649,13 @@ function AdminUsersPage({
     loadReviews();
   }, [selectedUser?.id, onGetUserReviews]);
 
+  useEffect(() => {
+    if (!selectedUser?.id) return;
+    requestAnimationFrame(() => {
+      detailScrollRef.current?.scrollTo({ y: 0, animated: false });
+    });
+  }, [selectedUser?.id]);
+
   const filteredUsers = useMemo(
     () =>
       users.filter((item) => {
@@ -655,6 +683,54 @@ function AdminUsersPage({
     }))
     .filter((job) => Boolean(job?.id));
   const activeUserJobs = jobTab === 'POSTED' ? postedJobs : pickedJobs;
+  const userJobStatusOptions = ['ALL', 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+  const parsedUserJobMinBudget = Number.parseFloat(userJobMinBudget);
+  const parsedUserJobMaxBudget = Number.parseFloat(userJobMaxBudget);
+  const hasValidUserJobMinBudget = Number.isFinite(parsedUserJobMinBudget);
+  const hasValidUserJobMaxBudget = Number.isFinite(parsedUserJobMaxBudget);
+  const hasAnyUserJobFilter = userJobStatusFilter !== 'ALL' || hasValidUserJobMinBudget || hasValidUserJobMaxBudget;
+  const filteredActiveUserJobs = useMemo(
+    () =>
+      activeUserJobs.filter((job) => {
+        const status = String(job?.status || '').toUpperCase();
+        const matchesStatus = userJobStatusFilter === 'ALL' || status === userJobStatusFilter;
+        const budget = Number(job?.budget || 0);
+        const hasBudget = Number.isFinite(budget);
+        const matchesMinBudget = !hasValidUserJobMinBudget || (hasBudget && budget >= parsedUserJobMinBudget);
+        const matchesMaxBudget = !hasValidUserJobMaxBudget || (hasBudget && budget <= parsedUserJobMaxBudget);
+        const q = userJobSearch.trim().toLowerCase();
+        const matchesSearch =
+          !q ||
+          [job?.title, job?.description, job?.owner?.name, job?.category?.name]
+            .some((value) => String(value || '').toLowerCase().includes(q));
+        return matchesStatus && matchesMinBudget && matchesMaxBudget && matchesSearch;
+      }),
+    [
+      activeUserJobs,
+      userJobStatusFilter,
+      hasValidUserJobMinBudget,
+      hasValidUserJobMaxBudget,
+      parsedUserJobMinBudget,
+      parsedUserJobMaxBudget,
+      userJobSearch
+    ]
+  );
+  const userEarnedAmount = useMemo(
+    () =>
+      (selectedUser?.applications || []).reduce((total, application) => {
+        if (String(application?.status || '').toUpperCase() !== 'ACCEPTED') return total;
+        return total + getPerWorkerBudget(application?.job);
+      }, 0),
+    [selectedUser?.applications]
+  );
+  const userSpentAmount = useMemo(
+    () =>
+      (selectedUser?.jobs || []).reduce((total, job) => {
+        const acceptedCount = Number(job?.applicationStats?.acceptedCount || 0);
+        return total + getPerWorkerBudget(job) * acceptedCount;
+      }, 0),
+    [selectedUser?.jobs]
+  );
 
   const saveDetails = async () => {
     if (!selectedUser?.id) return;
@@ -780,7 +856,7 @@ function AdminUsersPage({
           </View>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        <ScrollView ref={detailScrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
           <View style={styles.adminUserDetailHero}>
             <Pressable style={styles.avatarWrap} onPress={() => setShowAvatarPreview(true)}>
               <AvatarView imageUrl={selectedUser?.avatar || DEFAULT_AVATAR_URL} size={88} colors={colors} showBorder />
@@ -998,6 +1074,22 @@ function AdminUsersPage({
 
           {!isEditingUser ? (
             <View style={styles.adminUserDetailCard}>
+              <Text style={styles.createFieldLabel}>Financial Summary</Text>
+              <View style={styles.adminUserStatsGrid}>
+                <View style={styles.adminUserStatsCard}>
+                  <Text style={styles.adminUserStatsLabel}>Total Earned</Text>
+                  <Text style={styles.adminUserStatsValue}>{formatCurrency(userEarnedAmount)}</Text>
+                </View>
+                <View style={styles.adminUserStatsCard}>
+                  <Text style={styles.adminUserStatsLabel}>Total Spend</Text>
+                  <Text style={styles.adminUserStatsValue}>{formatCurrency(userSpentAmount)}</Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {!isEditingUser ? (
+            <View style={styles.adminUserDetailCard}>
               <Text style={styles.createFieldLabel}>
                 Reviews ({Number(selectedUserReviews?.summary?.totalReviews || 0)})
               </Text>
@@ -1017,10 +1109,15 @@ function AdminUsersPage({
                         <Text style={styles.adminJobStatusText}>{Number(review?.rating || 0)} / 5</Text>
                       </View>
                     </View>
-                    <Pressable onPress={() => openUserDetailById(review?.reviewer?.id)}>
-                      <Text style={styles.adminJobMeta} numberOfLines={1}>
-                        Reviewer: {review?.reviewer?.name || '-'}
+                    <Pressable
+                      style={styles.adminJobMetaLinkRow}
+                      onPress={() => openUserDetailById(review?.reviewer?.id)}
+                      disabled={!review?.reviewer?.id}
+                    >
+                      <Text style={styles.adminJobMetaLinkText} numberOfLines={1}>
+                        Reviewer: {review?.reviewer?.name || '-'} (View Profile)
                       </Text>
+                      <Ionicons name="open-outline" size={14} color={colors.primary} />
                     </Pressable>
                     <Text style={styles.adminJobMeta} numberOfLines={1}>
                       Reviewer Role: {getUserModeLabel(review?.reviewer?.role, review?.reviewer?.userMode)}
@@ -1059,8 +1156,34 @@ function AdminUsersPage({
                 </Pressable>
               </View>
 
-              {activeUserJobs.length ? (
-                activeUserJobs.map((job) => (
+              <View style={styles.adminCategoryToolbar}>
+                <View style={styles.categorySearchWrap}>
+                  <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+                  <TextInput
+                    value={userJobSearch}
+                    onChangeText={setUserJobSearch}
+                    placeholder="Search user jobs..."
+                    placeholderTextColor={colors.textSecondary}
+                    style={styles.categorySearchInput}
+                  />
+                </View>
+                <Pressable
+                  style={[styles.categoryFilterIconBtn, hasAnyUserJobFilter ? styles.categoryFilterIconBtnActive : null]}
+                  onPress={() => setShowUserJobFilterSheet(true)}
+                >
+                  <Ionicons name="filter-outline" size={18} color={hasAnyUserJobFilter ? '#FFFFFF' : colors.primary} />
+                  {hasAnyUserJobFilter ? (
+                    <View style={styles.adminUserFilterBadge}>
+                      <Text style={styles.adminUserFilterBadgeText}>
+                        {[userJobStatusFilter !== 'ALL', hasValidUserJobMinBudget, hasValidUserJobMaxBudget].filter(Boolean).length}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              </View>
+
+              {filteredActiveUserJobs.length ? (
+                filteredActiveUserJobs.map((job) => (
                   <Pressable key={`${jobTab}-${job.id}`} style={styles.adminJobCard} onPress={() => setSelectedUserJob(job)}>
                     <View style={styles.adminJobTop}>
                       <Text style={styles.adminJobTitle} numberOfLines={1}>
@@ -1070,7 +1193,19 @@ function AdminUsersPage({
                         <Text style={styles.adminJobStatusText}>{String(job?.status || 'OPEN').replace('_', ' ')}</Text>
                       </View>
                     </View>
-                    <Text style={styles.adminJobMeta} numberOfLines={1}>By: {job?.owner?.name || '-'}</Text>
+                    {jobTab === 'PICKED' && job?.owner?.id ? (
+                      <Pressable
+                        style={styles.adminJobMetaLinkRow}
+                        onPress={() => openUserDetailById(job?.owner?.id)}
+                      >
+                        <Text style={styles.adminJobMetaLinkText} numberOfLines={1}>
+                          Posted By: {job?.owner?.name || '-'} (View Profile)
+                        </Text>
+                        <Ionicons name="open-outline" size={14} color={colors.primary} />
+                      </Pressable>
+                    ) : (
+                      <Text style={styles.adminJobMeta} numberOfLines={1}>By: {job?.owner?.name || '-'}</Text>
+                    )}
                     <Text style={styles.adminJobMeta} numberOfLines={1}>Category: {job?.category?.name || '-'}</Text>
                     <View style={styles.adminJobBottomRow}>
                       <Text style={styles.adminJobBudget}>{getBudgetDisplay(job)}</Text>
@@ -1082,9 +1217,11 @@ function AdminUsersPage({
                 <AdminListState
                   mode="empty"
                   title={jobTab === 'POSTED' ? 'No posted jobs' : 'No picked jobs'}
-                  subtitle={jobTab === 'POSTED'
-                    ? 'This user has not posted any jobs yet.'
-                    : 'This user has not picked any jobs yet.'}
+                  subtitle={activeUserJobs.length
+                    ? 'No jobs match your current filters.'
+                    : jobTab === 'POSTED'
+                      ? 'This user has not posted any jobs yet.'
+                      : 'This user has not picked any jobs yet.'}
                   colors={colors}
                   emptySource={ADMIN_EMPTY_ANIMATION}
                 />
@@ -1092,6 +1229,73 @@ function AdminUsersPage({
             </View>
           ) : null}
         </ScrollView>
+
+        <Modal visible={showUserJobFilterSheet} transparent animationType="none" onRequestClose={() => setShowUserJobFilterSheet(false)}>
+          <Pressable style={styles.bottomSheetBackdrop} onPress={() => setShowUserJobFilterSheet(false)}>
+            <View style={styles.bottomFilterSheet}>
+              <Pressable onPress={() => {}}>
+                <View style={styles.bottomSheetGrabber} />
+                <View style={styles.bottomSheetHeaderRow}>
+                  <Text style={styles.optionTitle}>User Job Filters</Text>
+                  <Pressable
+                    onPress={() => {
+                      setUserJobStatusFilter('ALL');
+                      setUserJobMinBudget('');
+                      setUserJobMaxBudget('');
+                    }}
+                  >
+                    <Text style={styles.bottomSheetResetText}>Reset</Text>
+                  </Pressable>
+                </View>
+
+                <Text style={styles.bottomSheetLabel}>Status</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.createPillRow}>
+                  {userJobStatusOptions.map((value) => (
+                    <Pressable
+                      key={`admin-user-job-status-${value}`}
+                      style={[styles.createPill, userJobStatusFilter === value && styles.createPillActive]}
+                      onPress={() => setUserJobStatusFilter(value)}
+                    >
+                      <Text style={[styles.createPillText, userJobStatusFilter === value && styles.createPillTextActive]}>
+                        {value.replace('_', ' ')}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+
+                <Text style={styles.bottomSheetLabel}>Budget Range</Text>
+                <View style={styles.bottomBudgetRow}>
+                  <View style={styles.bottomBudgetInputWrap}>
+                    <Text style={styles.bottomBudgetInputLabel}>Min</Text>
+                    <TextInput
+                      value={userJobMinBudget}
+                      onChangeText={(value) => setUserJobMinBudget(value.replace(/[^\d]/g, ''))}
+                      placeholder="0"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                      style={styles.bottomBudgetInput}
+                    />
+                  </View>
+                  <View style={styles.bottomBudgetInputWrap}>
+                    <Text style={styles.bottomBudgetInputLabel}>Max</Text>
+                    <TextInput
+                      value={userJobMaxBudget}
+                      onChangeText={(value) => setUserJobMaxBudget(value.replace(/[^\d]/g, ''))}
+                      placeholder="50000"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                      style={styles.bottomBudgetInput}
+                    />
+                  </View>
+                </View>
+
+                <Pressable style={styles.bottomSheetApplyBtn} onPress={() => setShowUserJobFilterSheet(false)}>
+                  <Text style={styles.bottomSheetApplyBtnText}>Apply Filters</Text>
+                </Pressable>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
 
         <Modal visible={showAvatarOptions} transparent animationType="fade" onRequestClose={() => setShowAvatarOptions(false)}>
           <View style={styles.modalBackdrop}>
@@ -1195,7 +1399,22 @@ function AdminUsersPage({
               <Text style={styles.adminJobDetailDescription}>{selectedUserJob?.description || 'No description provided.'}</Text>
               <View style={styles.adminJobDetailGrid}>
                 <Text style={styles.adminJobMeta}>Category: {selectedUserJob?.category?.name || '-'}</Text>
-                <Text style={styles.adminJobMeta}>Posted By: {selectedUserJob?.owner?.name || '-'}</Text>
+                {selectedUserJob?.owner?.id ? (
+                  <Pressable
+                    style={styles.adminJobMetaLinkRow}
+                    onPress={() => {
+                      setSelectedUserJob(null);
+                      openUserDetailById(selectedUserJob?.owner?.id);
+                    }}
+                  >
+                    <Text style={styles.adminJobMetaLinkText} numberOfLines={1}>
+                      Posted By: {selectedUserJob?.owner?.name || '-'} (View Profile)
+                    </Text>
+                    <Ionicons name="open-outline" size={14} color={colors.primary} />
+                  </Pressable>
+                ) : (
+                  <Text style={styles.adminJobMeta}>Posted By: {selectedUserJob?.owner?.name || '-'}</Text>
+                )}
                 <Text style={styles.adminJobMeta}>Email: {selectedUserJob?.owner?.email || '-'}</Text>
                 <Text style={styles.adminJobMeta}>Budget: {getBudgetDisplay(selectedUserJob)}</Text>
                 <Text style={styles.adminJobMeta}>Type: {String(selectedUserJob?.jobType || '').replace('_', ' ') || '-'}</Text>
@@ -1557,7 +1776,7 @@ function AdminModerationPage({
         <View style={styles.settingsNav}>
           <Pressable style={[styles.settingsBackBtn, { width: 96 }]} onPress={backToJobList}>
             <Ionicons name="chevron-back" size={22} color={colors.primary} />
-            <Text style={styles.settingsBackText} numberOfLines={1}>Admin Panel</Text>
+            <Text style={styles.settingsBackText} numberOfLines={1}>All Jobs</Text>
           </Pressable>
           <Text style={[styles.settingsNavTitle, { flex: 1, textAlign: 'center' }]}>Job Details</Text>
           <View style={[styles.settingsNavRight, { width: 96, alignItems: 'flex-end' }]}>
@@ -1603,7 +1822,25 @@ function AdminModerationPage({
             <Text style={styles.adminJobDetailDescription}>{selectedJob?.description || 'No description provided.'}</Text>
             <View style={styles.adminJobDetailGrid}>
               <Text style={styles.adminJobMeta}>Category: {selectedJob?.category?.name || '-'}</Text>
-              <Text style={styles.adminJobMeta}>Posted By: {selectedJob?.owner?.name || '-'}</Text>
+              {selectedJob?.owner?.id ? (
+                <Pressable
+                  style={styles.adminJobMetaLinkRow}
+                  onPress={() =>
+                    onOpenUserDetails?.(selectedJob?.owner?.id, {
+                      tab: 'create',
+                      settingsPage: 'main',
+                      adminJobId: selectedJob?.id
+                    })
+                  }
+                >
+                  <Text style={styles.adminJobMetaLinkText} numberOfLines={1}>
+                    Posted By: {selectedJob?.owner?.name || '-'} (View Profile)
+                  </Text>
+                  <Ionicons name="open-outline" size={14} color={colors.primary} />
+                </Pressable>
+              ) : (
+                <Text style={styles.adminJobMeta}>Posted By: {selectedJob?.owner?.name || '-'}</Text>
+              )}
               <Text style={styles.adminJobMeta}>Email: {selectedJob?.owner?.email || '-'}</Text>
               <Text style={styles.adminJobMeta}>Budget: {getBudgetDisplay(selectedJob)}</Text>
               <Text style={styles.adminJobMeta}>Type: {String(selectedJob?.jobType || '').replace('_', ' ') || '-'}</Text>
@@ -1759,7 +1996,7 @@ function AdminModerationPage({
     <View style={styles.settingsScreen}>
       <View style={styles.settingsNav}>
         <View style={styles.settingsNavRight} />
-        <Text style={styles.settingsNavTitle}>Admin Panel</Text>
+        <Text style={styles.settingsNavTitle}>All Jobs</Text>
         <View style={styles.settingsNavRight}>
           <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
             <Ionicons name="refresh-outline" size={18} color={colors.primary} />
@@ -3467,7 +3704,7 @@ function PickerJobsPage({
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const filterSheetAnim = useRef(new Animated.Value(0)).current;
-  const statusOptions = ['ALL', 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+  const statusOptions = ['ALL', 'OPEN', 'IN_PROGRESS'];
   const parsedMinBudget = Number.parseFloat(minBudget);
   const parsedMaxBudget = Number.parseFloat(maxBudget);
   const hasValidMinBudget = Number.isFinite(parsedMinBudget);
@@ -3501,6 +3738,8 @@ function PickerJobsPage({
     () =>
       jobs.filter((job) => {
         const status = String(job?.status || '').toUpperCase();
+        const isVisibleStatus = status === 'OPEN' || status === 'IN_PROGRESS';
+        if (!isVisibleStatus) return false;
         const okStatus = statusFilter === 'ALL' || status === statusFilter;
         const numericBudget = Number(job?.budget);
         const hasNumericBudget = Number.isFinite(numericBudget);

@@ -684,7 +684,8 @@ export const createStyles = (colors) =>
       borderColor: colors.border,
       borderTopWidth: 0,
       paddingHorizontal: 14,
-      paddingVertical: 12
+      paddingTop: TOP_SAFE_PADDING + 2,
+      paddingBottom: 12
     },
     dashboardTopHeader: {
       flexDirection: 'row',
@@ -2182,6 +2183,31 @@ export const createStyles = (colors) =>
       padding: 14,
       marginBottom: 10
     },
+    adminUserStatsGrid: {
+      marginTop: 8,
+      flexDirection: 'row',
+      gap: 10
+    },
+    adminUserStatsCard: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 10,
+      paddingVertical: 10
+    },
+    adminUserStatsLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    adminUserStatsValue: {
+      marginTop: 4,
+      color: colors.textMain,
+      fontSize: 16,
+      fontWeight: '900'
+    },
     adminReadOnlyWrap: {
       justifyContent: 'center',
       backgroundColor: colors.sheet
@@ -2270,6 +2296,26 @@ export const createStyles = (colors) =>
       marginTop: 4,
       color: colors.textSecondary,
       fontSize: 12
+    },
+    adminJobMetaLinkRow: {
+      marginTop: 6,
+      minHeight: 28,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    adminJobMetaLinkText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800',
+      flex: 1,
+      marginRight: 8
     },
     adminJobStatusPill: {
       borderRadius: 999,
