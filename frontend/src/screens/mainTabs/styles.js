@@ -2178,15 +2178,68 @@ export const createStyles = (colors) =>
     adminUserDetailCard: {
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 16,
+      borderRadius: 18,
       backgroundColor: colors.surface,
-      padding: 14,
-      marginBottom: 10
+      padding: 16,
+      marginBottom: 10,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.06,
+      shadowRadius: 14,
+      elevation: 2
     },
     adminUserStatsGrid: {
-      marginTop: 8,
+      marginTop: 10,
       flexDirection: 'row',
       gap: 10
+    },
+    financialHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    financialPeriodBtn: {
+      minHeight: 32,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+      paddingHorizontal: 11,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5
+    },
+    financialPeriodBtnText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    financialTabRow: {
+      marginTop: 10,
+      flexDirection: 'row',
+      gap: 8
+    },
+    financialTabBtn: {
+      flex: 1,
+      minHeight: 38,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    financialTabBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    financialTabText: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    financialTabTextActive: {
+      color: colors.primary
     },
     adminUserStatsCard: {
       flex: 1,
@@ -2194,19 +2247,103 @@ export const createStyles = (colors) =>
       borderColor: colors.border,
       borderRadius: 12,
       backgroundColor: colors.sheet,
-      paddingHorizontal: 10,
-      paddingVertical: 10
+      paddingHorizontal: 12,
+      paddingVertical: 12
     },
     adminUserStatsLabel: {
       color: colors.textSecondary,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '700'
     },
     adminUserStatsValue: {
       marginTop: 4,
       color: colors.textMain,
-      fontSize: 16,
+      fontSize: 18,
       fontWeight: '900'
+    },
+    financialChartCard: {
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.sheet,
+      paddingVertical: 10,
+      paddingHorizontal: 10
+    },
+    financialChartHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    financialChartTitle: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    financialChartSubtitle: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '600'
+    },
+    financialChartLayout: {
+      marginTop: 8,
+      flexDirection: 'row',
+      alignItems: 'flex-start'
+    },
+    financialYAxisWrap: {
+      width: 44,
+      marginRight: 4
+    },
+    financialAxisTitle: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700',
+      marginBottom: 3
+    },
+    financialYAxis: {
+      position: 'relative'
+    },
+    financialYAxisLabel: {
+      position: 'absolute',
+      width: 42,
+      textAlign: 'right',
+      color: colors.textSecondary,
+      fontSize: 9,
+      fontWeight: '700'
+    },
+    financialChartArea: {
+      flex: 1
+    },
+    financialChartCanvas: {
+      width: '100%'
+    },
+    financialChartPlot: {
+      position: 'relative',
+      borderLeftWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      borderRadius: 10,
+      overflow: 'hidden'
+    },
+    financialXAxisLabels: {
+      marginTop: 6,
+      height: 18,
+      position: 'relative'
+    },
+    financialXAxisLabel: {
+      position: 'absolute',
+      width: 24,
+      textAlign: 'center',
+      color: colors.textSecondary,
+      fontSize: 9,
+      fontWeight: '700'
+    },
+    financialXAxisTitle: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
     },
     adminReadOnlyWrap: {
       justifyContent: 'center',

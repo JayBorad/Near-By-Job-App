@@ -16,6 +16,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 import { AdminListState } from '../../components/AdminListState';
 import { COUNTRY_CODES } from '../../constants/countryCodes';
 import {
@@ -66,6 +67,21 @@ const getApplicationStats = (job) => ({
   rejectedCount: Number(job?.applicationStats?.rejectedCount || 0)
 });
 
+const getJobSeatStats = (job) => {
+  const stats = getApplicationStats(job);
+  const totalSeats = Math.max(1, Number(job?.requiredWorkers || 1));
+  const filledSeats = Math.min(stats.acceptedCount, totalSeats);
+  const remainingSeats = Math.max(totalSeats - filledSeats, 0);
+  const remainingToApply = Math.max(totalSeats - stats.appliedCount, 0);
+  return {
+    ...stats,
+    totalSeats,
+    filledSeats,
+    remainingSeats,
+    remainingToApply
+  };
+};
+
 const getBudgetDisplay = (job) => {
   const budget = Number(job?.budget || 0);
   const requiredWorkers = Math.max(1, Number(job?.requiredWorkers || 1));
@@ -85,7 +101,145 @@ const getPerWorkerBudget = (job) => {
   return budgetType === 'PER_PERSON' ? budget : budget / requiredWorkers;
 };
 
+const getTotalBudget = (job) => {
+  const budget = Number(job?.budget || 0);
+  const requiredWorkers = Math.max(1, Number(job?.requiredWorkers || 1));
+  const budgetType = String(job?.budgetType || 'TOTAL').toUpperCase();
+  if (!Number.isFinite(budget) || budget <= 0) return 0;
+  return budgetType === 'PER_PERSON' ? budget * requiredWorkers : budget;
+};
+
 const formatCurrency = (value) => `₹${Math.round(Number(value) || 0).toLocaleString('en-IN')}`;
+const formatCompactCurrency = (value) => {
+  const amount = Math.round(Number(value) || 0);
+  if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1).replace(/\.0$/, '')}Cr`;
+  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1).replace(/\.0$/, '')}L`;
+  if (amount >= 1000) return `₹${(amount / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+  return `₹${amount}`;
+};
+const clampPointY = (value, minY, maxY) => Math.min(maxY, Math.max(minY, value));
+
+const getSmoothPathD = (points, minY, maxY) => {
+  if (!points.length) return '';
+  if (points.length === 1) {
+    const first = points[0];
+    return `M ${first.x} ${clampPointY(first.y, minY, maxY)}`;
+  }
+  let path = `M ${points[0].x} ${clampPointY(points[0].y, minY, maxY)}`;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const p1 = points[index];
+    const p2 = points[index + 1];
+    const cp1x = p1.x + (p2.x - p1.x) / 3;
+    const cp1y = clampPointY(p1.y, minY, maxY);
+    const cp2x = p1.x + ((p2.x - p1.x) * 2) / 3;
+    const cp2y = clampPointY(p2.y, minY, maxY);
+    path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return path;
+};
+
+const FINANCIAL_PERIOD_OPTIONS = [
+  { key: 'THIS_WEEK', label: 'This Week' },
+  { key: 'MONTHLY', label: 'Monthly' },
+  { key: 'LAST_MONTH', label: 'Last Month' },
+  { key: 'THIS_YEAR', label: 'This Year' },
+  { key: 'LAST_YEAR', label: 'Last Year' }
+];
+
+const startOfDay = (dateValue) => {
+  const date = new Date(dateValue);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const toDateKey = (dateValue) => {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const toMonthKey = (dateValue) => {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const isDateWithin = (dateValue, start, end) => {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return false;
+  return date >= start && date <= end;
+};
+
+const getFinancialSeries = (entries, period) => {
+  const now = new Date();
+  const bars = [];
+
+  if (period === 'THIS_YEAR' || period === 'LAST_YEAR') {
+    const year = period === 'THIS_YEAR' ? now.getFullYear() : now.getFullYear() - 1;
+    const start = new Date(year, 0, 1, 0, 0, 0, 0);
+    const end = new Date(year, 11, 31, 23, 59, 59, 999);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const valueByMonth = {};
+
+    for (let index = 0; index < 12; index += 1) {
+      const monthKey = `${year}-${String(index + 1).padStart(2, '0')}`;
+      valueByMonth[monthKey] = 0;
+      bars.push({ key: monthKey, label: monthNames[index], value: 0 });
+    }
+
+    entries.forEach((item) => {
+      if (!isDateWithin(item?.date, start, end)) return;
+      const key = toMonthKey(item?.date);
+      if (!(key in valueByMonth)) return;
+      valueByMonth[key] += Number(item?.amount || 0);
+    });
+
+    return bars.map((bar) => ({ ...bar, value: valueByMonth[bar.key] || 0 }));
+  }
+
+  let start;
+  let end;
+  if (period === 'THIS_WEEK') {
+    const today = startOfDay(now);
+    const day = today.getDay();
+    const mondayShift = day === 0 ? -6 : 1 - day;
+    start = new Date(today);
+    start.setDate(start.getDate() + mondayShift);
+    end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+  } else if (period === 'LAST_MONTH') {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  } else {
+    start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  }
+
+  const valueByDate = {};
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const key = toDateKey(cursor);
+    valueByDate[key] = 0;
+    bars.push({
+      key,
+      label: period === 'THIS_WEEK'
+        ? cursor.toLocaleDateString('en-IN', { weekday: 'short' }).slice(0, 1)
+        : String(cursor.getDate()),
+      value: 0
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  entries.forEach((item) => {
+    if (!isDateWithin(item?.date, start, end)) return;
+    const key = toDateKey(item?.date);
+    if (!(key in valueByDate)) return;
+    valueByDate[key] += Number(item?.amount || 0);
+  });
+
+  return bars.map((bar) => ({ ...bar, value: valueByDate[bar.key] || 0 }));
+};
 
 function ProfilePage({
   user,
@@ -537,6 +691,10 @@ function AdminUsersPage({
   const [userJobMinBudget, setUserJobMinBudget] = useState('');
   const [userJobMaxBudget, setUserJobMaxBudget] = useState('');
   const [showUserJobFilterSheet, setShowUserJobFilterSheet] = useState(false);
+  const [financialTab, setFinancialTab] = useState('EARNED');
+  const [financialPeriod, setFinancialPeriod] = useState('MONTHLY');
+  const [showFinancialPeriodModal, setShowFinancialPeriodModal] = useState(false);
+  const [financialPlotWidth, setFinancialPlotWidth] = useState(0);
   const [userDetailHistory, setUserDetailHistory] = useState([]);
   const [selectedUserReviews, setSelectedUserReviews] = useState(null);
   const [isSelectedUserReviewsLoading, setIsSelectedUserReviewsLoading] = useState(false);
@@ -565,6 +723,9 @@ function AdminUsersPage({
     setUserJobMinBudget('');
     setUserJobMaxBudget('');
     setShowUserJobFilterSheet(false);
+    setFinancialTab('EARNED');
+    setFinancialPeriod('MONTHLY');
+    setShowFinancialPeriodModal(false);
     setForm({
       name: String(user?.name || ''),
       username: String(user?.username || ''),
@@ -715,22 +876,94 @@ function AdminUsersPage({
       userJobSearch
     ]
   );
-  const userEarnedAmount = useMemo(
+  const earnedEntries = useMemo(
     () =>
-      (selectedUser?.applications || []).reduce((total, application) => {
-        if (String(application?.status || '').toUpperCase() !== 'ACCEPTED') return total;
-        return total + getPerWorkerBudget(application?.job);
-      }, 0),
+      (selectedUser?.applications || [])
+        .filter((application) => String(application?.status || '').toUpperCase() === 'ACCEPTED')
+        .map((application) => ({
+          date: application?.updatedAt || application?.createdAt || application?.job?.updatedAt || application?.job?.createdAt,
+          amount: getPerWorkerBudget(application?.job)
+        }))
+        .filter((item) => item.date && item.amount > 0),
     [selectedUser?.applications]
   );
-  const userSpentAmount = useMemo(
+  const spendEntries = useMemo(
     () =>
-      (selectedUser?.jobs || []).reduce((total, job) => {
-        const acceptedCount = Number(job?.applicationStats?.acceptedCount || 0);
-        return total + getPerWorkerBudget(job) * acceptedCount;
-      }, 0),
+      (selectedUser?.jobs || [])
+        .filter((job) => {
+          const status = String(job?.status || '').toUpperCase();
+          return status === 'IN_PROGRESS' || status === 'COMPLETED';
+        })
+        .map((job) => ({
+          date: job?.updatedAt || job?.createdAt,
+          amount: getTotalBudget(job)
+        }))
+        .filter((item) => item.date && item.amount > 0),
     [selectedUser?.jobs]
   );
+  const userEarnedAmount = useMemo(
+    () => earnedEntries.reduce((sum, item) => sum + Number(item?.amount || 0), 0),
+    [earnedEntries]
+  );
+  const userSpentAmount = useMemo(
+    () => spendEntries.reduce((sum, item) => sum + Number(item?.amount || 0), 0),
+    [spendEntries]
+  );
+  const financialSeries = useMemo(
+    () => getFinancialSeries(financialTab === 'EARNED' ? earnedEntries : spendEntries, financialPeriod),
+    [financialTab, financialPeriod, earnedEntries, spendEntries]
+  );
+  const financialPeriodTotal = useMemo(
+    () => financialSeries.reduce((sum, item) => sum + Number(item?.value || 0), 0),
+    [financialSeries]
+  );
+  const financialPeriodLabel = FINANCIAL_PERIOD_OPTIONS.find((item) => item.key === financialPeriod)?.label || 'Monthly';
+  const financialChartMeta = useMemo(() => {
+    const values = financialSeries.map((item) => Number(item?.value || 0));
+    const maxValue = Math.max(1, ...values);
+    const yTickCount = 4;
+    const plotHeight = 170;
+    const plotTop = 10;
+    const plotBottom = 18;
+    const xPadding = 10;
+    const usableHeight = Math.max(40, plotHeight - plotTop - plotBottom);
+    const baselineY = plotHeight - 2;
+    const chartWidth = Math.max(200, Number(financialPlotWidth || 0));
+    const seriesCount = Math.max(1, financialSeries.length);
+    const usableWidth = Math.max(24, chartWidth - xPadding * 2);
+    const pointGap = seriesCount > 1 ? usableWidth / (seriesCount - 1) : 0;
+    const xLabelStep = seriesCount > 30 ? 4 : seriesCount > 24 ? 3 : seriesCount > 16 ? 2 : 1;
+    const points = financialSeries.map((item, index) => {
+      const value = Number(item?.value || 0);
+      const ratio = maxValue ? value / maxValue : 0;
+      return {
+        key: item?.key || `point-${index}`,
+        label: item?.label || '',
+        x: xPadding + index * pointGap,
+        y: clampPointY(plotTop + (1 - ratio) * usableHeight, plotTop, baselineY),
+        showLabel: index % xLabelStep === 0 || index === seriesCount - 1
+      };
+    });
+    const yTicks = Array.from({ length: yTickCount + 1 }, (_, index) => {
+      const ratio = index / yTickCount;
+      const value = Math.round(maxValue * (1 - ratio));
+      return {
+        key: `tick-${index}`,
+        value,
+        label: formatCompactCurrency(value),
+        y: plotTop + ratio * usableHeight
+      };
+    });
+    return {
+      points,
+      yTicks,
+      chartWidth,
+      plotHeight,
+      baselineY,
+      smoothPathD: getSmoothPathD(points, plotTop, baselineY),
+      smoothAreaPathD: `${getSmoothPathD(points, plotTop, baselineY)} L ${points[points.length - 1]?.x || 0} ${baselineY} L ${points[0]?.x || 0} ${baselineY} Z`
+    };
+  }, [financialSeries, financialPlotWidth]);
 
   const saveDetails = async () => {
     if (!selectedUser?.id) return;
@@ -1074,15 +1307,156 @@ function AdminUsersPage({
 
           {!isEditingUser ? (
             <View style={styles.adminUserDetailCard}>
-              <Text style={styles.createFieldLabel}>Financial Summary</Text>
+              <View style={styles.financialHeaderRow}>
+                <Text style={styles.createFieldLabel}>Financial Summary</Text>
+                <Pressable style={styles.financialPeriodBtn} onPress={() => setShowFinancialPeriodModal(true)}>
+                  <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+                  <Text style={styles.financialPeriodBtnText}>{financialPeriodLabel}</Text>
+                  <Ionicons name="chevron-down" size={13} color={colors.primary} />
+                </Pressable>
+              </View>
+
+              <View style={styles.financialTabRow}>
+                <Pressable
+                  style={[styles.financialTabBtn, financialTab === 'EARNED' && styles.financialTabBtnActive]}
+                  onPress={() => setFinancialTab('EARNED')}
+                >
+                  <Text style={[styles.financialTabText, financialTab === 'EARNED' && styles.financialTabTextActive]}>
+                    Earned
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.financialTabBtn, financialTab === 'SPEND' && styles.financialTabBtnActive]}
+                  onPress={() => setFinancialTab('SPEND')}
+                >
+                  <Text style={[styles.financialTabText, financialTab === 'SPEND' && styles.financialTabTextActive]}>
+                    Spend
+                  </Text>
+                </Pressable>
+              </View>
+
               <View style={styles.adminUserStatsGrid}>
                 <View style={styles.adminUserStatsCard}>
-                  <Text style={styles.adminUserStatsLabel}>Total Earned</Text>
-                  <Text style={styles.adminUserStatsValue}>{formatCurrency(userEarnedAmount)}</Text>
+                  <Text style={styles.adminUserStatsLabel}>Selected Period</Text>
+                  <Text style={styles.adminUserStatsValue}>{formatCurrency(financialPeriodTotal)}</Text>
                 </View>
                 <View style={styles.adminUserStatsCard}>
-                  <Text style={styles.adminUserStatsLabel}>Total Spend</Text>
-                  <Text style={styles.adminUserStatsValue}>{formatCurrency(userSpentAmount)}</Text>
+                  <Text style={styles.adminUserStatsLabel}>Lifetime</Text>
+                  <Text style={styles.adminUserStatsValue}>
+                    {formatCurrency(financialTab === 'EARNED' ? userEarnedAmount : userSpentAmount)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.financialChartCard}>
+                <View style={styles.financialChartHead}>
+                  <Text style={styles.financialChartTitle}>
+                    {financialTab === 'EARNED' ? 'Income Trend' : 'Spend Trend'}
+                  </Text>
+                  <Text style={styles.financialChartSubtitle}>
+                    X axis: period, Y axis: amount
+                  </Text>
+                </View>
+
+                <View style={styles.financialChartLayout}>
+                  <View style={styles.financialYAxisWrap}>
+                    <Text style={styles.financialAxisTitle}>Amount</Text>
+                    <View style={[styles.financialYAxis, { height: financialChartMeta.plotHeight }]}>
+                      {financialChartMeta.yTicks.map((tick) => (
+                        <Text
+                          key={tick.key}
+                          style={[styles.financialYAxisLabel, { top: tick.y - 8 }]}
+                          numberOfLines={1}
+                        >
+                          {tick.label}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View
+                    style={styles.financialChartArea}
+                    onLayout={(event) => {
+                      const width = Math.floor(event?.nativeEvent?.layout?.width || 0);
+                      if (width > 0 && width !== financialPlotWidth) {
+                        setFinancialPlotWidth(width);
+                      }
+                    }}
+                  >
+                    <View style={[styles.financialChartCanvas, { width: financialChartMeta.chartWidth }]}>
+                      <View style={[styles.financialChartPlot, { height: financialChartMeta.plotHeight }]}>
+                        <Svg width={financialChartMeta.chartWidth} height={financialChartMeta.plotHeight}>
+                          <Defs>
+                            <LinearGradient id="financialAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                              <Stop
+                                offset="0%"
+                                stopColor={financialTab === 'EARNED' ? '#0EA5A4' : '#F97316'}
+                                stopOpacity="0.28"
+                              />
+                              <Stop
+                                offset="100%"
+                                stopColor={financialTab === 'EARNED' ? '#0EA5A4' : '#F97316'}
+                                stopOpacity="0.02"
+                              />
+                            </LinearGradient>
+                          </Defs>
+                          {financialChartMeta.yTicks.map((tick) => (
+                            <Line
+                              key={`guide-${tick.key}`}
+                              x1="0"
+                              x2={String(financialChartMeta.chartWidth)}
+                              y1={String(tick.y)}
+                              y2={String(tick.y)}
+                              stroke={colors.border}
+                              strokeWidth="1"
+                              strokeOpacity="0.7"
+                            />
+                          ))}
+                          <Line
+                            x1="0"
+                            x2="0"
+                            y1="0"
+                            y2={String(financialChartMeta.plotHeight)}
+                            stroke={colors.border}
+                            strokeWidth="1"
+                          />
+                          <Line
+                            x1="0"
+                            x2={String(financialChartMeta.chartWidth)}
+                            y1={String(financialChartMeta.plotHeight)}
+                            y2={String(financialChartMeta.plotHeight)}
+                            stroke={colors.border}
+                            strokeWidth="1"
+                          />
+                          <Path
+                            d={financialChartMeta.smoothAreaPathD}
+                            fill="url(#financialAreaGradient)"
+                          />
+                          <Path
+                            d={financialChartMeta.smoothPathD}
+                            fill="none"
+                            stroke={financialTab === 'EARNED' ? '#0EA5A4' : '#F97316'}
+                            strokeWidth="3"
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                          />
+                        </Svg>
+                      </View>
+
+                      <View style={styles.financialXAxisLabels}>
+                        {financialChartMeta.points.filter((point) => point.showLabel).map((point) => (
+                          <Text
+                            key={`label-${point.key}`}
+                            style={[styles.financialXAxisLabel, { left: point.x - 12 }]}
+                            numberOfLines={1}
+                          >
+                            {point.label}
+                          </Text>
+                        ))}
+                      </View>
+                      <Text style={styles.financialXAxisTitle}>Period</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
             </View>
@@ -1229,6 +1603,42 @@ function AdminUsersPage({
             </View>
           ) : null}
         </ScrollView>
+
+        <Modal
+          visible={showFinancialPeriodModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowFinancialPeriodModal(false)}
+        >
+          <Pressable style={styles.filterBackdrop} onPress={() => setShowFinancialPeriodModal(false)}>
+            <Pressable style={styles.categoryFilterModal} onPress={() => {}}>
+              <Text style={styles.optionTitle}>Financial Period</Text>
+              <Text style={styles.categoryFilterHint}>Choose range for the bar chart</Text>
+              {FINANCIAL_PERIOD_OPTIONS.map((option) => (
+                <Pressable
+                  key={`financial-period-${option.key}`}
+                  style={[styles.categoryFilterOption, financialPeriod === option.key && styles.categoryFilterOptionActive]}
+                  onPress={() => {
+                    setFinancialPeriod(option.key);
+                    setShowFinancialPeriodModal(false);
+                  }}
+                >
+                  <View style={styles.categoryFilterOptionLeft}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={16}
+                      color={financialPeriod === option.key ? colors.primary : colors.textSecondary}
+                    />
+                    <Text style={[styles.categoryFilterOptionText, financialPeriod === option.key && styles.categoryFilterOptionTextActive]}>
+                      {option.label}
+                    </Text>
+                  </View>
+                  {financialPeriod === option.key ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+                </Pressable>
+              ))}
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         <Modal visible={showUserJobFilterSheet} transparent animationType="none" onRequestClose={() => setShowUserJobFilterSheet(false)}>
           <Pressable style={styles.bottomSheetBackdrop} onPress={() => setShowUserJobFilterSheet(false)}>
@@ -4052,7 +4462,7 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
           filteredApplications.map((item) => (
             <Pressable key={item.id} style={styles.myJobCard} onPress={() => setSelectedApplication(item)}>
               {(() => {
-                const stats = getApplicationStats(item?.job);
+                const stats = getJobSeatStats(item?.job);
                 return (
                   <>
               <View style={styles.myJobHead}>
@@ -4073,15 +4483,19 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
                 </View>
                 <View style={styles.myJobMetaPill}>
                   <Ionicons name="people-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>Seats: {stats.totalSeats}</Text>
+                </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="person-add-outline" size={13} color={colors.primary} />
                   <Text style={styles.myJobMetaPillText}>Applied: {stats.appliedCount}</Text>
                 </View>
                 <View style={styles.myJobMetaPill}>
                   <Ionicons name="checkmark-done-outline" size={13} color={colors.primary} />
-                  <Text style={styles.myJobMetaPillText}>Accepted: {stats.acceptedCount}</Text>
+                  <Text style={styles.myJobMetaPillText}>Filled: {stats.filledSeats}</Text>
                 </View>
                 <View style={styles.myJobMetaPill}>
-                  <Ionicons name="time-outline" size={13} color={colors.primary} />
-                  <Text style={styles.myJobMetaPillText}>Pending: {stats.pendingCount}</Text>
+                  <Ionicons name="hourglass-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>Remaining: {stats.remainingSeats}</Text>
                 </View>
               </View>
               <View style={styles.myJobOpenRow}>
@@ -4159,16 +4573,20 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
             <Text style={styles.myJobDetailDescription}>{selectedApplication?.job?.description || 'No description provided.'}</Text>
             <View style={styles.myJobInfoCard}>
               {(() => {
-                const stats = getApplicationStats(selectedApplication?.job);
+                const stats = getJobSeatStats(selectedApplication?.job);
                 return (
                   <>
               <Text style={styles.myJobMeta}>Category: {selectedApplication?.job?.category?.name || '-'}</Text>
               <Text style={styles.myJobMeta}>Posted By: {selectedApplication?.job?.owner?.name || '-'}</Text>
               <Text style={styles.myJobMeta}>Poster Rating: {getRatingSummaryText(selectedApplication?.job?.owner?.ratingSummary)}</Text>
               <Text style={styles.myJobMeta}>Budget: {getBudgetDisplay(selectedApplication?.job)}</Text>
-              <Text style={styles.myJobMeta}>Applied Users: {stats.appliedCount}</Text>
-              <Text style={styles.myJobMeta}>Accepted Users: {stats.acceptedCount}</Text>
+              <Text style={styles.myJobMeta}>Total Seats: {stats.totalSeats}</Text>
+              <Text style={styles.myJobMeta}>Total Applied: {stats.appliedCount}</Text>
+              <Text style={styles.myJobMeta}>Filled Seats: {stats.filledSeats}</Text>
+              <Text style={styles.myJobMeta}>Seats Remaining: {stats.remainingSeats}</Text>
+              <Text style={styles.myJobMeta}>Remaining To Apply: {stats.remainingToApply}</Text>
               <Text style={styles.myJobMeta}>Pending Users: {stats.pendingCount}</Text>
+              <Text style={styles.myJobMeta}>Rejected Users: {stats.rejectedCount}</Text>
               <Text style={styles.myJobMeta}>Due Date: {selectedApplication?.job?.dueDate ? String(selectedApplication.job.dueDate).slice(0, 10) : '-'}</Text>
               <Text style={styles.myJobMeta}>Applied On: {selectedApplication?.createdAt ? String(selectedApplication.createdAt).slice(0, 10) : '-'}</Text>
                   </>
