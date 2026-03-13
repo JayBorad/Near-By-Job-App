@@ -7,6 +7,7 @@ import {
 } from '../modules/chat/chat.service.js';
 
 const connectedUsers = new Map();
+let ioRef = null;
 
 const addConnectedUserSocket = (userId, socketId) => {
   const existing = connectedUsers.get(userId) || new Set();
@@ -30,7 +31,16 @@ const isUserOnline = (userId) => {
   return Boolean(existing && existing.size);
 };
 
+export const emitNotificationToUser = (userId, notification) => {
+  if (!userId || !notification || !ioRef) return;
+  const socketIds = Array.from(connectedUsers.get(userId) || []);
+  socketIds.forEach((socketId) => {
+    ioRef.to(socketId).emit('notification_created', notification);
+  });
+};
+
 export const setupChatSocket = (io) => {
+  ioRef = io;
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
