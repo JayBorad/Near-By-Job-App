@@ -7,12 +7,12 @@ export const createJob = asyncHandler(async (req, res) => {
 });
 
 export const updateJob = asyncHandler(async (req, res) => {
-  const result = await service.updateJob(req.params.id, req.body);
+  const result = await service.updateJob(req.params.id, req.body, { id: req.user?.id, role: req.user?.role });
   return res.status(200).json({ success: true, message: 'Job updated successfully', data: result });
 });
 
 export const deleteJob = asyncHandler(async (req, res) => {
-  const result = await service.softDeleteJob(req.params.id);
+  const result = await service.softDeleteJob(req.params.id, { id: req.user?.id, role: req.user?.role });
   return res.status(200).json({ success: true, data: result });
 });
 

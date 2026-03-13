@@ -65,6 +65,15 @@ enum MessageStatus {
   SEEN
 }
 
+enum NotificationType {
+  JOB_APPLIED
+  APPLICATION_ACCEPTED
+  APPLICATION_REJECTED
+  JOB_UPDATED
+  JOB_CANCELLED
+  ADMIN_JOB_UPDATED
+}
+
 model User {
   id             String            @id @default(uuid()) @db.Uuid
   supabaseAuthId String            @unique @db.Uuid
@@ -90,6 +99,7 @@ model User {
   reviewsReceived Review[]         @relation("ReviewReceivedBy")
   sentMessages   ChatMessage[]     @relation("ChatSender")
   recvMessages   ChatMessage[]     @relation("ChatReceiver")
+  notifications  Notification[]
 
   @@index([role])
   @@index([userMode])
@@ -197,4 +207,24 @@ model Review {
   @@index([jobId])
   @@index([reviewerId])
   @@index([revieweeId])
+}
+
+model Notification {
+  id            String           @id @default(uuid()) @db.Uuid
+  userId        String           @db.Uuid
+  type          NotificationType
+  title         String
+  description   String
+  icon          String
+  isRead        Boolean          @default(false)
+  readAt        DateTime?
+  actionPage    String?
+  jobId         String?          @db.Uuid
+  applicationId String?          @db.Uuid
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  user          User             @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
 }

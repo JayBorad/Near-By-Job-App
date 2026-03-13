@@ -2,6 +2,7 @@ import prisma from '../../config/prisma.js';
 import ApiError from '../../utils/ApiError.js';
 import { getReviewSummaryMapForUsers, isMissingReviewTableError } from '../../utils/review-summary.js';
 import { emptyApplicationStats, getApplicationStatsMapForJobs } from '../../utils/application-stats.js';
+import { createNotification } from '../notification/notification.service.js';
 
 export const applyJob = async (userId, jobId) => {
   const job = await prisma.job.findFirst({
@@ -44,12 +45,36 @@ export const applyJob = async (userId, jobId) => {
     throw new ApiError(409, 'You already applied to this job');
   }
 
-  return prisma.jobApplication.create({
+  const createdApplication = await prisma.jobApplication.create({
     data: {
       jobId,
       applicantId: userId
     }
   });
+
+  let applicantName = 'A job picker';
+  try {
+    const applicant = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true }
+    });
+    if (applicant?.name) applicantName = applicant.name;
+  } catch (_error) {
+    // Best-effort name resolution.
+  }
+
+  await createNotification({
+    userId: job.createdBy,
+    type: 'JOB_APPLIED',
+    title: 'New job application',
+    description: `${applicantName} applied for "${job.title}".`,
+    icon: 'briefcase-outline',
+    actionPage: 'JOB_DETAILS',
+    jobId: job.id,
+    applicationId: createdApplication.id
+  });
+
+  return createdApplication;
 };
 
 export const updateApplicationStatus = async (ownerId, ownerRole, applicationId, status) => {
@@ -71,7 +96,7 @@ export const updateApplicationStatus = async (ownerId, ownerRole, applicationId,
   }
 
   if (status === 'ACCEPTED') {
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       const acceptedCount = await tx.jobApplication.count({
         where: {
           jobId: application.jobId,
@@ -98,12 +123,37 @@ export const updateApplicationStatus = async (ownerId, ownerRole, applicationId,
 
       return updated;
     });
+
+    await createNotification({
+      userId: application.applicantId,
+      type: 'APPLICATION_ACCEPTED',
+      title: 'Application accepted',
+      description: `Your application for "${application.job.title}" was accepted.`,
+      icon: 'checkmark-circle-outline',
+      actionPage: 'MY_APPLICATIONS',
+      jobId: application.jobId,
+      applicationId: application.id
+    });
+    return updated;
   }
 
-  return prisma.jobApplication.update({
+  const updated = await prisma.jobApplication.update({
     where: { id: applicationId },
     data: { status }
   });
+
+  await createNotification({
+    userId: application.applicantId,
+    type: 'APPLICATION_REJECTED',
+    title: 'Application status updated',
+    description: `Your application for "${application.job.title}" was ${status.toLowerCase()}.`,
+    icon: status === 'REJECTED' ? 'close-circle-outline' : 'information-circle-outline',
+    actionPage: 'MY_APPLICATIONS',
+    jobId: application.jobId,
+    applicationId: application.id
+  });
+
+  return updated;
 };
 
 export const getApplicationsByJob = async (ownerId, ownerRole, jobId) => {

@@ -4,6 +4,7 @@ import ApiError from '../../utils/ApiError.js';
 import { parsePagination } from '../../utils/pagination.js';
 import { getReviewSummaryMapForUsers } from '../../utils/review-summary.js';
 import { emptyApplicationStats, getApplicationStatsMapForJobs } from '../../utils/application-stats.js';
+import { createNotificationsBulk } from '../notification/notification.service.js';
 
 const isBrokenJobLocationTriggerError = (error) =>
   String(error?.message || '').toLowerCase().includes('column `new` does not exist') ||
@@ -77,7 +78,14 @@ export const createJob = async (userId, payload) => {
   }
 };
 
-export const updateJob = async (jobId, payload) => {
+export const updateJob = async (jobId, payload, actor: { id?: string; role?: string } = {}) => {
+  const previous = await prisma.job.findUnique({
+    where: { id: jobId }
+  });
+  if (!previous || previous.deletedAt) {
+    throw new ApiError(404, 'Job not found');
+  }
+
   if (payload.categoryId) {
     await ensureCategoryApproved(payload.categoryId);
   }
@@ -95,23 +103,91 @@ export const updateJob = async (jobId, payload) => {
   if (payload.latitude !== undefined) updateData.latitude = new Prisma.Decimal(payload.latitude);
   if (payload.longitude !== undefined) updateData.longitude = new Prisma.Decimal(payload.longitude);
 
+  let updated;
   try {
-    return await prisma.job.update({
+    updated = await prisma.job.update({
       where: { id: jobId },
       data: updateData
     });
   } catch (error) {
     if (!isBrokenJobLocationTriggerError(error)) throw error;
     await repairJobLocationTrigger();
-    return prisma.job.update({
+    updated = await prisma.job.update({
       where: { id: jobId },
       data: updateData
     });
   }
+
+  const actorRole = String(actor?.role || '').toUpperCase();
+  const actorId = actor?.id || null;
+  const isAdminAction = actorRole === 'ADMIN';
+  const currentStatus = String(updated?.status || previous?.status || 'OPEN').toUpperCase();
+  const shouldNotifyPickers = currentStatus !== 'COMPLETED';
+  const title = currentStatus === 'CANCELLED'
+    ? (isAdminAction ? 'Admin cancelled a job' : 'Job cancelled')
+    : (isAdminAction ? 'Admin updated a job' : 'Job updated');
+
+  const descriptionForPicker = currentStatus === 'CANCELLED'
+    ? `The job "${updated.title}" was cancelled.`
+    : `The job "${updated.title}" was updated.`;
+
+  const jobApplications = shouldNotifyPickers
+    ? await prisma.jobApplication.findMany({
+        where: {
+          jobId: updated.id,
+          status: { in: ['PENDING', 'ACCEPTED'] }
+        },
+        select: { applicantId: true }
+      })
+    : [];
+
+  const recipientIds = new Set(jobApplications.map((item) => item.applicantId));
+  const records = [];
+
+  if (isAdminAction && updated.createdBy) {
+    records.push({
+      userId: updated.createdBy,
+      type: currentStatus === 'CANCELLED' ? 'JOB_CANCELLED' : 'ADMIN_JOB_UPDATED',
+      title,
+      description: `Admin updated your job "${updated.title}".`,
+      icon: currentStatus === 'CANCELLED' ? 'close-circle-outline' : 'settings-outline',
+      actionPage: 'JOB_DETAILS',
+      jobId: updated.id
+    });
+  }
+
+  if (shouldNotifyPickers) {
+    recipientIds.forEach((userId) => {
+      if (!userId) return;
+      if (actorId && userId === actorId) return;
+      records.push({
+        userId,
+        type: currentStatus === 'CANCELLED' ? 'JOB_CANCELLED' : (isAdminAction ? 'ADMIN_JOB_UPDATED' : 'JOB_UPDATED'),
+        title,
+        description: descriptionForPicker,
+        icon: currentStatus === 'CANCELLED' ? 'alert-circle-outline' : 'refresh-outline',
+        actionPage: 'MY_APPLICATIONS',
+        jobId: updated.id
+      });
+    });
+  }
+
+  if (records.length) {
+    await createNotificationsBulk(records);
+  }
+
+  return updated;
 };
 
-export const softDeleteJob = async (jobId) => {
-  await prisma.job.update({
+export const softDeleteJob = async (jobId, actor: { id?: string; role?: string } = {}) => {
+  const previous = await prisma.job.findUnique({
+    where: { id: jobId }
+  });
+  if (!previous || previous.deletedAt) {
+    throw new ApiError(404, 'Job not found');
+  }
+
+  const updated = await prisma.job.update({
     where: { id: jobId },
     data: {
       deletedAt: new Date(),
@@ -119,7 +195,50 @@ export const softDeleteJob = async (jobId) => {
     }
   });
 
-  return { message: 'Job soft-deleted successfully' };
+  const actorRole = String(actor?.role || '').toUpperCase();
+  const actorId = actor?.id || null;
+  const isAdminAction = actorRole === 'ADMIN';
+
+  const activeApplications = await prisma.jobApplication.findMany({
+    where: {
+      jobId,
+      status: { in: ['PENDING', 'ACCEPTED'] }
+    },
+    select: { applicantId: true }
+  });
+
+  const records = [];
+  if (isAdminAction && previous.createdBy) {
+    records.push({
+      userId: previous.createdBy,
+      type: 'JOB_CANCELLED',
+      title: 'Admin cancelled a job',
+      description: `Admin cancelled your job "${previous.title}".`,
+      icon: 'close-circle-outline',
+      actionPage: 'JOB_DETAILS',
+      jobId
+    });
+  }
+
+  activeApplications.forEach((item) => {
+    if (!item?.applicantId) return;
+    if (actorId && item.applicantId === actorId) return;
+    records.push({
+      userId: item.applicantId,
+      type: 'JOB_CANCELLED',
+      title: 'Job cancelled',
+      description: `The job "${previous.title}" was cancelled.`,
+      icon: 'alert-circle-outline',
+      actionPage: 'MY_APPLICATIONS',
+      jobId
+    });
+  });
+
+  if (records.length) {
+    await createNotificationsBulk(records);
+  }
+
+  return { message: 'Job soft-deleted successfully', job: updated };
 };
 
 export const getAllJobs = async (query) => {
