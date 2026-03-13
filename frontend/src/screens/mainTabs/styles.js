@@ -746,12 +746,20 @@ export const createStyles = (colors) =>
     },
     dashboardNotificationDot: {
       position: 'absolute',
-      right: 8,
-      top: 8,
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      backgroundColor: '#EF4444'
+      right: 3,
+      top: 3,
+      minWidth: 16,
+      height: 16,
+      paddingHorizontal: 4,
+      borderRadius: 8,
+      backgroundColor: '#EF4444',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    dashboardNotificationDotText: {
+      color: '#FFFFFF',
+      fontSize: 9,
+      fontWeight: '800'
     },
     dashboardUserProfitCard: {
       marginTop: 14,
@@ -1347,6 +1355,139 @@ export const createStyles = (colors) =>
       borderWidth: 1,
       borderColor: colors.border,
       overflow: 'hidden'
+    },
+    notificationsTopActions: {
+      marginBottom: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    notificationsTopIcons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6
+    },
+    notificationsUnreadPill: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.primarySoft,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      minHeight: 32,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6
+    },
+    notificationsUnreadPillText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    notificationItemCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      padding: 10,
+      marginBottom: 8
+    },
+    notificationItemCardUnread: {
+      borderColor: colors.primary
+    },
+    notificationItemHead: {
+      flexDirection: 'row',
+      alignItems: 'flex-start'
+    },
+    notificationItemIconWrap: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    notificationItemContent: {
+      flex: 1,
+      marginLeft: 8,
+      marginRight: 6
+    },
+    notificationItemTitle: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    notificationItemDesc: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    notificationItemActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2
+    },
+    notificationItemFooter: {
+      marginTop: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    notificationItemTime: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '600'
+    },
+    notificationUnreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.primary
+    },
+    inAppNotificationToast: {
+      position: 'absolute',
+      top: TOP_SAFE_PADDING + 2,
+      left: 12,
+      right: 12,
+      zIndex: 50
+    },
+    inAppNotificationToastContent: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.16,
+      shadowRadius: 14,
+      elevation: 8
+    },
+    inAppNotificationToastIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primarySoft
+    },
+    inAppNotificationToastTextWrap: {
+      flex: 1,
+      marginLeft: 8
+    },
+    inAppNotificationToastTitle: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    inAppNotificationToastDescription: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 17
     },
     settingRow: {
       minHeight: 58,

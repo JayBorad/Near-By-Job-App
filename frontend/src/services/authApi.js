@@ -404,3 +404,48 @@ export async function getReceivedReviewsByUser({ token, userId }) {
     }
   });
 }
+
+export async function getMyNotifications({ token }) {
+  return apiRequest('/notifications', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function markNotificationAsRead({ token, notificationId }) {
+  return apiRequest(`/notifications/${notificationId}/read`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function markAllNotificationsAsRead({ token }) {
+  return apiRequest('/notifications/read-all', {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function deleteNotification({ token, notificationId }) {
+  return apiRequest(`/notifications/${notificationId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function deleteAllNotifications({ token }) {
+  return apiRequest('/notifications/delete-all', {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}

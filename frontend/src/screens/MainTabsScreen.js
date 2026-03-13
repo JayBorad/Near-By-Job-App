@@ -43,7 +43,12 @@ import {
   updateUserAvatarByAdmin,
   updateUserByAdmin,
   updateProfile,
-  updateProfileAvatar
+  updateProfileAvatar,
+  deleteAllNotifications,
+  deleteNotification,
+  getMyNotifications,
+  markAllNotificationsAsRead,
+  markNotificationAsRead
 } from '../services/authApi';
 import { io } from 'socket.io-client';
 import { COUNTRY_CODES } from '../constants/countryCodes';
@@ -79,6 +84,7 @@ import {
   toNumberOrNull
 } from './mainTabs/utils';
 import { PageContent } from './mainTabs/tabs/PageContent';
+import { NotificationsPage } from './mainTabs/tabScreens';
 
 const DEFAULT_AVATAR_URL = null;
 const THEME_MODE_KEY = 'app_theme_mode';
@@ -116,6 +122,17 @@ const formatChatDayLabel = (value) => {
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
   return date.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const getNotificationIconName = (notification) => {
+  const type = String(notification?.type || '').toUpperCase();
+  if (type === 'JOB_APPLIED') return 'briefcase-outline';
+  if (type === 'APPLICATION_ACCEPTED') return 'checkmark-circle';
+  if (type === 'APPLICATION_REJECTED') return 'close-circle';
+  if (type === 'JOB_UPDATED') return 'create-outline';
+  if (type === 'JOB_CANCELLED') return 'alert-circle';
+  if (type === 'ADMIN_JOB_UPDATED') return 'shield-checkmark-outline';
+  return notification?.icon || 'notifications';
 };
 
 export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
@@ -221,6 +238,14 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [userCategoryDraft, setUserCategoryDraft] = useState({ name: '', description: '' });
   const [showUserCategoryCreateModal, setShowUserCategoryCreateModal] = useState(false);
   const [isCreatingUserCategory, setIsCreatingUserCategory] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+  const [showNotificationsPage, setShowNotificationsPage] = useState(false);
+  const [notificationPingKey, setNotificationPingKey] = useState(0);
+  const [activeToastNotification, setActiveToastNotification] = useState(null);
+  const toastTranslateY = useRef(new Animated.Value(-110)).current;
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTimerRef = useRef(null);
   const [localUser, setLocalUser] = useState(user || null);
   const [popup, setPopup] = useState({ visible: false, title: '', message: '', type: 'error' });
   const [showChatModal, setShowChatModal] = useState(false);
@@ -240,6 +265,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const typingStopTimerRef = useRef(null);
   const peerOnlinePollRef = useRef(null);
   const conversationRefreshTimerRef = useRef(null);
+  const unreadNotificationCount = useMemo(
+    () => notifications.filter((item) => !item?.isRead).length,
+    [notifications]
+  );
   const activeChatSessionRef = useRef(null);
   const localUserIdRef = useRef(localUser?.id || null);
   const contentFade = useRef(new Animated.Value(1)).current;
@@ -310,6 +339,13 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       setActiveTab(visibleTabs[0]?.key || 'dashboard');
     }
   }, [activeTab, visibleTabs]);
+
+  useEffect(() => {
+    if (!showNotificationsPage) return;
+    setShowNotificationsPage(false);
+    // only when tab actually changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   useEffect(() => {
     activeChatSessionRef.current = activeChatSession;
@@ -700,7 +736,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   };
 
   const fetchMyJobs = async ({ forceLoader = false } = {}) => {
-    if (!token || userRole !== 'USER') return;
+    if (!token || userRole !== 'USER') return [];
     try {
       if (forceLoader || !myJobs.length) {
         setIsMyJobsLoading(true);
@@ -737,8 +773,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       );
       setMyJobs(ownJobsWithApplications);
       setSelectedMyJob((prev) => (prev ? ownJobsWithApplications.find((item) => item.id === prev.id) || null : null));
+      return ownJobsWithApplications;
     } catch (error) {
       showPopup('Jobs Failed', error?.message || 'Unable to load your jobs.', 'error');
+      return [];
     } finally {
       setIsMyJobsLoading(false);
     }
@@ -827,6 +865,166 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     } finally {
       setIsMyApplicationsLoading(false);
     }
+  };
+
+  const showNotificationToast = (notification) => {
+    if (!notification?.id) return;
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+
+    setActiveToastNotification(notification);
+    toastTranslateY.setValue(-110);
+    toastOpacity.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(toastTranslateY, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true
+      }),
+      Animated.timing(toastOpacity, {
+        toValue: 1,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true
+      })
+    ]).start();
+
+    toastTimerRef.current = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(toastTranslateY, {
+          toValue: -110,
+          duration: 220,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true
+        }),
+        Animated.timing(toastOpacity, {
+          toValue: 0,
+          duration: 180,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true
+        })
+      ]).start(() => setActiveToastNotification(null));
+      toastTimerRef.current = null;
+    }, 3200);
+  };
+
+  const fetchNotifications = async ({ forceLoader = false, silentError = false } = {}) => {
+    if (!token || !['USER', 'ADMIN'].includes(userRole)) return;
+    try {
+      if (forceLoader || !notifications.length) {
+        setIsNotificationsLoading(true);
+      }
+      const response = await getMyNotifications({ token });
+      setNotifications(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      if (!silentError) {
+        showPopup('Notifications Failed', error?.message || 'Unable to load notifications.', 'error');
+      }
+    } finally {
+      setIsNotificationsLoading(false);
+    }
+  };
+
+  const navigateFromNotification = async (notification) => {
+    const actionPage = String(notification?.actionPage || '').toUpperCase();
+    const jobId = notification?.jobId || null;
+
+    if (actionPage === 'JOB_DETAILS') {
+      if (userRole === 'ADMIN') {
+        setActiveTab('create');
+        await fetchAdminJobs({ forceLoader: true });
+        return;
+      }
+      if (userRole === 'USER' && userMode === 'JOB_POSTER') {
+        setActiveTab('explore');
+        const ownJobs = await fetchMyJobs({ forceLoader: false });
+        const matched = ownJobs.find((item) => item.id === jobId);
+        if (matched) {
+          await openMyJobDetailPage(matched);
+          return;
+        }
+      }
+      return;
+    }
+
+    if (actionPage === 'MY_APPLICATIONS') {
+      if (userRole === 'USER' && userMode === 'JOB_PICKER') {
+        setActiveTab('explore');
+        setPickerExplorePage('applications');
+        await fetchMyApplications({ forceLoader: true });
+      }
+    }
+  };
+
+  const readNotificationById = async (notificationId, { silent = false } = {}) => {
+    if (!token || !notificationId) return;
+    try {
+      const response = await markNotificationAsRead({ token, notificationId });
+      const updated = response?.data;
+      setNotifications((prev) => prev.map((item) => (item.id === notificationId ? { ...item, ...(updated || {}), isRead: true } : item)));
+    } catch (error) {
+      if (!silent) {
+        showPopup('Read Failed', error?.message || 'Unable to mark notification as read.', 'error');
+      }
+    }
+  };
+
+  const openNotification = async (notification) => {
+    if (!notification?.id) return;
+    if (!notification?.isRead) {
+      await readNotificationById(notification.id, { silent: true });
+    }
+    await navigateFromNotification(notification);
+  };
+
+  const openNotificationFromPage = async (notification) => {
+    await openNotification(notification);
+    setShowNotificationsPage(false);
+  };
+
+  const deleteNotificationById = async (notificationId) => {
+    if (!token || !notificationId) return;
+    try {
+      await deleteNotification({ token, notificationId });
+      setNotifications((prev) => prev.filter((item) => item.id !== notificationId));
+    } catch (error) {
+      showPopup('Delete Failed', error?.message || 'Unable to delete notification.', 'error');
+    }
+  };
+
+  const readAllNotifications = async () => {
+    if (!token) return;
+    try {
+      await markAllNotificationsAsRead({ token });
+      const nowIso = new Date().toISOString();
+      setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true, readAt: item?.readAt || nowIso })));
+    } catch (error) {
+      showPopup('Read Failed', error?.message || 'Unable to mark all as read.', 'error');
+    }
+  };
+
+  const deleteAllNotificationsFromList = async () => {
+    if (!token) return;
+    try {
+      await deleteAllNotifications({ token });
+      setNotifications([]);
+    } catch (error) {
+      showPopup('Delete Failed', error?.message || 'Unable to delete all notifications.', 'error');
+    }
+  };
+
+  const openNotificationsPage = async () => {
+    setShowNotificationsPage(true);
+    await fetchNotifications({ forceLoader: true });
+  };
+
+  const closeNotificationsPageToHome = () => {
+    setShowNotificationsPage(false);
+    switchTab('dashboard');
   };
 
   const fetchMyReceivedReviews = async ({ forceLoader = false } = {}) => {
@@ -1589,6 +1787,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
 
   useEffect(() => {
     if (!token || !['USER', 'ADMIN'].includes(userRole)) return;
+    fetchNotifications({ forceLoader: false, silentError: true });
+  }, [token, userRole]);
+
+  useEffect(() => {
+    if (!token || !['USER', 'ADMIN'].includes(userRole)) return;
     const socket = io(SOCKET_BASE_URL, {
       transports: ['websocket'],
       auth: { token }
@@ -1643,6 +1846,19 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       if (payload?.jobId !== activeChatSession.jobId) return;
       if (payload?.userId !== activeChatSession.peerId) return;
       setIsPeerTyping(Boolean(payload?.isTyping));
+    });
+
+    socket.on('notification_created', (incomingNotification) => {
+      if (!incomingNotification?.id) return;
+      setNotifications((prev) => {
+        const exists = prev.some((item) => item.id === incomingNotification.id);
+        if (exists) {
+          return prev.map((item) => (item.id === incomingNotification.id ? incomingNotification : item));
+        }
+        return [incomingNotification, ...prev];
+      });
+      setNotificationPingKey((prev) => prev + 1);
+      showNotificationToast(incomingNotification);
     });
 
     return () => {
@@ -1724,6 +1940,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         clearTimeout(conversationRefreshTimerRef.current);
         conversationRefreshTimerRef.current = null;
       }
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
     },
     []
   );
@@ -1761,6 +1981,9 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   };
 
   const switchTab = (nextKey) => {
+    if (showNotificationsPage) {
+      setShowNotificationsPage(false);
+    }
     if (nextKey === activeTab) {
       animateIcon(nextKey);
       return;
@@ -1822,142 +2045,202 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
 
   const centerTab = visibleTabs[2] || visibleTabs[0];
   const handleCenterAction = () => {
+    if (showNotificationsPage) {
+      setShowNotificationsPage(false);
+    }
     switchTab(centerTab.key);
   };
 
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.pageWrap, { opacity: contentFade, transform: [{ translateY: contentShift }] }]}>
-        <PageContent
-          tabKey={activeTab}
-          user={localUser}
-          userRole={userRole}
-          userMode={userMode}
-          token={token}
-          settingsPage={settingsPage}
-          themeMode={themeMode}
-          setThemeMode={setThemeMode}
-          onOpenProfile={() => switchSettingsPage('profile')}
-          onOpenMode={() => switchSettingsPage('mode')}
-          onOpenReviews={() => switchSettingsPage('reviews')}
-          onBackFromProfile={() => switchSettingsPage('main')}
-          onBackFromMode={() => switchSettingsPage('main')}
-          onBackFromReviews={() => switchSettingsPage('main')}
-          onBackFromCategories={() => switchSettingsPage('main')}
-          onRequestLogout={() => setShowLogoutConfirm(true)}
-          onOpenAvatarOptions={() => setShowAvatarOptions(true)}
-          onOpenAvatarPreview={() => setShowAvatarPreview(true)}
-          onSaveProfile={saveProfileDetails}
-          onChangeMode={changeUserMode}
-          isSavingProfile={isSavingProfile}
-          isChangingMode={isChangingMode}
-          onOpenCategories={() => switchSettingsPage('categories')}
-          categoriesTab={categoriesTab}
-          setCategoriesTab={setCategoriesTab}
-          categorySearch={categorySearch}
-          setCategorySearch={setCategorySearch}
-          categoryFilter={categoryFilter}
-          setCategoryFilter={setCategoryFilter}
-          allCategories={allCategories}
-          myCategories={myCategories}
-          isCategoryLoading={isCategoryLoading}
-          hasFetchedCategoriesOnce={hasFetchedCategoriesOnce}
-          onRefreshCategories={() => fetchCategories({ forceLoader: true })}
-          jobForm={jobForm}
-          setJobForm={setJobForm}
-          approvedCategoryOptions={approvedCategoryOptions}
-          onCreateJob={submitCreateJob}
-          onValidationError={showPopup}
-          isCreatingJob={isCreatingJob}
-          myJobs={myJobs}
-          isMyJobsLoading={isMyJobsLoading}
-          onRefreshMyJobs={() => fetchMyJobs({ forceLoader: true })}
-          myJobsPage={myJobsPage}
-          onOpenMyJob={openMyJobDetailPage}
-          selectedMyJob={selectedMyJob}
-          selectedMyJobApplications={selectedMyJobApplications}
-          isSelectedMyJobApplicationsLoading={isSelectedMyJobApplicationsLoading}
-          isUpdatingJobApplicationStatus={isUpdatingJobApplicationStatus}
-          isSubmittingReview={isSubmittingReview}
-          isUpdatingJobStatus={isUpdatingMyJobStatus}
-          onBackFromMyJobDetail={backFromMyJobDetailPage}
-          onRefreshSelectedMyJobApplications={() =>
-            fetchApplicationsForMySelectedJob(selectedMyJob?.id, { forceLoader: true })
-          }
-          onApproveJobApplication={(applicationId) => updateSelectedJobApplicationStatus(applicationId, 'ACCEPTED')}
-          onRejectJobApplication={(applicationId) => updateSelectedJobApplicationStatus(applicationId, 'REJECTED')}
-          onSubmitReview={submitReviewForJobPicker}
-          onChangeJobStatus={changeMyJobStatus}
-          onEditMyJob={openEditJobModal}
-          pickerExplorePage={pickerExplorePage}
-          onOpenPickerApplications={openPickerApplicationsPage}
-          onBackFromPickerApplications={backFromPickerApplicationsPage}
-          pickerJobs={pickerJobs}
-          isPickerJobsLoading={isPickerJobsLoading}
-          onRefreshPickerJobs={() => fetchPickerJobs({ forceLoader: true })}
-          onApplyJob={handleApplyJob}
-          isApplyingJob={isApplyingJob}
-          myApplications={myApplications}
-          isMyApplicationsLoading={isMyApplicationsLoading}
-          onRefreshMyApplications={() => fetchMyApplications({ forceLoader: true })}
-          myReceivedReviews={myReceivedReviews}
-          isMyReceivedReviewsLoading={isMyReceivedReviewsLoading}
-          onRefreshMyReceivedReviews={() => fetchMyReceivedReviews({ forceLoader: true })}
-          onOpenChatWithJobPoster={(application) =>
-            openChatSession({
-              job: application?.job,
-              peer: application?.job?.owner
-            })
-          }
-          chatConversations={chatConversations}
-          isChatConversationsLoading={isChatConversationsLoading}
-          onRefreshChatConversations={() => fetchChatConversations({ forceLoader: true })}
-          onOpenChatConversation={openChatFromConversation}
-          onOpenChatWithApplicant={(payload) =>
-            openChatSession({
-              job: payload?.job,
-              peer: payload?.applicant
-            })
-          }
-          onOpenChatWithUser={(payload) =>
-            openChatSession({
-              job: payload?.job,
-              peer: payload?.applicant
-            })
-          }
-          onOpenAdminUserDetails={openAdminUserDetailsById}
-          onGetApplicationsByJob={getApplicationsByJobForAdmin}
-          onChangeAdminJobStatus={changeAdminJobStatus}
-          onEditAdminJob={openEditJobModal}
-          adminReturnJobId={adminReturnJobId}
-          onAdminReturnJobHandled={clearAdminReturnJobId}
-          adminJobs={adminJobs}
-          adminCategories={adminCategories}
-          isAdminPanelLoading={isAdminPanelLoading}
-          onRefreshAdminJobs={() => fetchAdminJobs({ forceLoader: true })}
-          onRefreshAdminCategories={() => fetchAdminCategories({ forceLoader: true })}
-          adminCategorySearch={adminCategorySearch}
-          setAdminCategorySearch={setAdminCategorySearch}
-          adminCategoryFilter={adminCategoryFilter}
-          setAdminCategoryFilter={setAdminCategoryFilter}
-          adminCategoryDraft={adminCategoryDraft}
-          setAdminCategoryDraft={setAdminCategoryDraft}
-          onCreateAdminCategory={createAdminCategory}
-          onUpdateAdminCategoryStatus={updateAdminCategoryStatus}
-          adminUsers={adminUsers}
-          isAdminUsersLoading={isAdminUsersLoading}
-          onRefreshAdminUsers={() => fetchAdminUsers({ forceLoader: true })}
-          onGetUserReviews={getReceivedReviewsByUserForAdmin}
-          selectedAdminUserId={adminSelectedUserId}
-          onAdminUserDetailOpened={clearAdminSelectedUserId}
-          onExitAdminUserDetails={exitAdminUserDetails}
-          onSaveUserDetails={handleUpdateUserDetails}
-          onSaveUserAvatar={handleUpdateUserAvatar}
-          isUploadingAvatar={isUploadingAvatar}
-          styles={styles}
-          colors={colors}
-        />
+        {showNotificationsPage ? (
+          <NotificationsPage
+            notifications={notifications}
+            isLoading={isNotificationsLoading}
+            onBack={closeNotificationsPageToHome}
+            onRefresh={() => fetchNotifications({ forceLoader: true })}
+            onOpenNotification={openNotificationFromPage}
+            onReadNotification={(notificationId) => readNotificationById(notificationId)}
+            onDeleteNotification={deleteNotificationById}
+            onReadAll={readAllNotifications}
+            onDeleteAll={deleteAllNotificationsFromList}
+            styles={styles}
+            colors={colors}
+          />
+        ) : (
+          <PageContent
+            tabKey={activeTab}
+            user={localUser}
+            userRole={userRole}
+            userMode={userMode}
+            token={token}
+            settingsPage={settingsPage}
+            themeMode={themeMode}
+            setThemeMode={setThemeMode}
+            onOpenProfile={() => switchSettingsPage('profile')}
+            onOpenMode={() => switchSettingsPage('mode')}
+            onOpenReviews={() => switchSettingsPage('reviews')}
+            onOpenNotifications={openNotificationsPage}
+            onBackFromProfile={() => switchSettingsPage('main')}
+            onBackFromMode={() => switchSettingsPage('main')}
+            onBackFromReviews={() => switchSettingsPage('main')}
+            onBackFromCategories={() => switchSettingsPage('main')}
+            onRequestLogout={() => setShowLogoutConfirm(true)}
+            onOpenAvatarOptions={() => setShowAvatarOptions(true)}
+            onOpenAvatarPreview={() => setShowAvatarPreview(true)}
+            onSaveProfile={saveProfileDetails}
+            onChangeMode={changeUserMode}
+            isSavingProfile={isSavingProfile}
+            isChangingMode={isChangingMode}
+            onOpenCategories={() => switchSettingsPage('categories')}
+            categoriesTab={categoriesTab}
+            setCategoriesTab={setCategoriesTab}
+            categorySearch={categorySearch}
+            setCategorySearch={setCategorySearch}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            allCategories={allCategories}
+            myCategories={myCategories}
+            isCategoryLoading={isCategoryLoading}
+            hasFetchedCategoriesOnce={hasFetchedCategoriesOnce}
+            onRefreshCategories={() => fetchCategories({ forceLoader: true })}
+            jobForm={jobForm}
+            setJobForm={setJobForm}
+            approvedCategoryOptions={approvedCategoryOptions}
+            onCreateJob={submitCreateJob}
+            onValidationError={showPopup}
+            isCreatingJob={isCreatingJob}
+            myJobs={myJobs}
+            isMyJobsLoading={isMyJobsLoading}
+            onRefreshMyJobs={() => fetchMyJobs({ forceLoader: true })}
+            myJobsPage={myJobsPage}
+            onOpenMyJob={openMyJobDetailPage}
+            selectedMyJob={selectedMyJob}
+            selectedMyJobApplications={selectedMyJobApplications}
+            isSelectedMyJobApplicationsLoading={isSelectedMyJobApplicationsLoading}
+            isUpdatingJobApplicationStatus={isUpdatingJobApplicationStatus}
+            isSubmittingReview={isSubmittingReview}
+            isUpdatingJobStatus={isUpdatingMyJobStatus}
+            onBackFromMyJobDetail={backFromMyJobDetailPage}
+            onRefreshSelectedMyJobApplications={() =>
+              fetchApplicationsForMySelectedJob(selectedMyJob?.id, { forceLoader: true })
+            }
+            onApproveJobApplication={(applicationId) => updateSelectedJobApplicationStatus(applicationId, 'ACCEPTED')}
+            onRejectJobApplication={(applicationId) => updateSelectedJobApplicationStatus(applicationId, 'REJECTED')}
+            onSubmitReview={submitReviewForJobPicker}
+            onChangeJobStatus={changeMyJobStatus}
+            onEditMyJob={openEditJobModal}
+            pickerExplorePage={pickerExplorePage}
+            onOpenPickerApplications={openPickerApplicationsPage}
+            onBackFromPickerApplications={backFromPickerApplicationsPage}
+            pickerJobs={pickerJobs}
+            isPickerJobsLoading={isPickerJobsLoading}
+            onRefreshPickerJobs={() => fetchPickerJobs({ forceLoader: true })}
+            onApplyJob={handleApplyJob}
+            isApplyingJob={isApplyingJob}
+            myApplications={myApplications}
+            isMyApplicationsLoading={isMyApplicationsLoading}
+            onRefreshMyApplications={() => fetchMyApplications({ forceLoader: true })}
+            notifications={notifications}
+            isNotificationsLoading={isNotificationsLoading}
+            notificationPingKey={notificationPingKey}
+            unreadNotificationCount={unreadNotificationCount}
+            onRefreshNotifications={() => fetchNotifications({ forceLoader: true })}
+            onOpenNotification={openNotification}
+            onReadNotification={(notificationId) => readNotificationById(notificationId)}
+            onDeleteNotification={deleteNotificationById}
+            onReadAllNotifications={readAllNotifications}
+            onDeleteAllNotifications={deleteAllNotificationsFromList}
+            myReceivedReviews={myReceivedReviews}
+            isMyReceivedReviewsLoading={isMyReceivedReviewsLoading}
+            onRefreshMyReceivedReviews={() => fetchMyReceivedReviews({ forceLoader: true })}
+            onOpenChatWithJobPoster={(application) =>
+              openChatSession({
+                job: application?.job,
+                peer: application?.job?.owner
+              })
+            }
+            chatConversations={chatConversations}
+            isChatConversationsLoading={isChatConversationsLoading}
+            onRefreshChatConversations={() => fetchChatConversations({ forceLoader: true })}
+            onOpenChatConversation={openChatFromConversation}
+            onOpenChatWithApplicant={(payload) =>
+              openChatSession({
+                job: payload?.job,
+                peer: payload?.applicant
+              })
+            }
+            onOpenChatWithUser={(payload) =>
+              openChatSession({
+                job: payload?.job,
+                peer: payload?.applicant
+              })
+            }
+            onOpenAdminUserDetails={openAdminUserDetailsById}
+            onGetApplicationsByJob={getApplicationsByJobForAdmin}
+            onChangeAdminJobStatus={changeAdminJobStatus}
+            onEditAdminJob={openEditJobModal}
+            adminReturnJobId={adminReturnJobId}
+            onAdminReturnJobHandled={clearAdminReturnJobId}
+            adminJobs={adminJobs}
+            adminCategories={adminCategories}
+            isAdminPanelLoading={isAdminPanelLoading}
+            onRefreshAdminJobs={() => fetchAdminJobs({ forceLoader: true })}
+            onRefreshAdminCategories={() => fetchAdminCategories({ forceLoader: true })}
+            adminCategorySearch={adminCategorySearch}
+            setAdminCategorySearch={setAdminCategorySearch}
+            adminCategoryFilter={adminCategoryFilter}
+            setAdminCategoryFilter={setAdminCategoryFilter}
+            adminCategoryDraft={adminCategoryDraft}
+            setAdminCategoryDraft={setAdminCategoryDraft}
+            onCreateAdminCategory={createAdminCategory}
+            onUpdateAdminCategoryStatus={updateAdminCategoryStatus}
+            adminUsers={adminUsers}
+            isAdminUsersLoading={isAdminUsersLoading}
+            onRefreshAdminUsers={() => fetchAdminUsers({ forceLoader: true })}
+            onGetUserReviews={getReceivedReviewsByUserForAdmin}
+            selectedAdminUserId={adminSelectedUserId}
+            onAdminUserDetailOpened={clearAdminSelectedUserId}
+            onExitAdminUserDetails={exitAdminUserDetails}
+            onSaveUserDetails={handleUpdateUserDetails}
+            onSaveUserAvatar={handleUpdateUserAvatar}
+            isUploadingAvatar={isUploadingAvatar}
+            styles={styles}
+            colors={colors}
+          />
+        )}
       </Animated.View>
+
+      {activeToastNotification ? (
+        <Animated.View
+          style={[
+            styles.inAppNotificationToast,
+            {
+              transform: [{ translateY: toastTranslateY }],
+              opacity: toastOpacity
+            }
+          ]}
+        >
+          <Pressable style={styles.inAppNotificationToastContent} onPress={() => openNotification(activeToastNotification)}>
+            <View style={styles.inAppNotificationToastIconWrap}>
+              <Ionicons
+                name={getNotificationIconName(activeToastNotification)}
+                size={18}
+                color={colors.primary}
+              />
+            </View>
+            <View style={styles.inAppNotificationToastTextWrap}>
+              <Text style={styles.inAppNotificationToastTitle} numberOfLines={1}>
+                {activeToastNotification?.title || 'Notification'}
+              </Text>
+              <Text style={styles.inAppNotificationToastDescription} numberOfLines={2}>
+                {activeToastNotification?.description || ''}
+              </Text>
+            </View>
+          </Pressable>
+        </Animated.View>
+      ) : null}
 
       {activeTab === 'settings' && settingsPage === 'categories' && userRole !== 'ADMIN' ? (
         <Pressable

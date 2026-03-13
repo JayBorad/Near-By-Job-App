@@ -146,7 +146,16 @@ function buildMonotonePath(points) {
   return d;
 }
 
-export function DashboardTab({ user, userRole, myApplications, styles, colors }) {
+export function DashboardTab({
+  user,
+  userRole,
+  myApplications,
+  notificationPingKey = 0,
+  unreadNotificationCount = 0,
+  onOpenNotifications,
+  styles,
+  colors
+}) {
   const bellAnim = useRef(new Animated.Value(0)).current;
   const profitAnim = useRef(new Animated.Value(0)).current;
   const filterAnim = useRef(new Animated.Value(0)).current;
@@ -449,6 +458,12 @@ export function DashboardTab({ user, userRole, myApplications, styles, colors })
     ]).start(() => setIsBellActive(false));
   };
 
+  useEffect(() => {
+    if (!notificationPingKey) return;
+    ringBell();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notificationPingKey]);
+
   const activeDay = analytics.days[selectedIndex] || analytics.days[0];
   const isUserDashboard = String(userRole || '').toUpperCase() === 'USER';
   const nowLabel = useMemo(
@@ -486,7 +501,13 @@ export function DashboardTab({ user, userRole, myApplications, styles, colors })
             </View>
           </View>
 
-          <Pressable onPress={ringBell} style={styles.dashboardNotificationBtn}>
+          <Pressable
+            onPress={() => {
+              ringBell();
+              onOpenNotifications?.();
+            }}
+            style={styles.dashboardNotificationBtn}
+          >
             <Animated.View style={{ transform: [{ rotate: bellRotate }] }}>
               <Ionicons
                 name={isBellActive ? 'notifications' : 'notifications-outline'}
@@ -494,7 +515,13 @@ export function DashboardTab({ user, userRole, myApplications, styles, colors })
                 color={colors.textMain}
               />
             </Animated.View>
-            <View style={styles.dashboardNotificationDot} />
+            {unreadNotificationCount > 0 ? (
+              <View style={styles.dashboardNotificationDot}>
+                <Text style={styles.dashboardNotificationDotText}>
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                </Text>
+              </View>
+            ) : null}
           </Pressable>
         </View>
       </View>

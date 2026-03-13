@@ -1,5 +1,12 @@
 import React from 'react';
-import { AdminCategoriesPage, CategoryPage, ProfilePage, ReviewsPage, SettingsPage, UserModePage } from '../tabScreens';
+import {
+  AdminCategoriesPage,
+  CategoryPage,
+  ProfilePage,
+  ReviewsPage,
+  SettingsPage,
+  UserModePage
+} from '../tabScreens';
 
 export function SettingsTab({
   settingsPage,

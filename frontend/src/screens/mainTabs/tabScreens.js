@@ -67,6 +67,17 @@ const getApplicationStats = (job) => ({
   rejectedCount: Number(job?.applicationStats?.rejectedCount || 0)
 });
 
+const getNotificationIconName = (notification) => {
+  const type = String(notification?.type || '').toUpperCase();
+  if (type === 'JOB_APPLIED') return 'briefcase-outline';
+  if (type === 'APPLICATION_ACCEPTED') return 'checkmark-circle';
+  if (type === 'APPLICATION_REJECTED') return 'close-circle';
+  if (type === 'JOB_UPDATED') return 'create-outline';
+  if (type === 'JOB_CANCELLED') return 'alert-circle';
+  if (type === 'ADMIN_JOB_UPDATED') return 'shield-checkmark-outline';
+  return notification?.icon || 'notifications';
+};
+
 const getJobSeatStats = (job) => {
   const stats = getApplicationStats(job);
   const totalSeats = Math.max(1, Number(job?.requiredWorkers || 1));
@@ -4727,6 +4738,125 @@ function UserModePage({ user, onBack, onChangeMode, isChangingMode, styles, colo
   );
 }
 
+function NotificationsPage({
+  notifications,
+  isLoading,
+  onBack,
+  onRefresh,
+  onOpenNotification,
+  onReadNotification,
+  onDeleteNotification,
+  onReadAll,
+  onDeleteAll,
+  styles,
+  colors
+}) {
+  const items = Array.isArray(notifications) ? notifications : [];
+  const unreadCount = items.filter((item) => !item?.isRead).length;
+
+  return (
+    <View style={styles.settingsScreen}>
+      <View style={styles.settingsNav}>
+        <Pressable style={styles.settingsBackBtn} onPress={onBack}>
+          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          <Text style={styles.settingsBackText}>Back</Text>
+        </Pressable>
+        <Text style={styles.settingsNavTitle}>Notifications</Text>
+        <View style={styles.settingsNavRight}>
+          <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
+            <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.notificationsTopActions}>
+        <View style={styles.notificationsUnreadPill}>
+          <Ionicons name="notifications-outline" size={14} color={colors.primary} />
+          <Text style={styles.notificationsUnreadPillText}>Unread: {unreadCount}</Text>
+        </View>
+        <View style={styles.notificationsTopIcons}>
+          <Pressable style={styles.settingsNavIconBtn} onPress={onReadAll}>
+            <Ionicons name="mail-open-outline" size={17} color={colors.primary} />
+          </Pressable>
+          <Pressable style={styles.settingsNavIconBtn} onPress={onDeleteAll}>
+            <Ionicons name="trash-outline" size={17} color={colors.danger} />
+          </Pressable>
+        </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        {isLoading ? (
+          <AdminListState mode="loading" title="Loading notifications..." subtitle="Please wait..." colors={colors} />
+        ) : items.length ? (
+          items.map((item) => (
+            <Pressable
+              key={item.id}
+              style={[styles.notificationItemCard, !item?.isRead && styles.notificationItemCardUnread]}
+              onPress={() => onOpenNotification(item)}
+            >
+              <View style={styles.notificationItemHead}>
+                <View style={styles.notificationItemIconWrap}>
+                  <Ionicons
+                    name={getNotificationIconName(item)}
+                    size={16}
+                    color={!item?.isRead ? colors.primary : colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.notificationItemContent}>
+                  <Text style={styles.notificationItemTitle} numberOfLines={1}>
+                    {item?.title || 'Notification'}
+                  </Text>
+                  <Text style={styles.notificationItemDesc} numberOfLines={2}>
+                    {item?.description || '-'}
+                  </Text>
+                </View>
+                <View style={styles.notificationItemActions}>
+                  <Pressable
+                    style={styles.settingsNavIconBtn}
+                    onPress={(event) => {
+                      event?.stopPropagation?.();
+                      onReadNotification(item.id);
+                    }}
+                  >
+                    <Ionicons
+                      name={item?.isRead ? 'checkmark-done-outline' : 'mail-open-outline'}
+                      size={16}
+                      color={colors.primary}
+                    />
+                  </Pressable>
+                  <Pressable
+                    style={styles.settingsNavIconBtn}
+                    onPress={(event) => {
+                      event?.stopPropagation?.();
+                      onDeleteNotification(item.id);
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                  </Pressable>
+                </View>
+              </View>
+              <View style={styles.notificationItemFooter}>
+                <Text style={styles.notificationItemTime}>
+                  {item?.createdAt ? new Date(item.createdAt).toLocaleString('en-GB') : ''}
+                </Text>
+                {!item?.isRead ? <View style={styles.notificationUnreadDot} /> : null}
+              </View>
+            </Pressable>
+          ))
+        ) : (
+          <AdminListState
+            mode="empty"
+            title="No notifications yet"
+            subtitle="Updates about jobs and applications will appear here."
+            colors={colors}
+            emptySource={ADMIN_EMPTY_ANIMATION}
+          />
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
 function SettingsPage({
   user,
   themeMode,
@@ -4815,14 +4945,14 @@ function SettingsPage({
             colors={colors}
           />
         ) : null}
-          <SettingsOption
-            icon="notifications-outline"
-            title="Notifications"
-            subtitle="Push and email preferences"
-            onPress={() => {}}
-            styles={styles}
-            colors={colors}
-          />
+        <SettingsOption
+          icon="notifications-outline"
+          title="Notifications"
+          subtitle="Push and email preferences"
+          onPress={() => {}}
+          styles={styles}
+          colors={colors}
+        />
           <SettingsOption
             icon="lock-closed-outline"
             title="Privacy & Security"
@@ -4872,5 +5002,6 @@ export {
   PickerJobsPage,
   MyApplicationsPage,
   ReviewsPage,
+  NotificationsPage,
   SettingsPage
 };
