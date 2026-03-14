@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Animated, Easing, Image, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, Path, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
@@ -7,6 +7,7 @@ import Svg, { Circle, Defs, Path, Stop, LinearGradient as SvgLinearGradient } fr
 const WEB_SAFE_NATIVE_DRIVER = Platform.OS !== 'web';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PERIOD_OPTIONS = ['DAY', 'MONTH', 'YEAR'];
+const ADMIN_RANGE_OPTIONS = ['7D', '30D', '12M'];
 
 const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -22,6 +23,26 @@ function getDateKey(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function startOfDay(dateValue) {
+  const date = new Date(dateValue);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function isSameDay(a, b) {
+  return getDateKey(a) === getDateKey(b);
+}
+
+function getMonthKey(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getShortMonthLabel(dateValue) {
+  return new Date(dateValue).toLocaleDateString('en-IN', { month: 'short' });
 }
 
 function formatCurrency(value) {
@@ -63,6 +84,14 @@ function compactAmount(value) {
   if (amount >= 100000) return `${(amount / 100000).toFixed(1)}L`;
   if (amount >= 1000) return `${(amount / 1000).toFixed(1)}k`;
   return String(Math.round(amount));
+}
+
+function getJobBudgetTotal(job) {
+  const budget = Number(job?.budget || 0);
+  const workers = Math.max(1, Number(job?.requiredWorkers || 1));
+  const budgetType = String(job?.budgetType || 'TOTAL').toUpperCase();
+  if (!Number.isFinite(budget) || budget <= 0) return 0;
+  return budgetType === 'PER_PERSON' ? budget * workers : budget;
 }
 
 function buildSmoothPath(points) {
@@ -150,6 +179,10 @@ export function DashboardTab({
   user,
   userRole,
   myApplications,
+  adminJobs = [],
+  adminUsers = [],
+  onRefreshAdminJobs,
+  onRefreshAdminUsers,
   notificationPingKey = 0,
   unreadNotificationCount = 0,
   onOpenNotifications,
@@ -172,6 +205,16 @@ export function DashboardTab({
   const [selectedJobType, setSelectedJobType] = useState('ALL');
   const [earnPeriod, setEarnPeriod] = useState('MONTH');
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
+  const [adminRange, setAdminRange] = useState('30D');
+  const [adminPage, setAdminPage] = useState('overview');
+  const [adminJobStatusFilter, setAdminJobStatusFilter] = useState('ALL');
+  const [adminEarningFilter, setAdminEarningFilter] = useState('ALL');
+  const [adminUserFilter, setAdminUserFilter] = useState('ALL');
+  const adminFadeAnim = useRef(new Animated.Value(0)).current;
+  const adminEarningsChartAnim = useRef(new Animated.Value(0)).current;
+  const adminJobsBarAnims = useRef(Array.from({ length: 16 }, () => new Animated.Value(0))).current;
+  const adminUsersBarAnims = useRef(Array.from({ length: 16 }, () => new Animated.Value(0))).current;
+  const [adminEarningsChartWidth, setAdminEarningsChartWidth] = useState(0);
   const salesGradientId = useMemo(() => `salesArea-${String(userRole || 'user').toLowerCase()}`, [userRole]);
 
   const displayName = useMemo(() => {
@@ -443,6 +486,7 @@ export function DashboardTab({
     return [shiftHexColor(base, 18) || base, shiftHexColor(base, -8) || base];
   }, [colors?.primary]);
   const statsLineColor = useMemo(() => shiftHexColor(colors?.primary || '#0F766E', 10) || '#0F766E', [colors?.primary]);
+  const themedBarColor = useMemo(() => normalizeHex(colors?.primary) || '#197D74', [colors?.primary]);
 
   const ringBell = () => {
     bellAnim.stopAnimation();
@@ -464,8 +508,280 @@ export function DashboardTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notificationPingKey]);
 
-  const activeDay = analytics.days[selectedIndex] || analytics.days[0];
   const isUserDashboard = String(userRole || '').toUpperCase() === 'USER';
+  const isAdminDashboard = String(userRole || '').toUpperCase() === 'ADMIN';
+  const adminRangeDays = adminRange === '7D' ? 7 : adminRange === '30D' ? 30 : 365;
+
+  useEffect(() => {
+    if (!isAdminDashboard) return;
+    adminFadeAnim.setValue(0);
+    Animated.timing(adminFadeAnim, {
+      toValue: 1,
+      duration: 340,
+      useNativeDriver: WEB_SAFE_NATIVE_DRIVER
+    }).start();
+  }, [adminFadeAnim, adminPage, adminRange, isAdminDashboard]);
+
+  const adminDateWindow = useMemo(() => {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = startOfDay(end);
+    start.setDate(start.getDate() - (adminRangeDays - 1));
+    return { start, end };
+  }, [adminRangeDays]);
+
+  const adminJobMetrics = useMemo(() => {
+    const jobs = Array.isArray(adminJobs) ? adminJobs : [];
+    const filtered = jobs.filter((job) => {
+      const date = new Date(job?.createdAt || job?.updatedAt);
+      if (Number.isNaN(date.getTime())) return false;
+      return date >= adminDateWindow.start && date <= adminDateWindow.end;
+    });
+
+    const allCounts = { OPEN: 0, IN_PROGRESS: 0, COMPLETED: 0, CANCELLED: 0 };
+    const rangeCounts = { OPEN: 0, IN_PROGRESS: 0, COMPLETED: 0, CANCELLED: 0 };
+    jobs.forEach((job) => {
+      const status = String(job?.status || '').toUpperCase();
+      if (status in allCounts) allCounts[status] += 1;
+    });
+    filtered.forEach((job) => {
+      const status = String(job?.status || '').toUpperCase();
+      if (status in rangeCounts) rangeCounts[status] += 1;
+    });
+
+    const monthPoints = [];
+    const monthMap = {};
+    const baseMonth = new Date();
+    baseMonth.setDate(1);
+    for (let index = 5; index >= 0; index -= 1) {
+      const date = new Date(baseMonth.getFullYear(), baseMonth.getMonth() - index, 1);
+      const key = getMonthKey(date);
+      monthMap[key] = monthPoints.length;
+      monthPoints.push({
+        key,
+        label: getShortMonthLabel(date),
+        total: 0,
+        completed: 0
+      });
+    }
+    jobs.forEach((job) => {
+      const key = getMonthKey(job?.createdAt);
+      const idx = monthMap[key];
+      if (idx === undefined) return;
+      monthPoints[idx].total += 1;
+      if (String(job?.status || '').toUpperCase() === 'COMPLETED') {
+        monthPoints[idx].completed += 1;
+      }
+    });
+
+    return {
+      totalJobs: jobs.length,
+      pendingJobs: allCounts.OPEN + allCounts.IN_PROGRESS,
+      completedJobs: allCounts.COMPLETED,
+      cancelledJobs: allCounts.CANCELLED,
+      allCounts,
+      rangeCounts,
+      filteredCount: filtered.length,
+      monthPoints
+    };
+  }, [adminDateWindow.end, adminDateWindow.start, adminJobs]);
+
+  const adminEarningMetrics = useMemo(() => {
+    const jobs = Array.isArray(adminJobs) ? adminJobs : [];
+    const today = new Date();
+    const completedJobs = jobs.filter((job) => String(job?.status || '').toUpperCase() === 'COMPLETED');
+    const activeJobs = jobs.filter((job) => ['OPEN', 'IN_PROGRESS'].includes(String(job?.status || '').toUpperCase()));
+    const totalEarning = completedJobs.reduce((sum, job) => sum + getJobBudgetTotal(job), 0);
+    const todayEarning = completedJobs.reduce((sum, job) => {
+      const date = new Date(job?.updatedAt || job?.createdAt);
+      if (Number.isNaN(date.getTime()) || !isSameDay(date, today)) return sum;
+      return sum + getJobBudgetTotal(job);
+    }, 0);
+    const projectedEarning = activeJobs.reduce((sum, job) => sum + getJobBudgetTotal(job), 0);
+    const rangeEarning = completedJobs.reduce((sum, job) => {
+      const date = new Date(job?.updatedAt || job?.createdAt);
+      if (Number.isNaN(date.getTime())) return sum;
+      if (date < adminDateWindow.start || date > adminDateWindow.end) return sum;
+      return sum + getJobBudgetTotal(job);
+    }, 0);
+    const avgPerCompleted = completedJobs.length ? totalEarning / completedJobs.length : 0;
+
+    const daySeries = [];
+    const dayMap = {};
+    const dayCount = adminRange === '7D' ? 7 : adminRange === '30D' ? 10 : 12;
+    if (adminRange === '12M') {
+      const cursor = new Date();
+      cursor.setDate(1);
+      for (let index = dayCount - 1; index >= 0; index -= 1) {
+        const date = new Date(cursor.getFullYear(), cursor.getMonth() - index, 1);
+        const key = getMonthKey(date);
+        dayMap[key] = daySeries.length;
+        daySeries.push({ key, label: getShortMonthLabel(date), value: 0 });
+      }
+      completedJobs.forEach((job) => {
+        const key = getMonthKey(job?.updatedAt || job?.createdAt);
+        const idx = dayMap[key];
+        if (idx === undefined) return;
+        daySeries[idx].value += getJobBudgetTotal(job);
+      });
+    } else {
+      const bucketSize = adminRange === '30D' ? 3 : 1;
+      for (let index = dayCount - 1; index >= 0; index -= 1) {
+        const date = startOfDay(new Date());
+        date.setDate(date.getDate() - index * bucketSize);
+        const end = new Date(date);
+        end.setDate(end.getDate() + bucketSize - 1);
+        end.setHours(23, 59, 59, 999);
+        const key = `${getDateKey(date)}_${getDateKey(end)}`;
+        dayMap[key] = daySeries.length;
+        daySeries.push({
+          key,
+          start: date,
+          end,
+          label: bucketSize === 1 ? date.toLocaleDateString('en-IN', { weekday: 'short' }).slice(0, 1) : `${date.getDate()}`
+            + `-${end.getDate()}`,
+          value: 0
+        });
+      }
+      completedJobs.forEach((job) => {
+        const date = new Date(job?.updatedAt || job?.createdAt);
+        if (Number.isNaN(date.getTime())) return;
+        daySeries.forEach((bucket) => {
+          if (date >= bucket.start && date <= bucket.end) {
+            bucket.value += getJobBudgetTotal(job);
+          }
+        });
+      });
+    }
+
+    return {
+      totalEarning,
+      todayEarning,
+      projectedEarning,
+      rangeEarning,
+      avgPerCompleted,
+      completedCount: completedJobs.length,
+      series: daySeries
+    };
+  }, [adminDateWindow.end, adminDateWindow.start, adminJobs, adminRange]);
+
+  const adminUserMetrics = useMemo(() => {
+    const users = Array.isArray(adminUsers) ? adminUsers : [];
+    const filtered = users.filter((member) => {
+      const date = new Date(member?.createdAt);
+      if (Number.isNaN(date.getTime())) return false;
+      return date >= adminDateWindow.start && date <= adminDateWindow.end;
+    });
+    const today = new Date();
+    const activeUsers = users.filter((member) => String(member?.status || '').toUpperCase() === 'ACTIVE').length;
+    const deletedUsers = users.filter((member) => String(member?.status || '').toUpperCase() === 'DELETED').length;
+    const adminCount = users.filter((member) => String(member?.role || '').toUpperCase() === 'ADMIN').length;
+    const posters = users.filter((member) => String(member?.userMode || '').toUpperCase() === 'JOB_POSTER').length;
+    const pickers = users.filter((member) => String(member?.userMode || '').toUpperCase() === 'JOB_PICKER').length;
+    const todayJoined = users.filter((member) => {
+      const date = new Date(member?.createdAt);
+      return !Number.isNaN(date.getTime()) && isSameDay(date, today);
+    }).length;
+
+    const monthPoints = [];
+    const monthMap = {};
+    const anchor = new Date();
+    anchor.setDate(1);
+    for (let index = 5; index >= 0; index -= 1) {
+      const date = new Date(anchor.getFullYear(), anchor.getMonth() - index, 1);
+      const key = getMonthKey(date);
+      monthMap[key] = monthPoints.length;
+      monthPoints.push({ key, label: getShortMonthLabel(date), value: 0 });
+    }
+    users.forEach((member) => {
+      const key = getMonthKey(member?.createdAt);
+      const idx = monthMap[key];
+      if (idx === undefined) return;
+      monthPoints[idx].value += 1;
+    });
+
+    const activeRate = users.length ? Math.round((activeUsers / users.length) * 100) : 0;
+
+    return {
+      totalUsers: users.length,
+      activeUsers,
+      deletedUsers,
+      adminCount,
+      posters,
+      pickers,
+      todayJoined,
+      filteredCount: filtered.length,
+      activeRate,
+      monthPoints
+    };
+  }, [adminDateWindow.end, adminDateWindow.start, adminUsers]);
+
+  const animateBars = (animatedList, count) => {
+    animatedList.forEach((animatedValue, index) => {
+      animatedValue.stopAnimation();
+      animatedValue.setValue(0);
+      if (index >= count) return;
+      Animated.timing(animatedValue, {
+        toValue: 1,
+        duration: 640,
+        delay: index * 58,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false
+      }).start();
+    });
+  };
+
+  useEffect(() => {
+    if (!isAdminDashboard) return;
+    adminEarningsChartAnim.setValue(0);
+    Animated.timing(adminEarningsChartAnim, {
+      toValue: 1,
+      duration: 580,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true
+    }).start();
+  }, [adminEarningMetrics.series, adminEarningsChartAnim, adminRange, isAdminDashboard]);
+
+  useEffect(() => {
+    if (!isAdminDashboard) return;
+    animateBars(adminJobsBarAnims, adminJobMetrics.monthPoints.length);
+  }, [adminJobMetrics.monthPoints, adminJobsBarAnims, adminRange, isAdminDashboard]);
+
+  useEffect(() => {
+    if (!isAdminDashboard) return;
+    animateBars(adminUsersBarAnims, adminUserMetrics.monthPoints.length);
+  }, [adminRange, adminUserMetrics.monthPoints, adminUsersBarAnims, isAdminDashboard]);
+
+  const adminEarningMax = useMemo(
+    () => Math.max(...adminEarningMetrics.series.map((item) => Number(item.value) || 0), 1),
+    [adminEarningMetrics.series]
+  );
+  const adminEarningsChartMax = useMemo(() => {
+    const rounded = Math.ceil(adminEarningMax / 1000) * 1000;
+    return Math.max(rounded, 1000);
+  }, [adminEarningMax]);
+  const adminEarningsPeakIndex = useMemo(() => {
+    let maxValue = -1;
+    let maxIndex = 0;
+    adminEarningMetrics.series.forEach((item, index) => {
+      const value = Number(item?.value || 0);
+      if (value > maxValue) {
+        maxValue = value;
+        maxIndex = index;
+      }
+    });
+    return maxIndex;
+  }, [adminEarningMetrics.series]);
+  const adminJobsMax = useMemo(
+    () => Math.max(...adminJobMetrics.monthPoints.map((item) => Number(item.total) || 0), 1),
+    [adminJobMetrics.monthPoints]
+  );
+  const adminUsersMax = useMemo(
+    () => Math.max(...adminUserMetrics.monthPoints.map((item) => Number(item.value) || 0), 1),
+    [adminUserMetrics.monthPoints]
+  );
+
+  const activeDay = analytics.days[selectedIndex] || analytics.days[0];
   const nowLabel = useMemo(
     () =>
       new Date().toLocaleDateString('en-GB', {
@@ -475,6 +791,110 @@ export function DashboardTab({
       }),
     []
   );
+
+  const formatThousandsLabel = (value) => `${(Math.max(Number(value) || 0, 0) / 1000).toFixed(1)}k`;
+
+  const renderAdminEarningsGraph = (keyPrefix) => {
+    const width = Math.max(adminEarningsChartWidth, 300);
+    const height = 220;
+    const padLeft = 8;
+    const padRight = 40;
+    const padTop = 16;
+    const padBottom = 36;
+    const graphW = width - padLeft - padRight;
+    const graphH = height - padTop - padBottom;
+    const series = adminEarningMetrics.series || [];
+    const maxDiv = Math.max(adminEarningsChartMax, 1);
+    const points = series.map((item, idx) => {
+      const x = padLeft + (graphW * idx) / Math.max(series.length - 1, 1);
+      const y = padTop + (1 - (Number(item?.value || 0) / maxDiv)) * graphH;
+      return { x, y, value: Number(item?.value || 0), label: item?.label, key: item?.key };
+    });
+    const linePath = buildMonotonePath(points);
+    const first = points[0] || { x: padLeft, y: height - padBottom };
+    const last = points[points.length - 1] || first;
+    const areaPath = `${linePath} L ${last.x} ${height - padBottom} L ${first.x} ${height - padBottom} Z`;
+
+    return (
+      <View style={styles.adminThemeGraphMain} onLayout={(event) => setAdminEarningsChartWidth(event.nativeEvent.layout.width)}>
+        <Animated.View
+          style={[
+            styles.adminThemeGraphCanvasWrap,
+            {
+              opacity: adminEarningsChartAnim,
+              transform: [
+                {
+                  translateY: adminEarningsChartAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [10, 0]
+                  })
+                }
+              ]
+            }
+          ]}
+        >
+          <Svg width={width} height={height} style={styles.adminThemeGraphSvg}>
+            <Defs>
+              <SvgLinearGradient id={`${keyPrefix}-earn-area`} x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor={themedBarColor} stopOpacity="0.28" />
+                <Stop offset="100%" stopColor={themedBarColor} stopOpacity="0.02" />
+              </SvgLinearGradient>
+              <SvgLinearGradient id={`${keyPrefix}-earn-line`} x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0%" stopColor={shiftHexColor(themedBarColor, 8) || themedBarColor} stopOpacity="0.9" />
+                <Stop offset="100%" stopColor={shiftHexColor(themedBarColor, -6) || themedBarColor} stopOpacity="1" />
+              </SvgLinearGradient>
+            </Defs>
+
+            {[0, 1, 2].map((idx) => {
+              const y = padTop + (graphH * idx) / 2;
+              return (
+                <Path
+                  key={`${keyPrefix}-grid-${idx}`}
+                  d={`M ${padLeft} ${y} L ${width - padRight} ${y}`}
+                  stroke="#D6DCE5"
+                  strokeWidth={1}
+                  strokeDasharray="4,6"
+                />
+              );
+            })}
+
+            <Path d={areaPath} fill={`url(#${keyPrefix}-earn-area)`} />
+            <Path d={linePath} stroke={`url(#${keyPrefix}-earn-line)`} strokeWidth={3} fill="none" />
+            {points.map((point, idx) => {
+              const isPeak = idx === adminEarningsPeakIndex && point.value > 0;
+              return (
+                <Circle
+                  key={`${keyPrefix}-dot-${point.key}`}
+                  cx={point.x}
+                  cy={point.y}
+                  r={isPeak ? 5.6 : 4}
+                  fill={isPeak ? themedBarColor : '#FFFFFF'}
+                  stroke={themedBarColor}
+                  strokeWidth={2}
+                />
+              );
+            })}
+          </Svg>
+
+          <View style={styles.adminThemeGraphYAxisWrap}>
+            {[3, 2, 1].map((level) => (
+              <Text key={`${keyPrefix}-scale-${level}`} style={styles.adminThemeGraphScaleText}>
+                {formatThousandsLabel((adminEarningsChartMax * level) / 3)}
+              </Text>
+            ))}
+          </View>
+
+          <View style={styles.adminThemeGraphXRow}>
+            {series.map((item) => (
+              <Text key={`${keyPrefix}-x-${item.key}`} style={styles.adminThemeGraphBarLabel}>
+                {item.label}
+              </Text>
+            ))}
+          </View>
+        </Animated.View>
+      </View>
+    );
+  };
 
   return (
     <ScrollView
@@ -810,6 +1230,433 @@ export function DashboardTab({
             ))}
           </View>
         </>
+      ) : isAdminDashboard ? (
+        <Animated.View
+          style={[
+            styles.adminOverviewWrap,
+            {
+              opacity: adminFadeAnim,
+              transform: [
+                {
+                  translateY: adminFadeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [16, 0]
+                  })
+                }
+              ]
+            }
+          ]}
+        >
+          <View style={styles.adminOverviewFilterRow}>
+            {ADMIN_RANGE_OPTIONS.map((option) => (
+              <Pressable
+                key={option}
+                style={[
+                  styles.adminOverviewFilterChip,
+                  adminRange === option && styles.adminOverviewFilterChipActive
+                ]}
+                onPress={() => setAdminRange(option)}
+              >
+                <Text
+                  style={[
+                    styles.adminOverviewFilterChipText,
+                    adminRange === option && styles.adminOverviewFilterChipTextActive
+                  ]}
+                >
+                  {option}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {adminPage === 'overview' ? (
+            <>
+              <LinearGradient
+                colors={['#0F766E', '#0EA5A4']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.adminOverviewHero}
+              >
+                <Text style={styles.adminOverviewHeroLabel}>Admin Analytics</Text>
+                <Text style={styles.adminOverviewHeroTitle}>Platform Overview</Text>
+                <Text style={styles.adminOverviewHeroSub}>
+                  {`${adminRange} window • ${adminJobMetrics.filteredCount} jobs • ${adminUserMetrics.filteredCount} users`}
+                </Text>
+              </LinearGradient>
+
+              <View style={styles.adminOverviewSectionCard}>
+                <View style={styles.adminOverviewSectionHead}>
+                  <Text style={styles.adminOverviewSectionTitle}>Jobs</Text>
+                  <Pressable style={styles.adminOverviewViewBtn} onPress={() => setAdminPage('jobs')}>
+                    <Text style={styles.adminOverviewViewBtnText}>View All</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.adminOverviewKpiRow}>
+                  <View style={styles.adminOverviewKpiPill}>
+                    <Text style={styles.adminOverviewKpiLabel}>Total</Text>
+                    <Text style={styles.adminOverviewKpiValue}>{adminJobMetrics.totalJobs}</Text>
+                  </View>
+                  <View style={styles.adminOverviewKpiPill}>
+                    <Text style={styles.adminOverviewKpiLabel}>Pending</Text>
+                    <Text style={styles.adminOverviewKpiValue}>{adminJobMetrics.pendingJobs}</Text>
+                  </View>
+                  <View style={styles.adminOverviewKpiPill}>
+                    <Text style={styles.adminOverviewKpiLabel}>Completed</Text>
+                    <Text style={styles.adminOverviewKpiValue}>{adminJobMetrics.completedJobs}</Text>
+                  </View>
+                </View>
+                <View style={styles.adminOverviewStatusList}>
+                  {[
+                    { key: 'OPEN', label: 'Open', color: '#0369A1' },
+                    { key: 'IN_PROGRESS', label: 'In Progress', color: '#0F766E' },
+                    { key: 'COMPLETED', label: 'Completed', color: '#166534' },
+                    { key: 'CANCELLED', label: 'Cancelled', color: '#B91C1C' }
+                  ].map((item) => {
+                    const value = adminJobMetrics.allCounts[item.key] || 0;
+                    const ratio = adminJobMetrics.totalJobs ? Math.max(value / adminJobMetrics.totalJobs, 0.04) : 0.04;
+                    return (
+                      <View key={item.key} style={styles.adminOverviewStatusRow}>
+                        <Text style={styles.adminOverviewStatusLabel}>{item.label}</Text>
+                        <Text style={styles.adminOverviewStatusValue}>{value}</Text>
+                        <View style={styles.adminOverviewStatusTrack}>
+                          <View style={[styles.adminOverviewStatusFill, { width: `${ratio * 100}%`, backgroundColor: item.color }]} />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={styles.adminOverviewSectionCard}>
+                <View style={styles.adminOverviewSectionHead}>
+                  <Text style={styles.adminOverviewSectionTitle}>Earnings</Text>
+                  <Pressable style={styles.adminOverviewViewBtn} onPress={() => setAdminPage('earnings')}>
+                    <Text style={styles.adminOverviewViewBtnText}>View All</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.adminOverviewKpiRow}>
+                  <View style={styles.adminOverviewKpiPill}>
+                    <Text style={styles.adminOverviewKpiLabel}>Total</Text>
+                    <Text style={styles.adminOverviewKpiValue}>{formatCurrency(adminEarningMetrics.totalEarning)}</Text>
+                  </View>
+                  <View style={styles.adminOverviewKpiPill}>
+                    <Text style={styles.adminOverviewKpiLabel}>Today</Text>
+                    <Text style={styles.adminOverviewKpiValue}>{formatCurrency(adminEarningMetrics.todayEarning)}</Text>
+                  </View>
+                  <View style={styles.adminOverviewKpiPill}>
+                    <Text style={styles.adminOverviewKpiLabel}>Projected</Text>
+                    <Text style={styles.adminOverviewKpiValue}>{formatCurrency(adminEarningMetrics.projectedEarning)}</Text>
+                  </View>
+                </View>
+                <View style={styles.adminOverviewBarRow}>
+                  {renderAdminEarningsGraph('overview')}
+                </View>
+              </View>
+
+              <View style={styles.adminOverviewSectionCard}>
+                <View style={styles.adminOverviewSectionHead}>
+                  <Text style={styles.adminOverviewSectionTitle}>Users</Text>
+                  <Pressable style={styles.adminOverviewViewBtn} onPress={() => setAdminPage('users')}>
+                    <Text style={styles.adminOverviewViewBtnText}>View All</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.adminOverviewKpiRow}>
+                  <View style={styles.adminOverviewKpiPill}>
+                    <Text style={styles.adminOverviewKpiLabel}>Total</Text>
+                    <Text style={styles.adminOverviewKpiValue}>{adminUserMetrics.totalUsers}</Text>
+                  </View>
+                  <View style={styles.adminOverviewKpiPill}>
+                    <Text style={styles.adminOverviewKpiLabel}>Active</Text>
+                    <Text style={styles.adminOverviewKpiValue}>{adminUserMetrics.activeUsers}</Text>
+                  </View>
+                  <View style={styles.adminOverviewKpiPill}>
+                    <Text style={styles.adminOverviewKpiLabel}>Others</Text>
+                    <Text style={styles.adminOverviewKpiValue}>{adminUserMetrics.deletedUsers + adminUserMetrics.adminCount}</Text>
+                  </View>
+                </View>
+                <View style={styles.adminOverviewDualBar}>
+                  <View style={styles.adminOverviewDualTrack}>
+                    <View
+                      style={[
+                        styles.adminOverviewDualFill,
+                        { width: `${adminUserMetrics.activeRate}%`, backgroundColor: '#0F766E' }
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.adminOverviewDualLabel}>{`Active rate ${adminUserMetrics.activeRate}%`}</Text>
+                </View>
+              </View>
+            </>
+          ) : null}
+
+          {adminPage !== 'overview' ? (
+            <View style={styles.adminDetailsCard}>
+              <View style={styles.adminDetailsHead}>
+                <Pressable style={styles.adminDetailsBackBtn} onPress={() => setAdminPage('overview')}>
+                  <Ionicons name="chevron-back" size={16} color={colors.primary} />
+                  <Text style={styles.adminDetailsBackText}>Back</Text>
+                </Pressable>
+                <Text style={styles.adminDetailsTitle}>
+                  {adminPage === 'jobs' ? 'Jobs Analytics' : adminPage === 'earnings' ? 'Earnings Analytics' : 'Users Analytics'}
+                </Text>
+                <Pressable
+                  style={styles.adminDetailsRefreshBtn}
+                  onPress={() => {
+                    if (adminPage === 'users') {
+                      onRefreshAdminUsers?.();
+                    } else {
+                      onRefreshAdminJobs?.();
+                    }
+                  }}
+                >
+                  <Ionicons name="refresh-outline" size={14} color={colors.primary} />
+                </Pressable>
+              </View>
+
+              {adminPage === 'jobs' ? (
+                <>
+                  <View style={styles.adminDetailsFilterRow}>
+                    {['ALL', 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((filter) => (
+                      <Pressable
+                        key={filter}
+                        style={[
+                          styles.adminDetailsFilterChip,
+                          adminJobStatusFilter === filter && styles.adminDetailsFilterChipActive
+                        ]}
+                        onPress={() => setAdminJobStatusFilter(filter)}
+                      >
+                        <Text
+                          style={[
+                            styles.adminDetailsFilterChipText,
+                            adminJobStatusFilter === filter && styles.adminDetailsFilterChipTextActive
+                          ]}
+                        >
+                          {filter === 'IN_PROGRESS' ? 'IN PROGRESS' : filter}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.adminOverviewKpiRow}>
+                    <View style={styles.adminOverviewKpiPill}>
+                      <Text style={styles.adminOverviewKpiLabel}>Total Jobs</Text>
+                      <Text style={styles.adminOverviewKpiValue}>{adminJobMetrics.totalJobs}</Text>
+                    </View>
+                    <View style={styles.adminOverviewKpiPill}>
+                      <Text style={styles.adminOverviewKpiLabel}>Pending Jobs</Text>
+                      <Text style={styles.adminOverviewKpiValue}>{adminJobMetrics.pendingJobs}</Text>
+                    </View>
+                    <View style={styles.adminOverviewKpiPill}>
+                      <Text style={styles.adminOverviewKpiLabel}>Completed Jobs</Text>
+                      <Text style={styles.adminOverviewKpiValue}>{adminJobMetrics.completedJobs}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.adminDetailsBarsWrap}>
+                    {adminJobMetrics.monthPoints.map((item, idx) => {
+                      const totalHeight = 16 + ((Number(item.total) || 0) / adminJobsMax) * 86;
+                      const completedHeight = 10 + ((Number(item.completed) || 0) / adminJobsMax) * 76;
+                      const totalAnimatedHeight = adminJobsBarAnims[idx].interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, totalHeight]
+                      });
+                      const completedAnimatedHeight = adminJobsBarAnims[idx].interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, completedHeight]
+                      });
+                      return (
+                        <View key={item.key} style={styles.adminDetailsBarMonthCol}>
+                          <View style={styles.adminDetailsBarMonthTrack}>
+                            <Animated.View
+                              style={[
+                                styles.adminDetailsBarMonthFill,
+                                styles.adminDetailsBarMonthFillTotal,
+                                { height: totalAnimatedHeight }
+                              ]}
+                            />
+                            <Animated.View
+                              style={[
+                                styles.adminDetailsBarMonthFill,
+                                styles.adminDetailsBarMonthFillCompleted,
+                                { height: completedAnimatedHeight }
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.adminDetailsAxisText}>{item.label}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.adminOverviewStatusList}>
+                    {[
+                      { key: 'OPEN', label: 'Open', color: '#0369A1' },
+                      { key: 'IN_PROGRESS', label: 'In Progress', color: '#0F766E' },
+                      { key: 'COMPLETED', label: 'Completed', color: '#166534' },
+                      { key: 'CANCELLED', label: 'Cancelled', color: '#B91C1C' }
+                    ]
+                      .filter((item) => adminJobStatusFilter === 'ALL' || adminJobStatusFilter === item.key)
+                      .map((item) => {
+                        const value = adminJobMetrics.allCounts[item.key] || 0;
+                        const ratio = adminJobMetrics.totalJobs ? Math.max(value / adminJobMetrics.totalJobs, 0.04) : 0.04;
+                        return (
+                          <View key={item.key} style={styles.adminOverviewStatusRow}>
+                            <Text style={styles.adminOverviewStatusLabel}>{item.label}</Text>
+                            <Text style={styles.adminOverviewStatusValue}>{value}</Text>
+                            <View style={styles.adminOverviewStatusTrack}>
+                              <View style={[styles.adminOverviewStatusFill, { width: `${ratio * 100}%`, backgroundColor: item.color }]} />
+                            </View>
+                          </View>
+                        );
+                      })}
+                  </View>
+                </>
+              ) : null}
+
+              {adminPage === 'earnings' ? (
+                <>
+                  <View style={styles.adminDetailsFilterRow}>
+                    {['ALL', 'COMPLETED', 'PROJECTED'].map((filter) => (
+                      <Pressable
+                        key={filter}
+                        style={[
+                          styles.adminDetailsFilterChip,
+                          adminEarningFilter === filter && styles.adminDetailsFilterChipActive
+                        ]}
+                        onPress={() => setAdminEarningFilter(filter)}
+                      >
+                        <Text
+                          style={[
+                            styles.adminDetailsFilterChipText,
+                            adminEarningFilter === filter && styles.adminDetailsFilterChipTextActive
+                          ]}
+                        >
+                          {filter}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.adminOverviewKpiRow}>
+                    {[
+                      { label: 'Total', value: adminEarningMetrics.totalEarning, key: 'COMPLETED' },
+                      { label: 'Today', value: adminEarningMetrics.todayEarning, key: 'COMPLETED' },
+                      { label: 'Projected', value: adminEarningMetrics.projectedEarning, key: 'PROJECTED' }
+                    ]
+                      .filter((item) => adminEarningFilter === 'ALL' || adminEarningFilter === item.key)
+                      .map((item) => (
+                        <View key={item.label} style={styles.adminOverviewKpiPill}>
+                          <Text style={styles.adminOverviewKpiLabel}>{item.label}</Text>
+                          <Text style={styles.adminOverviewKpiValue}>{formatCurrency(item.value)}</Text>
+                        </View>
+                      ))}
+                  </View>
+                  <View style={styles.adminOverviewBarRow}>
+                    {renderAdminEarningsGraph('details')}
+                  </View>
+                  <View style={styles.adminOverviewKpiRow}>
+                    <View style={styles.adminOverviewKpiPill}>
+                      <Text style={styles.adminOverviewKpiLabel}>In {adminRange}</Text>
+                      <Text style={styles.adminOverviewKpiValue}>{formatCurrency(adminEarningMetrics.rangeEarning)}</Text>
+                    </View>
+                    <View style={styles.adminOverviewKpiPill}>
+                      <Text style={styles.adminOverviewKpiLabel}>Avg / Completed</Text>
+                      <Text style={styles.adminOverviewKpiValue}>{formatCurrency(adminEarningMetrics.avgPerCompleted)}</Text>
+                    </View>
+                    <View style={styles.adminOverviewKpiPill}>
+                      <Text style={styles.adminOverviewKpiLabel}>Completed Jobs</Text>
+                      <Text style={styles.adminOverviewKpiValue}>{adminEarningMetrics.completedCount}</Text>
+                    </View>
+                  </View>
+                </>
+              ) : null}
+
+              {adminPage === 'users' ? (
+                <>
+                  <View style={styles.adminDetailsFilterRow}>
+                    {['ALL', 'ACTIVE', 'DELETED', 'JOB_PICKER', 'JOB_POSTER'].map((filter) => (
+                      <Pressable
+                        key={filter}
+                        style={[
+                          styles.adminDetailsFilterChip,
+                          adminUserFilter === filter && styles.adminDetailsFilterChipActive
+                        ]}
+                        onPress={() => setAdminUserFilter(filter)}
+                      >
+                        <Text
+                          style={[
+                            styles.adminDetailsFilterChipText,
+                            adminUserFilter === filter && styles.adminDetailsFilterChipTextActive
+                          ]}
+                        >
+                          {filter === 'JOB_PICKER' ? 'PICKER' : filter === 'JOB_POSTER' ? 'POSTER' : filter}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.adminOverviewKpiRow}>
+                    {[
+                      { label: 'Total Users', value: adminUserMetrics.totalUsers, key: 'ALL' },
+                      { label: 'Active Users', value: adminUserMetrics.activeUsers, key: 'ACTIVE' },
+                      { label: 'Other Users', value: adminUserMetrics.deletedUsers + adminUserMetrics.adminCount, key: 'DELETED' },
+                      { label: 'Pickers', value: adminUserMetrics.pickers, key: 'JOB_PICKER' },
+                      { label: 'Posters', value: adminUserMetrics.posters, key: 'JOB_POSTER' }
+                    ]
+                      .filter((item) => adminUserFilter === 'ALL' || adminUserFilter === item.key)
+                      .slice(0, 3)
+                      .map((item) => (
+                        <View key={item.label} style={styles.adminOverviewKpiPill}>
+                          <Text style={styles.adminOverviewKpiLabel}>{item.label}</Text>
+                          <Text style={styles.adminOverviewKpiValue}>{item.value}</Text>
+                        </View>
+                      ))}
+                  </View>
+                  <View style={styles.adminDetailsBarsWrap}>
+                    {adminUserMetrics.monthPoints.map((item, idx) => {
+                      const height = 16 + ((Number(item.value) || 0) / adminUsersMax) * 86;
+                      const animatedHeight = adminUsersBarAnims[idx].interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, height]
+                      });
+                      return (
+                        <View key={item.key} style={styles.adminDetailsBarMonthCol}>
+                          <View style={styles.adminDetailsBarMonthTrack}>
+                            <Animated.View
+                              style={[
+                                styles.adminDetailsBarMonthFill,
+                                styles.adminDetailsBarMonthFillUsers,
+                                { height: animatedHeight }
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.adminDetailsAxisText}>{item.label}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.adminOverviewStatusList}>
+                    {[
+                      { key: 'ACTIVE', label: 'Active Users', value: adminUserMetrics.activeUsers, color: '#0F766E' },
+                      { key: 'DELETED', label: 'Deleted Users', value: adminUserMetrics.deletedUsers, color: '#B91C1C' },
+                      { key: 'JOB_PICKER', label: 'Job Pickers', value: adminUserMetrics.pickers, color: '#0369A1' },
+                      { key: 'JOB_POSTER', label: 'Job Posters', value: adminUserMetrics.posters, color: '#7C3AED' }
+                    ]
+                      .filter((item) => adminUserFilter === 'ALL' || adminUserFilter === item.key)
+                      .map((item) => {
+                        const ratio = adminUserMetrics.totalUsers ? Math.max(item.value / adminUserMetrics.totalUsers, 0.04) : 0.04;
+                        return (
+                          <View key={item.key} style={styles.adminOverviewStatusRow}>
+                            <Text style={styles.adminOverviewStatusLabel}>{item.label}</Text>
+                            <Text style={styles.adminOverviewStatusValue}>{item.value}</Text>
+                            <View style={styles.adminOverviewStatusTrack}>
+                              <View style={[styles.adminOverviewStatusFill, { width: `${ratio * 100}%`, backgroundColor: item.color }]} />
+                            </View>
+                          </View>
+                        );
+                      })}
+                  </View>
+                  <Text style={styles.adminDetailsFootText}>{`Joined today: ${adminUserMetrics.todayJoined} • Active rate: ${adminUserMetrics.activeRate}%`}</Text>
+                </>
+              ) : null}
+            </View>
+          ) : null}
+        </Animated.View>
       ) : null}
     </ScrollView>
   );
