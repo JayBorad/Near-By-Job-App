@@ -1163,6 +1163,449 @@ export const createStyles = (colors) =>
       fontWeight: '700',
       textAlign: 'center'
     },
+    adminOverviewWrap: {
+      marginTop: 12,
+      paddingHorizontal: 12,
+      gap: 10
+    },
+    adminOverviewFilterRow: {
+      flexDirection: 'row',
+      gap: 8
+    },
+    adminOverviewFilterChip: {
+      height: 30,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    adminOverviewFilterChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    adminOverviewFilterChipText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    adminOverviewFilterChipTextActive: {
+      color: colors.primary
+    },
+    adminOverviewHero: {
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12
+    },
+    adminOverviewHeroLabel: {
+      color: 'rgba(255,255,255,0.84)',
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    adminOverviewHeroTitle: {
+      marginTop: 2,
+      color: '#FFFFFF',
+      fontSize: 22,
+      fontWeight: '900'
+    },
+    adminOverviewHeroSub: {
+      marginTop: 3,
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    adminOverviewSectionCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 12
+    },
+    adminOverviewSectionHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    adminOverviewSectionTitle: {
+      color: colors.textMain,
+      fontSize: 15,
+      fontWeight: '800'
+    },
+    adminOverviewViewBtn: {
+      minHeight: 28,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    adminOverviewViewBtnText: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    adminOverviewKpiRow: {
+      marginTop: 10,
+      flexDirection: 'row',
+      gap: 7
+    },
+    adminOverviewKpiPill: {
+      flex: 1,
+      minHeight: 64,
+      borderRadius: 11,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 9,
+      paddingVertical: 8
+    },
+    adminOverviewKpiLabel: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    adminOverviewKpiValue: {
+      marginTop: 5,
+      color: colors.textMain,
+      fontSize: 16,
+      fontWeight: '900'
+    },
+    adminOverviewStatusList: {
+      marginTop: 10,
+      gap: 8
+    },
+    adminOverviewStatusRow: {
+      gap: 4
+    },
+    adminOverviewStatusLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    adminOverviewStatusValue: {
+      position: 'absolute',
+      right: 0,
+      top: 0,
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    adminOverviewStatusTrack: {
+      width: '100%',
+      height: 9,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+      backgroundColor: colors.sheet
+    },
+    adminOverviewStatusFill: {
+      height: '100%',
+      minWidth: 3,
+      borderRadius: 999
+    },
+    adminOverviewBarRow: {
+      marginTop: 10,
+      minHeight: 240,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 5
+    },
+    adminOverviewBarCol: {
+      flex: 1,
+      alignItems: 'center'
+    },
+    adminOverviewBarTrack: {
+      width: '100%',
+      maxWidth: 38,
+      height: 140,
+      borderRadius: 16,
+      backgroundColor: '#F2F4F7',
+      borderWidth: 1,
+      borderColor: '#D5DAE1',
+      justifyContent: 'flex-end',
+      overflow: 'hidden',
+      padding: 2
+    },
+    adminOverviewBarFill: {
+      width: '100%',
+      borderRadius: 13,
+      backgroundColor: '#197D74'
+    },
+    adminOverviewBarLabel: {
+      marginTop: 5,
+      color: colors.textSecondary,
+      fontSize: 9,
+      fontWeight: '700'
+    },
+    adminOverviewBarTop: {
+      marginBottom: 4,
+      color: colors.textSecondary,
+      fontSize: 9,
+      fontWeight: '700'
+    },
+    adminThemeGraphMain: {
+      flex: 1,
+      minHeight: 224,
+      position: 'relative',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: '#D7DCE3',
+      backgroundColor: '#F8FAFC',
+      paddingHorizontal: 8,
+      paddingTop: 8,
+      paddingBottom: 6
+    },
+    adminThemeGraphCanvasWrap: {
+      flex: 1,
+      position: 'relative'
+    },
+    adminThemeGraphSvg: {
+      alignSelf: 'stretch'
+    },
+    adminThemeGraphGrid: {
+      position: 'absolute',
+      left: 10,
+      right: 10,
+      top: 34,
+      bottom: 34,
+      justifyContent: 'space-between'
+    },
+    adminThemeGraphGridRow: {
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    adminThemeGraphGridLine: {
+      flex: 1,
+      borderTopWidth: 1,
+      borderColor: '#D8DEE7',
+      borderStyle: 'dashed',
+      marginRight: 8
+    },
+    adminThemeGraphScaleText: {
+      width: 34,
+      color: '#7A8493',
+      fontSize: 10,
+      fontWeight: '700',
+      textAlign: 'right'
+    },
+    adminThemeGraphBarsRow: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 6,
+      paddingTop: 8,
+      paddingBottom: 0,
+      paddingRight: 34
+    },
+    adminThemeGraphBarCol: {
+      flex: 1,
+      alignItems: 'center'
+    },
+    adminThemeGraphBarValue: {
+      minHeight: 14,
+      marginBottom: 4,
+      color: '#647084',
+      fontSize: 9,
+      fontWeight: '700'
+    },
+    adminThemeGraphBarTrack: {
+      width: '100%',
+      maxWidth: 40,
+      height: 142,
+      borderRadius: 20,
+      borderWidth: 1,
+      justifyContent: 'flex-end',
+      overflow: 'hidden',
+      padding: 2
+    },
+    adminThemeGraphBarFill: {
+      width: '100%',
+      borderRadius: 16
+    },
+    adminThemeGraphBarFillPeak: {
+      shadowColor: '#0F766E',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.18,
+      shadowRadius: 4,
+      elevation: 2
+    },
+    adminThemeGraphBarLabel: {
+      marginTop: 6,
+      color: '#657184',
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    adminThemeGraphYAxisWrap: {
+      position: 'absolute',
+      right: 0,
+      top: 18,
+      bottom: 40,
+      justifyContent: 'space-between',
+      alignItems: 'flex-end'
+    },
+    adminThemeGraphXRow: {
+      position: 'absolute',
+      left: 10,
+      right: 40,
+      bottom: 2,
+      flexDirection: 'row',
+      justifyContent: 'space-between'
+    },
+    adminOverviewDualBar: {
+      marginTop: 12
+    },
+    adminOverviewDualTrack: {
+      width: '100%',
+      height: 12,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      overflow: 'hidden'
+    },
+    adminOverviewDualFill: {
+      height: '100%'
+    },
+    adminOverviewDualLabel: {
+      marginTop: 5,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    adminDetailsCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingTop: 11,
+      paddingBottom: 12
+    },
+    adminDetailsHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 10
+    },
+    adminDetailsBackBtn: {
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    adminDetailsBackText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    adminDetailsTitle: {
+      flex: 1,
+      textAlign: 'center',
+      marginLeft: -18,
+      color: colors.textMain,
+      fontSize: 15,
+      fontWeight: '800'
+    },
+    adminDetailsRefreshBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primarySoft
+    },
+    adminDetailsFilterRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 7
+    },
+    adminDetailsFilterChip: {
+      height: 30,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 10,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    adminDetailsFilterChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    adminDetailsFilterChipText: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    adminDetailsFilterChipTextActive: {
+      color: colors.primary
+    },
+    adminDetailsTrendCard: {
+      marginTop: 12,
+      minHeight: 112
+    },
+    adminDetailsBarsWrap: {
+      marginTop: 12,
+      minHeight: 170,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 7
+    },
+    adminDetailsBarMonthCol: {
+      flex: 1,
+      alignItems: 'center'
+    },
+    adminDetailsBarMonthTrack: {
+      width: '100%',
+      maxWidth: 42,
+      height: 136,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: '#D5DAE1',
+      backgroundColor: '#F2F4F7',
+      justifyContent: 'flex-end',
+      overflow: 'hidden',
+      padding: 2
+    },
+    adminDetailsBarMonthFill: {
+      width: '100%',
+      borderRadius: 13
+    },
+    adminDetailsBarMonthFillTotal: {
+      position: 'absolute',
+      left: 2,
+      right: 2,
+      bottom: 2,
+      backgroundColor: '#A7DAD4'
+    },
+    adminDetailsBarMonthFillCompleted: {
+      backgroundColor: '#197D74'
+    },
+    adminDetailsBarMonthFillUsers: {
+      backgroundColor: '#197D74'
+    },
+    adminDetailsXAxis: {
+      marginTop: -6,
+      flexDirection: 'row',
+      justifyContent: 'space-between'
+    },
+    adminDetailsAxisText: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    adminDetailsFootText: {
+      marginTop: 10,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
     tabBarOuter: {
       position: 'absolute',
       left: 0,
