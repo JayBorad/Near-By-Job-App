@@ -1761,6 +1761,12 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   }, [activeTab, token, userRole]);
 
   useEffect(() => {
+    if (!token || userRole !== 'ADMIN' || activeTab !== 'dashboard') return;
+    fetchAdminJobs();
+    fetchAdminUsers();
+  }, [activeTab, token, userRole]);
+
+  useEffect(() => {
     if (!token || userRole !== 'USER' || userMode !== 'JOB_PICKER' || activeTab !== 'explore') return;
     fetchPickerJobs();
   }, [activeTab, token, userRole, userMode]);
