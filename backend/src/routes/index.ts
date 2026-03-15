@@ -7,6 +7,7 @@ import applicationRoutes from '../modules/application/application.routes.js';
 import chatRoutes from '../modules/chat/chat.routes.js';
 import reviewRoutes from '../modules/review/review.routes.js';
 import notificationRoutes from '../modules/notification/notification.routes.js';
+import reportRoutes from '../modules/report/report.routes.js';
 
 const router = express.Router();
 
@@ -23,5 +24,6 @@ router.use('/chat', chatRoutes);
 router.use('/chats', chatRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/reports', reportRoutes);
 
 export default router;
