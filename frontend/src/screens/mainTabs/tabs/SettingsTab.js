@@ -3,6 +3,7 @@ import {
   AdminCategoriesPage,
   CategoryPage,
   ProfilePage,
+  ReportsPage,
   ReviewsPage,
   SettingsPage,
   UserModePage
@@ -26,7 +27,13 @@ export function SettingsTab({
   onChangeMode,
   onOpenCategories,
   onOpenReviews,
+  onOpenReports,
   onBackFromReviews,
+  onBackFromReports,
+  reports,
+  isReportsLoading,
+  onRefreshReports,
+  onCreateReport,
   isSavingProfile,
   isChangingMode,
   isUploadingAvatar,
@@ -142,6 +149,20 @@ export function SettingsTab({
     );
   }
 
+  if (settingsPage === 'reports' && userRole !== 'ADMIN') {
+    return (
+      <ReportsPage
+        reports={reports}
+        isLoading={isReportsLoading}
+        onBack={onBackFromReports}
+        onRefresh={onRefreshReports}
+        onCreateReport={onCreateReport}
+        styles={styles}
+        colors={colors}
+      />
+    );
+  }
+
   return (
     <SettingsPage
       user={user}
@@ -151,6 +172,7 @@ export function SettingsTab({
       onOpenMode={onOpenMode}
       onOpenCategories={onOpenCategories}
       onOpenReviews={onOpenReviews}
+      onOpenReports={onOpenReports}
       onRequestLogout={onRequestLogout}
       styles={styles}
       colors={colors}

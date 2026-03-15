@@ -1965,6 +1965,274 @@ export const createStyles = (colors) =>
       fontSize: 12,
       marginTop: 1
     },
+    reportBannerCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 10,
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    reportBannerIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    reportBannerTextWrap: {
+      flex: 1,
+      marginLeft: 8
+    },
+    reportBannerTitle: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    reportBannerSubtitle: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 11
+    },
+    reportCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      padding: 11,
+      marginBottom: 10
+    },
+    reportCardHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8
+    },
+    reportCardTitle: {
+      flex: 1,
+      color: colors.textMain,
+      fontSize: 14,
+      fontWeight: '800'
+    },
+    reportStatusPill: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 4
+    },
+    reportStatusPillText: {
+      fontSize: 10,
+      fontWeight: '800'
+    },
+    reportCardDescription: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    reportCardMeta: {
+      marginTop: 7,
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    reportFab: {
+      position: 'absolute',
+      right: 18,
+      bottom: TAB_BAR_HEIGHT - 4,
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.2,
+      shadowRadius: 12,
+      elevation: 8
+    },
+    reportUploadRow: {
+      marginTop: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8
+    },
+    reportUploadBtn: {
+      flex: 1,
+      minHeight: 38,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    reportUploadBtnText: {
+      marginLeft: 6,
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    reportImageRemoveBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface
+    },
+    reportPreviewImage: {
+      width: '100%',
+      height: 160,
+      borderRadius: 12,
+      marginTop: 8
+    },
+    reportDetailModal: {
+      width: '100%',
+      maxWidth: 420,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 14
+    },
+    reportDetailHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 8
+    },
+    reportDetailHeadingWrap: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8
+    },
+    reportDetailHeadingIcon: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 1
+    },
+    reportDetailCloseBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    reportDetailTitle: {
+      flex: 1,
+      color: colors.textMain,
+      fontSize: 16,
+      fontWeight: '800'
+    },
+    reportDetailStatusRow: {
+      marginTop: 8,
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    reportDetailDescription: {
+      marginTop: 8,
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 19
+    },
+    reportDetailImage: {
+      width: '100%',
+      height: 190,
+      borderRadius: 12,
+      marginTop: 10
+    },
+    reportDetailMeta: {
+      marginTop: 8,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    reportDetailMetaCard: {
+      marginTop: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.sheet,
+      padding: 10,
+      gap: 8
+    },
+    reportDetailMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8
+    },
+    reportDetailMetaLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    reportDetailMetaValue: {
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '700',
+      textAlign: 'right',
+      flex: 1
+    },
+    reportAdminToolbar: {
+      marginBottom: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
+    reportStatusButtonsRow: {
+      marginTop: 10,
+      marginBottom: 12,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8
+    },
+    reportStatusActionBtn: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      backgroundColor: colors.sheet
+    },
+    reportStatusActionBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft
+    },
+    reportStatusActionBtnText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    reportStatusActionBtnTextActive: {
+      color: colors.primary
+    },
+    reportConfirmModal: {
+      width: '100%',
+      maxWidth: 380,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 14
+    },
     logoutBtn: {
       marginTop: 14,
       height: 44,

@@ -4738,6 +4738,273 @@ function UserModePage({ user, onBack, onChangeMode, isChangingMode, styles, colo
   );
 }
 
+function ReportsPage({
+  reports,
+  isLoading,
+  onBack,
+  onRefresh,
+  onCreateReport,
+  styles,
+  colors
+}) {
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    imageData: '',
+    imageUri: ''
+  });
+
+  const reportStatusTone = (status) => {
+    const normalized = String(status || '').toUpperCase();
+    if (normalized === 'RESOLVED') return { bg: '#DCFCE7', text: '#166534' };
+    if (normalized === 'REJECTED') return { bg: '#FEE2E2', text: '#991B1B' };
+    if (normalized === 'IN_REVIEW') return { bg: '#DBEAFE', text: '#1D4ED8' };
+    return { bg: colors.primarySoft, text: colors.primary };
+  };
+
+  const resetForm = () => {
+    setForm({
+      title: '',
+      description: '',
+      imageData: '',
+      imageUri: ''
+    });
+  };
+
+  const pickReportImage = async () => {
+    try {
+      if (Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.82,
+        base64: true
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      if (!asset.base64) return;
+      const normalizedMimeType = (asset.mimeType || 'image/jpeg').toLowerCase();
+      setForm((prev) => ({
+        ...prev,
+        imageData: `data:${normalizedMimeType};base64,${asset.base64}`,
+        imageUri: asset.uri || ''
+      }));
+    } catch (_error) {
+      // no-op: parent flow already handles API errors
+    }
+  };
+
+  const submitReport = async () => {
+    const title = String(form.title || '').trim();
+    const description = String(form.description || '').trim();
+    if (!title || !description || isSubmitting) return;
+
+    try {
+      setIsSubmitting(true);
+      const created = await onCreateReport({
+        title,
+        description,
+        imageData: form.imageData || ''
+      });
+      if (created) {
+        setShowCreateModal(false);
+        resetForm();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const items = Array.isArray(reports) ? reports : [];
+
+  return (
+    <View style={styles.settingsScreen}>
+      <View style={styles.settingsNav}>
+        <Pressable style={styles.settingsBackBtn} onPress={onBack}>
+          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          <Text style={styles.settingsBackText}>Settings</Text>
+        </Pressable>
+        <Text style={styles.settingsNavTitle}>Reports</Text>
+        <View style={styles.settingsNavRight}>
+          <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>
+            <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.reportBannerCard}>
+        <View style={styles.reportBannerIcon}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+        </View>
+        <View style={styles.reportBannerTextWrap}>
+          <Text style={styles.reportBannerTitle}>Submit and Track Reports</Text>
+          <Text style={styles.reportBannerSubtitle}>New reports start as pending until reviewed by admin.</Text>
+        </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
+        {isLoading ? (
+          <AdminListState mode="loading" title="Loading reports..." subtitle="Please wait..." colors={colors} />
+        ) : items.length ? (
+          items.map((item) => {
+            const tone = reportStatusTone(item?.status);
+            return (
+              <Pressable key={item.id} style={styles.reportCard} onPress={() => setSelectedReport(item)}>
+                <View style={styles.reportCardHead}>
+                  <Text style={styles.reportCardTitle} numberOfLines={1}>
+                    {item?.title || 'Untitled report'}
+                  </Text>
+                  <View style={[styles.reportStatusPill, { backgroundColor: tone.bg }]}>
+                    <Text style={[styles.reportStatusPillText, { color: tone.text }]}>
+                      {String(item?.status || 'PENDING').replace('_', ' ')}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.reportCardDescription} numberOfLines={1}>
+                  {item?.description || '-'}
+                </Text>
+                <Text style={styles.reportCardMeta}>
+                  {item?.createdAt ? new Date(item.createdAt).toLocaleString('en-GB') : ''}
+                </Text>
+              </Pressable>
+            );
+          })
+        ) : (
+          <AdminListState
+            mode="empty"
+            title="No reports submitted"
+            subtitle="Tap + to submit your first report."
+            colors={colors}
+            emptySource={ADMIN_EMPTY_ANIMATION}
+          />
+        )}
+      </ScrollView>
+
+      <Pressable style={styles.reportFab} onPress={() => setShowCreateModal(true)}>
+        <Ionicons name="document-text-outline" size={23} color="#FFFFFF" />
+      </Pressable>
+
+      <Modal visible={showCreateModal} transparent animationType="fade" onRequestClose={() => setShowCreateModal(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowCreateModal(false)}>
+          <Pressable style={styles.optionModal} onPress={() => {}}>
+            <Text style={styles.optionTitle}>Create Report</Text>
+            <TextInput
+              value={form.title}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, title: value }))}
+              placeholder="Title (required)"
+              placeholderTextColor={colors.textSecondary}
+              style={styles.categoryCreateInput}
+            />
+            <TextInput
+              value={form.description}
+              onChangeText={(value) => setForm((prev) => ({ ...prev, description: value }))}
+              placeholder="Description (required)"
+              placeholderTextColor={colors.textSecondary}
+              style={[styles.categoryCreateInput, styles.categoryCreateDescription]}
+              multiline
+            />
+            <View style={styles.reportUploadRow}>
+              <Pressable style={styles.reportUploadBtn} onPress={pickReportImage}>
+                <Ionicons name="image-outline" size={15} color={colors.primary} />
+                <Text style={styles.reportUploadBtnText}>{form.imageData ? 'Change Image' : 'Upload Image (optional)'}</Text>
+              </Pressable>
+              {form.imageData ? (
+                <Pressable
+                  style={styles.reportImageRemoveBtn}
+                  onPress={() => setForm((prev) => ({ ...prev, imageData: '', imageUri: '' }))}
+                >
+                  <Ionicons name="close" size={14} color={colors.danger} />
+                </Pressable>
+              ) : null}
+            </View>
+            {form.imageUri ? <Image source={{ uri: form.imageUri }} style={styles.reportPreviewImage} resizeMode="cover" /> : null}
+            <View style={styles.optionActionsRow}>
+              <Pressable
+                style={[styles.optionCancel, styles.optionActionBtn]}
+                onPress={() => {
+                  setShowCreateModal(false);
+                  resetForm();
+                }}
+              >
+                <Text style={styles.optionCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.modalBtnPrimary,
+                  styles.optionActionBtn,
+                  (!String(form.title || '').trim() || !String(form.description || '').trim() || isSubmitting)
+                    ? styles.modalBtnDisabled
+                    : null
+                ]}
+                onPress={submitReport}
+                disabled={!String(form.title || '').trim() || !String(form.description || '').trim() || isSubmitting}
+              >
+                <Text style={styles.modalBtnPrimaryText}>{isSubmitting ? 'Submitting...' : 'Report'}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={Boolean(selectedReport)} transparent animationType="fade" onRequestClose={() => setSelectedReport(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.reportDetailModal}>
+            <View style={styles.reportDetailHeader}>
+              <View style={styles.reportDetailHeadingWrap}>
+                <View style={styles.reportDetailHeadingIcon}>
+                  <Ionicons name="alert-circle-outline" size={16} color={colors.primary} />
+                </View>
+                <Text style={styles.reportDetailTitle} numberOfLines={2}>
+                  {selectedReport?.title || ''}
+                </Text>
+              </View>
+              <Pressable style={styles.reportDetailCloseBtn} onPress={() => setSelectedReport(null)}>
+                <Ionicons name="close" size={18} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={styles.reportDetailStatusRow}>
+              <View style={[styles.reportStatusPill, { backgroundColor: reportStatusTone(selectedReport?.status).bg }]}>
+                <Text style={[styles.reportStatusPillText, { color: reportStatusTone(selectedReport?.status).text }]}>
+                  {String(selectedReport?.status || 'PENDING').replace('_', ' ')}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.reportDetailDescription}>{selectedReport?.description || '-'}</Text>
+            {selectedReport?.imageUrl ? (
+              <Image source={{ uri: selectedReport.imageUrl }} style={styles.reportDetailImage} resizeMode="cover" />
+            ) : null}
+
+            <View style={styles.reportDetailMetaCard}>
+              <View style={styles.reportDetailMetaRow}>
+                <Text style={styles.reportDetailMetaLabel}>Date</Text>
+                <Text style={styles.reportDetailMetaValue}>
+                  {selectedReport?.createdAt ? new Date(selectedReport.createdAt).toLocaleString('en-GB') : '-'}
+                </Text>
+              </View>
+              <View style={styles.reportDetailMetaRow}>
+                <Text style={styles.reportDetailMetaLabel}>Status</Text>
+                <Text style={styles.reportDetailMetaValue}>
+                  {String(selectedReport?.status || 'PENDING').replace('_', ' ')}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 function NotificationsPage({
   notifications,
   isLoading,
@@ -4865,6 +5132,7 @@ function SettingsPage({
   onOpenMode,
   onOpenCategories,
   onOpenReviews,
+  onOpenReports,
   onRequestLogout,
   styles,
   colors
@@ -4945,6 +5213,16 @@ function SettingsPage({
             colors={colors}
           />
         ) : null}
+        {user?.role !== 'ADMIN' ? (
+          <SettingsOption
+            icon="alert-circle-outline"
+            title="Reports"
+            subtitle="Create and track your submitted reports"
+            onPress={onOpenReports}
+            styles={styles}
+            colors={colors}
+          />
+        ) : null}
         <SettingsOption
           icon="notifications-outline"
           title="Notifications"
@@ -5001,6 +5279,7 @@ export {
   MyJobDetailsPage,
   PickerJobsPage,
   MyApplicationsPage,
+  ReportsPage,
   ReviewsPage,
   NotificationsPage,
   SettingsPage
