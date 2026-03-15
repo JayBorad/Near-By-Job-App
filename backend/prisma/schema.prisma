@@ -74,6 +74,13 @@ enum NotificationType {
   ADMIN_JOB_UPDATED
 }
 
+enum ReportStatus {
+  PENDING
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+}
+
 model User {
   id             String            @id @default(uuid()) @db.Uuid
   supabaseAuthId String            @unique @db.Uuid
@@ -100,10 +107,30 @@ model User {
   sentMessages   ChatMessage[]     @relation("ChatSender")
   recvMessages   ChatMessage[]     @relation("ChatReceiver")
   notifications  Notification[]
+  reportsCreated Report[]          @relation("ReportCreatedBy")
+  reportsReviewed Report[]         @relation("ReportReviewedBy")
 
   @@index([role])
   @@index([userMode])
   @@index([status])
+}
+
+model Report {
+  id          String       @id @default(uuid()) @db.Uuid
+  title       String
+  description String
+  imageUrl    String?
+  status      ReportStatus @default(PENDING)
+  createdBy   String       @db.Uuid
+  reviewedBy  String?      @db.Uuid
+  reviewedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  creator     User         @relation("ReportCreatedBy", fields: [createdBy], references: [id])
+  reviewer    User?        @relation("ReportReviewedBy", fields: [reviewedBy], references: [id])
+
+  @@index([createdBy, createdAt])
+  @@index([status, createdAt])
 }
 
 model Category {
