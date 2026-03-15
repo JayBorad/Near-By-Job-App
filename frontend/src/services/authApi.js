@@ -449,3 +449,56 @@ export async function deleteAllNotifications({ token }) {
     }
   });
 }
+
+export async function createReport({ token, payload }) {
+  return apiRequest('/reports', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: payload
+  });
+}
+
+export async function getMyReports({ token }) {
+  return apiRequest('/reports/mine', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function getAllReportsAdmin({ token, page = 1, limit = 100, status = 'ALL', q }) {
+  const query = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    status: String(status || 'ALL')
+  });
+  if (q) query.set('q', q);
+  return apiRequest(`/reports?${query.toString()}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function getReportById({ token, reportId }) {
+  return apiRequest(`/reports/${reportId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
+export async function updateReportStatus({ token, reportId, status }) {
+  return apiRequest(`/reports/${reportId}/status`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: { status }
+  });
+}

@@ -46,9 +46,13 @@ import {
   updateProfileAvatar,
   deleteAllNotifications,
   deleteNotification,
+  createReport,
+  getMyReports,
+  getAllReportsAdmin,
   getMyNotifications,
   markAllNotificationsAsRead,
-  markNotificationAsRead
+  markNotificationAsRead,
+  updateReportStatus
 } from '../services/authApi';
 import { io } from 'socket.io-client';
 import { COUNTRY_CODES } from '../constants/countryCodes';
@@ -180,6 +184,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [isMyApplicationsLoading, setIsMyApplicationsLoading] = useState(false);
   const [myReceivedReviews, setMyReceivedReviews] = useState(null);
   const [isMyReceivedReviewsLoading, setIsMyReceivedReviewsLoading] = useState(false);
+  const [reports, setReports] = useState([]);
+  const [isReportsLoading, setIsReportsLoading] = useState(false);
+  const [adminReports, setAdminReports] = useState([]);
+  const [isAdminReportsLoading, setIsAdminReportsLoading] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [isUpdatingMyJobStatus, setIsUpdatingMyJobStatus] = useState(false);
   const [isApplyingJob, setIsApplyingJob] = useState(false);
@@ -1052,6 +1060,83 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
+  const fetchReports = async ({ forceLoader = false } = {}) => {
+    if (!token || userRole !== 'USER') return;
+    try {
+      if (forceLoader || !reports.length) {
+        setIsReportsLoading(true);
+      }
+      const response = await getMyReports({ token });
+      setReports(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      showPopup('Reports Failed', error?.message || 'Unable to load reports.', 'error');
+    } finally {
+      setIsReportsLoading(false);
+    }
+  };
+
+  const submitReport = async ({ title, description, imageData }) => {
+    if (!token || userRole !== 'USER') return false;
+    try {
+      await createReport({
+        token,
+        payload: {
+          title: String(title || '').trim(),
+          description: String(description || '').trim(),
+          ...(imageData ? { imageData } : {})
+        }
+      });
+      await fetchReports({ forceLoader: false });
+      showPopup('Report Submitted', 'Your report has been submitted and is pending review.', 'success');
+      return true;
+    } catch (error) {
+      showPopup('Submit Failed', error?.message || 'Unable to submit report.', 'error');
+      return false;
+    }
+  };
+
+  const fetchAdminReports = async ({ forceLoader = false, status = 'ALL', q = '' } = {}) => {
+    if (!token || userRole !== 'ADMIN') return;
+    try {
+      if (forceLoader || !adminReports.length) {
+        setIsAdminReportsLoading(true);
+      }
+      const response = await getAllReportsAdmin({ token, status, q, page: 1, limit: 100 });
+      const records = response?.data?.reports || [];
+      setAdminReports(Array.isArray(records) ? records : []);
+    } catch (error) {
+      showPopup('Reports Failed', error?.message || 'Unable to load reports.', 'error');
+    } finally {
+      setIsAdminReportsLoading(false);
+    }
+  };
+
+  const changeAdminReportStatus = async (reportId, nextStatus) => {
+    if (!token || userRole !== 'ADMIN' || !reportId) return false;
+    const normalizedStatus = String(nextStatus || '').trim().toUpperCase();
+    if (!['PENDING', 'IN_REVIEW', 'RESOLVED', 'REJECTED'].includes(normalizedStatus)) return false;
+    try {
+      const response = await updateReportStatus({ token, reportId, status: normalizedStatus });
+      const updatedReport = response?.data;
+      setAdminReports((prev) =>
+        prev.map((item) =>
+          item.id === reportId
+            ? {
+                ...item,
+                ...(updatedReport || {}),
+                status: updatedReport?.status || normalizedStatus
+              }
+            : item
+        )
+      );
+      showPopup('Report Updated', `Report status changed to ${normalizedStatus.replace('_', ' ')}.`, 'success');
+      return true;
+    } catch (error) {
+      showPopup('Update Failed', error?.message || 'Unable to update report status.', 'error');
+      return false;
+    }
+  };
+
   const submitReviewForJobPicker = async ({ jobId, revieweeId, rating, comment }) => {
     if (!token) return;
     try {
@@ -1751,6 +1836,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   }, [activeTab, settingsPage, token, userRole]);
 
   useEffect(() => {
+    if (!token || userRole !== 'USER' || activeTab !== 'settings' || settingsPage !== 'reports') return;
+    fetchReports({ forceLoader: true });
+  }, [activeTab, settingsPage, token, userRole]);
+
+  useEffect(() => {
     if (!token || userRole !== 'USER' || userMode !== 'JOB_POSTER' || activeTab !== 'explore') return;
     fetchMyJobs();
   }, [activeTab, token, userRole, userMode]);
@@ -1774,6 +1864,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   useEffect(() => {
     if (!token || userRole !== 'USER' || activeTab !== 'messages') return;
     fetchChatConversations({ forceLoader: true });
+  }, [activeTab, token, userRole]);
+
+  useEffect(() => {
+    if (!token || userRole !== 'ADMIN' || activeTab !== 'messages') return;
+    fetchAdminReports({ forceLoader: true });
   }, [activeTab, token, userRole]);
 
   useEffect(() => {
@@ -2087,10 +2182,12 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
             onOpenProfile={() => switchSettingsPage('profile')}
             onOpenMode={() => switchSettingsPage('mode')}
             onOpenReviews={() => switchSettingsPage('reviews')}
+            onOpenReports={() => switchSettingsPage('reports')}
             onOpenNotifications={openNotificationsPage}
             onBackFromProfile={() => switchSettingsPage('main')}
             onBackFromMode={() => switchSettingsPage('main')}
             onBackFromReviews={() => switchSettingsPage('main')}
+            onBackFromReports={() => switchSettingsPage('main')}
             onBackFromCategories={() => switchSettingsPage('main')}
             onRequestLogout={() => setShowLogoutConfirm(true)}
             onOpenAvatarOptions={() => setShowAvatarOptions(true)}
@@ -2161,6 +2258,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
             myReceivedReviews={myReceivedReviews}
             isMyReceivedReviewsLoading={isMyReceivedReviewsLoading}
             onRefreshMyReceivedReviews={() => fetchMyReceivedReviews({ forceLoader: true })}
+            reports={reports}
+            isReportsLoading={isReportsLoading}
+            onRefreshReports={() => fetchReports({ forceLoader: true })}
+            onCreateReport={submitReport}
             onOpenChatWithJobPoster={(application) =>
               openChatSession({
                 job: application?.job,
@@ -2205,6 +2306,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
             adminUsers={adminUsers}
             isAdminUsersLoading={isAdminUsersLoading}
             onRefreshAdminUsers={() => fetchAdminUsers({ forceLoader: true })}
+            adminReports={adminReports}
+            isAdminReportsLoading={isAdminReportsLoading}
+            onRefreshAdminReports={(params = {}) => fetchAdminReports({ forceLoader: true, ...params })}
+            onUpdateAdminReportStatus={changeAdminReportStatus}
             onGetUserReviews={getReceivedReviewsByUserForAdmin}
             selectedAdminUserId={adminSelectedUserId}
             onAdminUserDetailOpened={clearAdminSelectedUserId}
