@@ -75,6 +75,7 @@ const getNotificationIconName = (notification) => {
   if (type === 'JOB_UPDATED') return 'create-outline';
   if (type === 'JOB_CANCELLED') return 'alert-circle';
   if (type === 'ADMIN_JOB_UPDATED') return 'shield-checkmark-outline';
+  if (type === 'CHAT_MESSAGE') return 'chatbubble-ellipses-outline';
   return notification?.icon || 'notifications';
 };
 
@@ -5019,7 +5020,9 @@ function NotificationsPage({
   colors
 }) {
   const items = Array.isArray(notifications) ? notifications : [];
-  const unreadCount = items.filter((item) => !item?.isRead).length;
+  const unreadCount = items.filter(
+    (item) => !item?.isRead && String(item?.type || '').toUpperCase() !== 'CHAT_MESSAGE'
+  ).length;
 
   return (
     <View style={styles.settingsScreen}>

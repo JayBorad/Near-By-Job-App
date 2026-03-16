@@ -136,8 +136,11 @@ const getNotificationIconName = (notification) => {
   if (type === 'JOB_UPDATED') return 'create-outline';
   if (type === 'JOB_CANCELLED') return 'alert-circle';
   if (type === 'ADMIN_JOB_UPDATED') return 'shield-checkmark-outline';
+  if (type === 'CHAT_MESSAGE') return 'chatbubble-ellipses-outline';
   return notification?.icon || 'notifications';
 };
+
+const isUuidValue = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
 
 export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -274,13 +277,65 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const peerOnlinePollRef = useRef(null);
   const conversationRefreshTimerRef = useRef(null);
   const unreadNotificationCount = useMemo(
-    () => notifications.filter((item) => !item?.isRead).length,
+    () =>
+      notifications.filter(
+        (item) => !item?.isRead && String(item?.type || '').toUpperCase() !== 'CHAT_MESSAGE'
+      ).length,
     [notifications]
   );
   const activeChatSessionRef = useRef(null);
   const localUserIdRef = useRef(localUser?.id || null);
   const contentFade = useRef(new Animated.Value(1)).current;
   const contentShift = useRef(new Animated.Value(0)).current;
+  const ensureSocketConnected = (timeoutMs = 8000) =>
+    new Promise((resolve, reject) => {
+      const socket = socketRef.current;
+      if (!socket) {
+        reject(new Error('Chat service is unavailable right now. Please try again.'));
+        return;
+      }
+      if (socket.connected) {
+        setIsSocketConnected(true);
+        resolve(true);
+        return;
+      }
+
+      let settled = false;
+      const cleanup = () => {
+        socket.off('connect', onConnect);
+        socket.off('connect_error', onConnectError);
+        clearTimeout(timer);
+      };
+      const onConnect = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        setIsSocketConnected(true);
+        resolve(true);
+      };
+      const onConnectError = (error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        setIsSocketConnected(false);
+        reject(new Error(error?.message || 'Chat is still connecting. Please try again.'));
+      };
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        setIsSocketConnected(false);
+        reject(new Error('Chat connection timed out. Please check your internet and try again.'));
+      }, timeoutMs);
+
+      socket.on('connect', onConnect);
+      socket.on('connect_error', onConnectError);
+      try {
+        socket.connect();
+      } catch (_error) {
+        onConnectError(_error);
+      }
+    });
   const emitWithAck = (eventName, payload, timeoutMs = 8000) =>
     new Promise((resolve, reject) => {
       const socket = socketRef.current;
@@ -965,11 +1020,39 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         setPickerExplorePage('applications');
         await fetchMyApplications({ forceLoader: true });
       }
+      return;
+    }
+
+    if (actionPage === 'MESSAGES') {
+      setActiveTab('messages');
+      if (userRole !== 'USER') return;
+      const senderId = notification?.applicationId || null;
+      const conversations = await fetchChatConversations({ forceLoader: true, silentError: true });
+      const matched = (Array.isArray(conversations) ? conversations : []).find(
+        (item) => item?.job?.id === jobId && (!senderId || item?.peer?.id === senderId)
+      );
+
+      if (matched?.job?.id && matched?.peer?.id) {
+        await openChatSession({ job: matched.job, peer: matched.peer });
+        return;
+      }
+
+      showPopup('Chat Not Found', 'This chat is not available right now.', 'warning');
     }
   };
 
   const readNotificationById = async (notificationId, { silent = false } = {}) => {
-    if (!token || !notificationId) return;
+    if (!notificationId) return;
+    if (!isUuidValue(notificationId) || !token) {
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === notificationId
+            ? { ...item, isRead: true, readAt: item?.readAt || new Date().toISOString() }
+            : item
+        )
+      );
+      return;
+    }
     try {
       const response = await markNotificationAsRead({ token, notificationId });
       const updated = response?.data;
@@ -995,7 +1078,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   };
 
   const deleteNotificationById = async (notificationId) => {
-    if (!token || !notificationId) return;
+    if (!notificationId) return;
+    if (!isUuidValue(notificationId) || !token) {
+      setNotifications((prev) => prev.filter((item) => item.id !== notificationId));
+      return;
+    }
     try {
       await deleteNotification({ token, notificationId });
       setNotifications((prev) => prev.filter((item) => item.id !== notificationId));
@@ -1696,11 +1783,14 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         setIsChatConversationsLoading(true);
       }
       const response = await getChatConversations({ token });
-      setChatConversations(Array.isArray(response?.data) ? response.data : []);
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      setChatConversations(rows);
+      return rows;
     } catch (error) {
       if (!silentError) {
         showPopup('Chat Failed', error?.message || 'Unable to load chat conversations.', 'error');
       }
+      return [];
     } finally {
       setIsChatConversationsLoading(false);
     }
@@ -1728,6 +1818,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
 
   const openChatSession = async ({ job, peer }) => {
     if (!job?.id || !peer?.id) return;
+    const previousSession = activeChatSessionRef.current;
+    if (previousSession?.jobId && socketRef.current?.connected) {
+      socketRef.current.emit('leave_job_room', { jobId: previousSession.jobId });
+    }
     const nextSession = {
       jobId: job.id,
       jobTitle: job.title || 'Job Chat',
@@ -1742,6 +1836,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   };
 
   const closeChatSession = () => {
+    const currentSession = activeChatSessionRef.current;
+    if (currentSession?.jobId && socketRef.current?.connected) {
+      socketRef.current.emit('leave_job_room', { jobId: currentSession.jobId });
+    }
     setShowChatModal(false);
     setActiveChatSession(null);
     setChatMessages([]);
@@ -1769,9 +1867,15 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const sendChatMessage = async () => {
     const messageText = String(chatInput || '').trim();
     if (!messageText || !activeChatSession?.jobId || !activeChatSession?.peerId || !socketRef.current) return;
+    setChatInput('');
     if (!socketRef.current.connected) {
-      showPopup('Chat Connecting', 'Please wait a moment and send again.', 'warning');
-      return;
+      try {
+        await ensureSocketConnected(9000);
+      } catch (error) {
+        setChatInput((prev) => (String(prev || '').trim() ? prev : messageText));
+        showPopup('Chat Connecting', error?.message || 'Please wait a moment and send again.', 'warning');
+        return;
+      }
     }
     try {
       setIsSendingChatMessage(true);
@@ -1792,8 +1896,8 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         },
         9000
       );
-      setChatInput('');
     } catch (error) {
+      setChatInput((prev) => (String(prev || '').trim() ? prev : messageText));
       showPopup('Send Failed', error?.message || 'Unable to send message.', 'error');
     } finally {
       setIsSendingChatMessage(false);
@@ -1894,8 +1998,12 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   useEffect(() => {
     if (!token || !['USER', 'ADMIN'].includes(userRole)) return;
     const socket = io(SOCKET_BASE_URL, {
-      transports: ['websocket'],
-      auth: { token }
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 800,
+      reconnectionDelayMax: 4000,
+      timeout: 9000
     });
     socketRef.current = socket;
     setIsSocketConnected(Boolean(socket.connected));
@@ -1905,6 +2013,11 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     });
 
     socket.on('disconnect', () => {
+      setIsSocketConnected(false);
+      setIsPeerOnline(false);
+    });
+
+    socket.on('connect_error', () => {
       setIsSocketConnected(false);
       setIsPeerOnline(false);
     });
@@ -1962,6 +2075,17 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       showNotificationToast(incomingNotification);
     });
 
+    socket.on('chat_message_alert', (incomingAlert) => {
+      if (!incomingAlert?.id) return;
+      setNotifications((prev) => {
+        const exists = prev.some((item) => item.id === incomingAlert.id);
+        if (exists) return prev;
+        return [incomingAlert, ...prev];
+      });
+      setNotificationPingKey((prev) => prev + 1);
+      showNotificationToast(incomingAlert);
+    });
+
     return () => {
       if (conversationRefreshTimerRef.current) {
         clearTimeout(conversationRefreshTimerRef.current);
@@ -1975,11 +2099,13 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
 
   useEffect(() => {
     if (!showChatModal || !activeChatSession?.jobId || !activeChatSession?.peerId) return;
-    if (!socketRef.current || !isSocketConnected) return;
+    if (!socketRef.current) return;
     let cancelled = false;
 
     (async () => {
       try {
+        await ensureSocketConnected(7000);
+        if (cancelled) return;
         const data = await emitWithAck(
           'join_job_room',
           { jobId: activeChatSession.jobId, peerId: activeChatSession.peerId },
@@ -3099,7 +3225,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
             </View>
           ) : null}
 
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingBottom: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingBottom: Platform.OS === 'web' ? 8 : 18 }}>
             <TextInput
               value={chatInput}
               onChangeText={(value) => {
@@ -3169,7 +3295,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
                 },
                 isSendingChatMessage ? styles.modalBtnDisabled : null
               ]}
-              disabled={isSendingChatMessage || !isSocketConnected}
+              disabled={isSendingChatMessage}
               onPress={sendChatMessage}
             >
               <Ionicons name="send" size={18} color="#FFFFFF" />
