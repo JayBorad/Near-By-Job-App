@@ -10,6 +10,7 @@ const getDefaultNotificationIcon = (type) => {
   if (normalized === 'JOB_UPDATED') return 'create-outline';
   if (normalized === 'JOB_CANCELLED') return 'alert-circle';
   if (normalized === 'ADMIN_JOB_UPDATED') return 'shield-checkmark-outline';
+  if (normalized === 'CHAT_MESSAGE') return 'chatbubble-ellipses-outline';
   return 'notifications';
 };
 

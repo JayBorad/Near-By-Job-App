@@ -8,6 +8,8 @@ declare global {
       userMode: 'JOB_POSTER' | 'JOB_PICKER';
       supabaseAuthId: string;
       email: string;
+      name?: string;
+      username?: string;
     }
 
     interface Request {

@@ -28,7 +28,9 @@ export const resolveUserFromToken = async (token) => {
     role: syncedUser.role,
     userMode: syncedUser.userMode,
     supabaseAuthId: syncedUser.supabaseAuthId,
-    email: syncedUser.email
+    email: syncedUser.email,
+    name: syncedUser.name,
+    username: syncedUser.username
   };
 };
 

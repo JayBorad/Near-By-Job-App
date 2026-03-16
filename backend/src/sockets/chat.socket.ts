@@ -5,6 +5,7 @@ import {
   markMessagesSeen,
   validateChatParticipants
 } from '../modules/chat/chat.service.js';
+import { createNotification } from '../modules/notification/notification.service.js';
 
 const connectedUsers = new Map();
 let ioRef = null;
@@ -31,11 +32,29 @@ const isUserOnline = (userId) => {
   return Boolean(existing && existing.size);
 };
 
+const isUserInActiveConversation = (io, userId, jobId, peerId) => {
+  if (!userId || !jobId || !peerId) return false;
+  const socketIds = Array.from(connectedUsers.get(userId) || []);
+  return socketIds.some((socketId) => {
+    const socket = io.sockets.sockets.get(socketId);
+    const activeChat = socket?.data?.activeChat;
+    return Boolean(activeChat?.jobId === jobId && activeChat?.peerId === peerId);
+  });
+};
+
 export const emitNotificationToUser = (userId, notification) => {
   if (!userId || !notification || !ioRef) return;
   const socketIds = Array.from(connectedUsers.get(userId) || []);
   socketIds.forEach((socketId) => {
     ioRef.to(socketId).emit('notification_created', notification);
+  });
+};
+
+const emitChatAlertToUser = (userId, payload) => {
+  if (!userId || !payload || !ioRef) return;
+  const socketIds = Array.from(connectedUsers.get(userId) || []);
+  socketIds.forEach((socketId) => {
+    ioRef.to(socketId).emit('chat_message_alert', payload);
   });
 };
 
@@ -73,6 +92,7 @@ export const setupChatSocket = (io) => {
         return;
       }
       socket.join(jobId);
+      socket.data.activeChat = { jobId, peerId };
       const seenIds = await markMessagesSeen({ jobId, viewerId: currentUserId });
       if (seenIds.length) {
         io.to(jobId).emit('message_status_updated', {
@@ -81,6 +101,18 @@ export const setupChatSocket = (io) => {
         });
       }
       if (ack) ack({ success: true, data: { online: isUserOnline(peerId) } });
+    });
+
+    socket.on('leave_job_room', ({ jobId }, ack) => {
+      if (!jobId) {
+        if (ack) ack({ success: false, message: 'jobId is required' });
+        return;
+      }
+      if (socket?.data?.activeChat?.jobId === jobId) {
+        socket.data.activeChat = null;
+      }
+      socket.leave(jobId);
+      if (ack) ack({ success: true });
     });
 
     socket.on('check_user_online', ({ userId }, ack) => {
@@ -139,6 +171,44 @@ export const setupChatSocket = (io) => {
         });
 
         io.to(payload.jobId).emit('new_message', message);
+
+        if (!isUserInActiveConversation(io, payload.receiverId, payload.jobId, currentUserId)) {
+          const senderName = socket.user?.name || socket.user?.username || 'User';
+          const alertPayload = {
+            id: `rt-${message.id}`,
+            userId: payload.receiverId,
+            type: 'CHAT_MESSAGE',
+            title: `${senderName} sent you a message`,
+            description: String(payload?.message || '').trim() || 'Open chat to reply.',
+            icon: 'chatbubble-ellipses-outline',
+            isRead: false,
+            actionPage: 'MESSAGES',
+            jobId: payload.jobId,
+            applicationId: currentUserId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            localOnly: true
+          };
+          let storedNotificationId = null;
+          try {
+            const createdNotification = await createNotification({
+              userId: payload.receiverId,
+              type: 'CHAT_MESSAGE',
+              title: alertPayload.title,
+              description: alertPayload.description,
+              icon: 'chatbubble-ellipses-outline',
+              actionPage: 'MESSAGES',
+              jobId: payload.jobId,
+              applicationId: currentUserId
+            });
+            storedNotificationId = createdNotification?.id || null;
+          } catch (_error) {
+            // Notification failures must not block chat message delivery.
+          }
+          if (!storedNotificationId) {
+            emitChatAlertToUser(payload.receiverId, alertPayload);
+          }
+        }
 
         if (isUserOnline(payload.receiverId)) {
           const deliveredIds = await markMessagesDelivered({
