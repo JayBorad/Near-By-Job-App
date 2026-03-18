@@ -533,6 +533,9 @@ function CategoryPage({
   const [selectedItem, setSelectedItem] = useState(null);
   const data = categoriesTab === 'all' ? allCategories : myCategories;
   const filterOptions = ['ALL', 'PENDING', 'APPROVED', 'REJECTED'];
+  const hasActiveMineFilters =
+    categoriesTab === 'mine' &&
+    (String(categorySearch || '').trim().length > 0 || String(categoryFilter || 'ALL').toUpperCase() !== 'ALL');
 
   return (
     <View style={styles.settingsScreen}>
@@ -581,6 +584,18 @@ function CategoryPage({
           </Pressable>
         ) : null}
       </View>
+      {hasActiveMineFilters ? (
+        <View style={{ alignItems: 'flex-end', marginBottom: 8 }}>
+          <Pressable
+            onPress={() => {
+              setCategorySearch('');
+              setCategoryFilter('ALL');
+            }}
+          >
+            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Clear Filters</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
         {isLoading ? (
@@ -2546,6 +2561,10 @@ function AdminCategoriesPage({
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('ALL');
   const adminFilterOptions = ['ALL', 'PENDING', 'APPROVED', 'REJECTED'];
   const creatorFilterOptions = ['ALL', 'ADMIN', 'USER'];
+  const hasActiveFilters =
+    String(categorySearch || '').trim().length > 0 ||
+    String(categoryFilter || 'ALL').toUpperCase() !== 'ALL' ||
+    String(creatorTypeFilter || 'ALL').toUpperCase() !== 'ALL';
   const filteredCategories = useMemo(
     () =>
       categories.filter((item) => {
@@ -2605,6 +2624,19 @@ function AdminCategoriesPage({
                 <Ionicons name="filter-outline" size={18} color={colors.primary} />
               </Pressable>
             </View>
+            {hasActiveFilters ? (
+              <View style={{ alignItems: 'flex-end', marginBottom: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    setCategorySearch('');
+                    setCategoryFilter('ALL');
+                    setCreatorTypeFilter('ALL');
+                  }}
+                >
+                  <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Clear Filters</Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             {filteredCategories.length ? (
               filteredCategories.map((item) => (
