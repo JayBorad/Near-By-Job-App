@@ -11,12 +11,22 @@ const getDefaultNotificationIcon = (type) => {
   if (normalized === 'JOB_CANCELLED') return 'alert-circle';
   if (normalized === 'ADMIN_JOB_UPDATED') return 'shield-checkmark-outline';
   if (normalized === 'CHAT_MESSAGE') return 'chatbubble-ellipses-outline';
+  if (normalized === 'CATEGORY_SUBMITTED') return 'layers-outline';
+  if (normalized === 'CATEGORY_STATUS_UPDATED') return 'alert-circle-outline';
   return 'notifications';
 };
 
 const isMissingNotificationTableError = (error) => {
   const message = String(error?.message || '');
   return error?.code === 'P2021' || message.includes('public.Notification') || message.includes('relation "Notification" does not exist');
+};
+
+const isInvalidNotificationTypeError = (error) => {
+  const message = String(error?.message || '');
+  return (
+    message.includes('Invalid value for argument `type`') &&
+    message.includes('Expected NotificationType')
+  );
 };
 
 const mapNotification = (item) => ({
@@ -63,7 +73,7 @@ export const createNotification = async ({
     emitNotificationToUser(userId, payload);
     return payload;
   } catch (error) {
-    if (isMissingNotificationTableError(error)) {
+    if (isMissingNotificationTableError(error) || isInvalidNotificationTypeError(error)) {
       return null;
     }
     throw error;

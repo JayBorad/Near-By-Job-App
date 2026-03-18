@@ -5,6 +5,7 @@ import { authorizeRoles } from '../../middleware/role.middleware.js';
 import { validate } from '../../middleware/validation.middleware.js';
 import {
   createCategoryValidator,
+  deleteCategoryValidator,
   getAllCategoriesValidator,
   getApprovedCategoriesValidator,
   getMyCategoriesValidator,
@@ -31,6 +32,14 @@ router.patch(
   updateCategoryStatusValidator,
   validate,
   controller.updateCategoryStatus
+);
+router.delete(
+  '/:id',
+  authenticate,
+  authorizeRoles('ADMIN'),
+  deleteCategoryValidator,
+  validate,
+  controller.deleteCategory
 );
 
 export default router;

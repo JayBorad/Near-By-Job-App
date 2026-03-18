@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma.js';
 import ApiError from '../../utils/ApiError.js';
 import { CategoryStatus, Prisma } from '@prisma/client';
+import { createNotification, createNotificationsBulk } from '../notification/notification.service.js';
 
 const isMissingDescriptionColumnError = (error) => {
   const message = String(error?.message || '').toLowerCase();
@@ -10,7 +11,7 @@ const isMissingDescriptionColumnError = (error) => {
   );
 };
 
-export const createCategory = async (userId, payload) => {
+export const createCategory = async (userId, userRole, payload) => {
   const normalizedName = String(payload?.name || '')
     .trim()
     .replace(/\s+/g, ' ');
@@ -29,8 +30,9 @@ export const createCategory = async (userId, payload) => {
     throw new ApiError(409, 'Category name already exists');
   }
 
+  let createdCategory = null;
   try {
-    return await prisma.category.create({
+    createdCategory = await prisma.category.create({
       data: {
         name: normalizedName,
         description: payload.description || null,
@@ -47,10 +49,40 @@ export const createCategory = async (userId, payload) => {
           createdBy: userId
         }
       });
-      return { ...fallback, description: null };
+      createdCategory = { ...fallback, description: null };
+    } else {
+      throw error;
     }
-    throw error;
   }
+
+  if (String(userRole || '').toUpperCase() !== 'ADMIN') {
+    const admins = await prisma.user.findMany({
+      where: {
+        role: 'ADMIN',
+        status: 'ACTIVE'
+      },
+      select: {
+        id: true
+      }
+    });
+
+    try {
+      await createNotificationsBulk(
+        admins.map((admin) => ({
+          userId: admin.id,
+          type: 'ADMIN_JOB_UPDATED',
+          title: 'Category pending review',
+          description: `A new category "${createdCategory.name}" is waiting for approval.`,
+          icon: 'layers-outline',
+          actionPage: 'ADMIN_CATEGORIES'
+        }))
+      );
+    } catch (_error) {
+      // Notification delivery should not block category creation.
+    }
+  }
+
+  return createdCategory;
 };
 
 export const getApprovedCategories = async (query) => {
@@ -237,11 +269,64 @@ export const updateCategoryStatus = async (categoryId, adminId, status) => {
     throw new ApiError(404, 'Category not found');
   }
 
-  return prisma.category.update({
+  const normalizedStatus = String(status || '').toUpperCase();
+  const previousStatus = String(category.status || '').toUpperCase();
+  const updated = await prisma.category.update({
     where: { id: categoryId },
     data: {
       status,
       approvedBy: status === 'APPROVED' || status === 'REJECTED' ? adminId : null
     }
   });
+
+  if (previousStatus !== normalizedStatus) {
+    try {
+      await createNotification({
+        userId: category.createdBy,
+        type: 'JOB_UPDATED',
+        title: 'Category status updated',
+        description: `Your category "${category.name}" is now ${normalizedStatus}.`,
+        icon: normalizedStatus === 'APPROVED' ? 'checkmark-circle-outline' : normalizedStatus === 'REJECTED' ? 'close-circle-outline' : 'time-outline',
+        actionPage: 'MY_CATEGORIES'
+      });
+    } catch (_error) {
+      // Notification delivery should not block category status updates.
+    }
+  }
+
+  return updated;
+};
+
+export const deleteCategory = async (categoryId) => {
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+    select: {
+      id: true,
+      name: true
+    }
+  });
+
+  if (!category) {
+    throw new ApiError(404, 'Category not found');
+  }
+
+  const linkedJobsCount = await prisma.job.count({
+    where: { categoryId }
+  });
+  if (linkedJobsCount > 0) {
+    throw new ApiError(409, 'Cannot delete category because it is used by existing jobs');
+  }
+
+  try {
+    await prisma.category.delete({
+      where: { id: categoryId }
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      throw new ApiError(409, 'Cannot delete category because it is used by existing jobs');
+    }
+    throw error;
+  }
+
+  return category;
 };

@@ -17,6 +17,10 @@ export const updateCategoryStatusValidator = [
     .withMessage('Status must be PENDING, APPROVED or REJECTED')
 ];
 
+export const deleteCategoryValidator = [
+  param('id').isUUID().withMessage('Category id must be a UUID')
+];
+
 export const getMyCategoriesValidator = [
   query('status')
     .optional()
