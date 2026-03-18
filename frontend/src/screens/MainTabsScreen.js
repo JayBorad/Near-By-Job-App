@@ -1970,7 +1970,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       if (userRole === 'ADMIN') {
         fetchAdminCategories({ forceLoader: true });
       } else {
-        fetchCategories();
+        fetchCategories({ forceLoader: categoriesTab === 'mine' });
       }
     }
   }, [activeTab, settingsPage, categorySearch, categoryFilter, categoriesTab, token, allCategories.length, userRole]);
@@ -2226,7 +2226,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
 
   useEffect(() => {
     if (!token || userRole !== 'ADMIN' || activeTab !== 'settings' || settingsPage !== 'categories') return;
-    fetchAdminCategories();
+    fetchAdminCategories({ forceLoader: true });
   }, [activeTab, settingsPage, userRole, token, debouncedAdminCategorySearch, adminCategoryFilter]);
 
   useEffect(() => {
