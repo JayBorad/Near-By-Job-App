@@ -59,6 +59,7 @@ export function SettingsTab({
   setAdminCategoryDraft,
   onCreateAdminCategory,
   onUpdateAdminCategoryStatus,
+  onDeleteAdminCategory,
   myReceivedReviews,
   isMyReceivedReviewsLoading,
   onRefreshMyReceivedReviews,
@@ -110,6 +111,7 @@ export function SettingsTab({
           setCategoryDraft={setAdminCategoryDraft}
           onCreateCategory={onCreateAdminCategory}
           onUpdateCategoryStatus={onUpdateAdminCategoryStatus}
+          onDeleteCategory={onDeleteAdminCategory}
           styles={styles}
           colors={colors}
         />

@@ -68,6 +68,7 @@ const getApplicationStats = (job) => ({
 });
 
 const getNotificationIconName = (notification) => {
+  if (notification?.icon) return notification.icon;
   const type = String(notification?.type || '').toUpperCase();
   if (type === 'JOB_APPLIED') return 'briefcase-outline';
   if (type === 'APPLICATION_ACCEPTED') return 'checkmark-circle';
@@ -76,7 +77,9 @@ const getNotificationIconName = (notification) => {
   if (type === 'JOB_CANCELLED') return 'alert-circle';
   if (type === 'ADMIN_JOB_UPDATED') return 'shield-checkmark-outline';
   if (type === 'CHAT_MESSAGE') return 'chatbubble-ellipses-outline';
-  return notification?.icon || 'notifications';
+  if (type === 'CATEGORY_SUBMITTED') return 'layers-outline';
+  if (type === 'CATEGORY_STATUS_UPDATED') return 'alert-circle-outline';
+  return 'notifications';
 };
 
 const getJobSeatStats = (job) => {
@@ -2529,6 +2532,7 @@ function AdminCategoriesPage({
   setCategoryDraft,
   onCreateCategory,
   onUpdateCategoryStatus,
+  onDeleteCategory,
   styles,
   colors
 }) {
@@ -2537,6 +2541,8 @@ function AdminCategoriesPage({
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [statusPickerItem, setStatusPickerItem] = useState(null);
   const [pendingStatusChange, setPendingStatusChange] = useState(null);
+  const [pendingDeleteCategory, setPendingDeleteCategory] = useState(null);
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false);
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('ALL');
   const adminFilterOptions = ['ALL', 'PENDING', 'APPROVED', 'REJECTED'];
   const creatorFilterOptions = ['ALL', 'ADMIN', 'USER'];
@@ -2735,6 +2741,19 @@ function AdminCategoriesPage({
               >
                 <Text style={styles.optionCancelText}>Change Status</Text>
               </Pressable>
+              <Pressable
+                style={[styles.modalBtnDanger, styles.optionActionBtn]}
+                onPress={() => {
+                  if (!selectedCategory) return;
+                  setPendingDeleteCategory({
+                    categoryId: selectedCategory.id,
+                    categoryName: selectedCategory.name
+                  });
+                  setSelectedCategory(null);
+                }}
+              >
+                <Text style={styles.modalBtnDangerText}>Delete</Text>
+              </Pressable>
               <Pressable style={[styles.modalBtnPrimary, styles.optionActionBtn]} onPress={() => setSelectedCategory(null)}>
                 <Text style={styles.modalBtnPrimaryText}>Close</Text>
               </Pressable>
@@ -2847,6 +2866,48 @@ function AdminCategoriesPage({
                 }}
               >
                 <Text style={styles.modalBtnPrimaryText}>Confirm</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={Boolean(pendingDeleteCategory)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingDeleteCategory(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.optionModal}>
+            <Text style={styles.optionTitle}>Delete Category</Text>
+            <Text style={styles.optionMessage}>
+              {`Are you sure you want to delete "${pendingDeleteCategory?.categoryName || ''}"? This action cannot be undone.`}
+            </Text>
+            <View style={styles.optionActionsRow}>
+              <Pressable
+                style={[styles.optionCancel, styles.optionActionBtn]}
+                onPress={() => setPendingDeleteCategory(null)}
+                disabled={isDeletingCategory}
+              >
+                <Text style={styles.optionCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtnDanger, styles.optionActionBtn, isDeletingCategory ? styles.modalBtnDisabled : null]}
+                disabled={isDeletingCategory}
+                onPress={async () => {
+                  const payload = pendingDeleteCategory;
+                  if (!payload?.categoryId) return;
+                  setIsDeletingCategory(true);
+                  const deleted = await onDeleteCategory(payload.categoryId);
+                  setIsDeletingCategory(false);
+                  if (!deleted) return;
+                  setPendingDeleteCategory(null);
+                  setSelectedCategory((prev) => (prev?.id === payload.categoryId ? null : prev));
+                  setStatusPickerItem((prev) => (prev?.id === payload.categoryId ? null : prev));
+                }}
+              >
+                <Text style={styles.modalBtnDangerText}>{isDeletingCategory ? 'Deleting...' : 'Delete'}</Text>
               </Pressable>
             </View>
           </View>

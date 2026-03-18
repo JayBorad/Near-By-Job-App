@@ -39,6 +39,7 @@ import {
   getMyCategories,
   createOrUpdateReview,
   updateCategoryStatus,
+  deleteCategoryAdmin,
   updateJob,
   updateUserAvatarByAdmin,
   updateUserByAdmin,
@@ -129,6 +130,7 @@ const formatChatDayLabel = (value) => {
 };
 
 const getNotificationIconName = (notification) => {
+  if (notification?.icon) return notification.icon;
   const type = String(notification?.type || '').toUpperCase();
   if (type === 'JOB_APPLIED') return 'briefcase-outline';
   if (type === 'APPLICATION_ACCEPTED') return 'checkmark-circle';
@@ -137,7 +139,9 @@ const getNotificationIconName = (notification) => {
   if (type === 'JOB_CANCELLED') return 'alert-circle';
   if (type === 'ADMIN_JOB_UPDATED') return 'shield-checkmark-outline';
   if (type === 'CHAT_MESSAGE') return 'chatbubble-ellipses-outline';
-  return notification?.icon || 'notifications';
+  if (type === 'CATEGORY_SUBMITTED') return 'layers-outline';
+  if (type === 'CATEGORY_STATUS_UPDATED') return 'alert-circle-outline';
+  return 'notifications';
 };
 
 const isUuidValue = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -766,10 +770,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
-  const fetchCategories = async ({ forceLoader = false } = {}) => {
+  const fetchCategories = async ({ forceLoader = false, targetTab = categoriesTab, statusOverride } = {}) => {
     if (!token) return;
     const searchText = categorySearch.trim();
-    const hasCurrentTabData = categoriesTab === 'all' ? allCategories.length > 0 : myCategories.length > 0;
+    const hasCurrentTabData = targetTab === 'all' ? allCategories.length > 0 : myCategories.length > 0;
     const shouldShowLoader = forceLoader || (!hasFetchedCategoriesOnce && !hasCurrentTabData);
 
     try {
@@ -777,14 +781,15 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         setIsCategoryLoading(true);
       }
 
-      if (categoriesTab === 'all') {
+      if (targetTab === 'all') {
         const approvedRes = await getApprovedCategories({ token, q: searchText || undefined });
         setAllCategories(approvedRes?.data || []);
       } else {
+        const effectiveStatus = statusOverride ?? categoryFilter;
         const myRes = await getMyCategories({
           token,
           q: searchText || undefined,
-          status: categoryFilter !== 'ALL' ? categoryFilter : undefined
+          status: effectiveStatus !== 'ALL' ? effectiveStatus : undefined
         });
         setMyCategories(myRes?.data || []);
       }
@@ -1038,6 +1043,27 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       }
 
       showPopup('Chat Not Found', 'This chat is not available right now.', 'warning');
+      return;
+    }
+
+    if (actionPage === 'ADMIN_CATEGORIES') {
+      if (userRole === 'ADMIN') {
+        setActiveTab('settings');
+        setSettingsPage('categories');
+        setAdminCategoryFilter('PENDING');
+        await fetchAdminCategories({ forceLoader: true, statusOverride: 'PENDING' });
+      }
+      return;
+    }
+
+    if (actionPage === 'MY_CATEGORIES') {
+      if (userRole === 'USER') {
+        setActiveTab('settings');
+        setSettingsPage('categories');
+        setCategoriesTab('mine');
+        setCategoryFilter('ALL');
+        await fetchCategories({ forceLoader: true, targetTab: 'mine', statusOverride: 'ALL' });
+      }
     }
   };
 
@@ -1565,16 +1591,18 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
-  const fetchAdminCategories = async ({ forceLoader = false } = {}) => {
+  const fetchAdminCategories = async ({ forceLoader = false, statusOverride, queryOverride } = {}) => {
     if (!token || userRole !== 'ADMIN') return;
     try {
       if (forceLoader || !adminCategories.length) {
         setIsAdminPanelLoading(true);
       }
+      const resolvedStatus = statusOverride || adminCategoryFilter;
+      const resolvedQuery = queryOverride !== undefined ? queryOverride : debouncedAdminCategorySearch.trim() || undefined;
       const categoriesRes = await getAllCategoriesAdmin({
         token,
-        status: adminCategoryFilter,
-        q: debouncedAdminCategorySearch.trim() || undefined
+        status: resolvedStatus,
+        q: resolvedQuery
       });
       setAdminCategories(categoriesRes?.data || []);
     } catch (error) {
@@ -1634,7 +1662,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       setShowUserCategoryCreateModal(false);
       setUserCategoryDraft({ name: '', description: '' });
       setCategoriesTab('mine');
-      await fetchCategories({ forceLoader: true });
+      await fetchCategories({ forceLoader: true, targetTab: 'mine' });
       showPopup('Category Created', 'Category submitted for review.', 'success');
       return true;
     } catch (error) {
@@ -1655,6 +1683,19 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       showPopup('Category Updated', `Category status changed to ${status}.`, 'success');
     } catch (error) {
       showPopup('Update Failed', error?.message || 'Unable to update category status.', 'error');
+    }
+  };
+
+  const deleteAdminCategoryById = async (categoryId) => {
+    if (!token || userRole !== 'ADMIN' || !categoryId) return false;
+    try {
+      await deleteCategoryAdmin({ token, categoryId });
+      setAdminCategories((prev) => prev.filter((item) => item.id !== categoryId));
+      showPopup('Category Deleted', 'Category deleted successfully.', 'success');
+      return true;
+    } catch (error) {
+      showPopup('Delete Failed', error?.message || 'Unable to delete category.', 'error');
+      return false;
     }
   };
 
@@ -2429,6 +2470,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
             setAdminCategoryDraft={setAdminCategoryDraft}
             onCreateAdminCategory={createAdminCategory}
             onUpdateAdminCategoryStatus={updateAdminCategoryStatus}
+            onDeleteAdminCategory={deleteAdminCategoryById}
             adminUsers={adminUsers}
             isAdminUsersLoading={isAdminUsersLoading}
             onRefreshAdminUsers={() => fetchAdminUsers({ forceLoader: true })}
