@@ -253,6 +253,15 @@ export async function updateCategoryStatus({ token, categoryId, status }) {
   });
 }
 
+export async function deleteCategoryAdmin({ token, categoryId }) {
+  return apiRequest(`/categories/${categoryId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+}
+
 export async function getAllUsers({ token, page = 1, limit = 20, role, mode, status, q }) {
   const query = new URLSearchParams({
     page: String(page),
