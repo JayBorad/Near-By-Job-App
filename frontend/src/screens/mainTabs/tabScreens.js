@@ -2546,6 +2546,7 @@ function AdminCategoriesPage({
   categoryDraft,
   setCategoryDraft,
   onCreateCategory,
+  onUpdateCategory,
   onUpdateCategoryStatus,
   onDeleteCategory,
   styles,
@@ -2558,6 +2559,9 @@ function AdminCategoriesPage({
   const [pendingStatusChange, setPendingStatusChange] = useState(null);
   const [pendingDeleteCategory, setPendingDeleteCategory] = useState(null);
   const [isDeletingCategory, setIsDeletingCategory] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
+  const [editCategoryDraft, setEditCategoryDraft] = useState({ name: '', description: '' });
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('ALL');
   const adminFilterOptions = ['ALL', 'PENDING', 'APPROVED', 'REJECTED'];
   const creatorFilterOptions = ['ALL', 'ADMIN', 'USER'];
@@ -2580,6 +2584,23 @@ function AdminCategoriesPage({
     setShowCreateModal(false);
     setCategoryDraft({ name: '', description: '' });
   };
+  const openEditCategoryModal = () => {
+    if (!selectedCategory) return;
+    setEditCategoryDraft({
+      name: String(selectedCategory.name || ''),
+      description: String(selectedCategory.description || '')
+    });
+    setShowEditModal(true);
+  };
+  const closeEditCategoryModal = () => {
+    setShowEditModal(false);
+    setEditCategoryDraft({ name: '', description: '' });
+  };
+  useEffect(() => {
+    if (selectedCategory) return;
+    setShowEditModal(false);
+    setEditCategoryDraft({ name: '', description: '' });
+  }, [selectedCategory]);
 
   return (
     <View style={styles.settingsScreen}>
@@ -2749,7 +2770,47 @@ function AdminCategoriesPage({
       <Modal visible={Boolean(selectedCategory)} transparent animationType="fade" onRequestClose={() => setSelectedCategory(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.categoryDetailModal}>
-            <Text style={styles.categoryDetailTitle}>{selectedCategory?.name || ''}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <Text style={[styles.categoryDetailTitle, { flex: 1 }]} numberOfLines={2}>
+                {selectedCategory?.name || ''}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Pressable
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card
+                  }}
+                  onPress={() => {
+                    if (selectedCategory) {
+                      setStatusPickerItem(selectedCategory);
+                    }
+                  }}
+                >
+                  <Ionicons name="swap-horizontal-outline" size={16} color={colors.primary} />
+                </Pressable>
+                <Pressable
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card
+                  }}
+                  onPress={openEditCategoryModal}
+                >
+                  <Ionicons name="create-outline" size={16} color={colors.primary} />
+                </Pressable>
+              </View>
+            </View>
             <Text style={styles.categoryDetailDescription}>{selectedCategory?.description || 'No description provided.'}</Text>
             <Text style={styles.categoryDetailDescription}>
               {`Created By: ${
@@ -2763,16 +2824,6 @@ function AdminCategoriesPage({
               <CategoryStatusBadge status={selectedCategory?.status} styles={styles} />
             </View>
             <View style={styles.optionActionsRow}>
-              <Pressable
-                style={[styles.optionCancel, styles.optionActionBtn]}
-                onPress={() => {
-                  if (selectedCategory) {
-                    setStatusPickerItem(selectedCategory);
-                  }
-                }}
-              >
-                <Text style={styles.optionCancelText}>Change Status</Text>
-              </Pressable>
               <Pressable
                 style={[styles.modalBtnDanger, styles.optionActionBtn]}
                 onPress={() => {
@@ -2830,6 +2881,70 @@ function AdminCategoriesPage({
                 }}
               >
                 <Text style={styles.modalBtnPrimaryText}>Create</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={showEditModal} transparent animationType="fade" onRequestClose={closeEditCategoryModal}>
+        <Pressable style={styles.modalBackdrop} onPress={closeEditCategoryModal}>
+          <Pressable style={styles.optionModal} onPress={() => {}}>
+            <View style={styles.adminSectionHeader}>
+              <Ionicons name="create-outline" size={16} color={colors.primary} />
+              <Text style={styles.adminCreateCategoryTitle}>Edit Category</Text>
+            </View>
+            <TextInput
+              value={editCategoryDraft.name}
+              onChangeText={(value) => setEditCategoryDraft((prev) => ({ ...prev, name: value }))}
+              placeholder="Category name"
+              placeholderTextColor={colors.textSecondary}
+              style={styles.categoryCreateInput}
+              editable={!isUpdatingCategory}
+            />
+            <TextInput
+              value={editCategoryDraft.description}
+              onChangeText={(value) => setEditCategoryDraft((prev) => ({ ...prev, description: value }))}
+              placeholder="Category description"
+              placeholderTextColor={colors.textSecondary}
+              style={[styles.categoryCreateInput, styles.categoryCreateDescription]}
+              multiline
+              editable={!isUpdatingCategory}
+            />
+            <View style={styles.optionActionsRow}>
+              <Pressable
+                style={[styles.optionCancel, styles.optionActionBtn]}
+                onPress={closeEditCategoryModal}
+                disabled={isUpdatingCategory}
+              >
+                <Text style={styles.optionCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtnPrimary, styles.optionActionBtn, isUpdatingCategory ? styles.modalBtnDisabled : null]}
+                onPress={async () => {
+                  if (!selectedCategory?.id || !onUpdateCategory) return;
+                  setIsUpdatingCategory(true);
+                  const updatedCategory = await onUpdateCategory(selectedCategory.id, editCategoryDraft);
+                  setIsUpdatingCategory(false);
+                  if (!updatedCategory) return;
+                  setSelectedCategory((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          ...updatedCategory,
+                          name: updatedCategory.name || String(editCategoryDraft.name || '').trim(),
+                          description:
+                            updatedCategory.description !== undefined
+                              ? updatedCategory.description
+                              : String(editCategoryDraft.description || '').trim() || null
+                        }
+                      : prev
+                  );
+                  closeEditCategoryModal();
+                }}
+                disabled={isUpdatingCategory}
+              >
+                <Text style={styles.modalBtnPrimaryText}>{isUpdatingCategory ? 'Saving...' : 'Save'}</Text>
               </Pressable>
             </View>
           </Pressable>

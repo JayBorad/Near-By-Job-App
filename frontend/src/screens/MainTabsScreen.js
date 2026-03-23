@@ -39,6 +39,7 @@ import {
   getMyCategories,
   createOrUpdateReview,
   updateCategoryStatus,
+  updateCategoryAdmin,
   deleteCategoryAdmin,
   updateJob,
   updateUserAvatarByAdmin,
@@ -1686,6 +1687,60 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     }
   };
 
+  const updateAdminCategoryDetails = async (categoryId, payload) => {
+    if (!token || userRole !== 'ADMIN' || !categoryId) return null;
+    const normalizedName = String(payload?.name || '').trim().replace(/\s+/g, ' ');
+    if (!normalizedName) {
+      showPopup('Validation Error', 'Category name is required.', 'warning');
+      return null;
+    }
+    if (
+      adminCategories.some(
+        (item) =>
+          item.id !== categoryId &&
+          String(item.name || '').trim().toLowerCase() === normalizedName.toLowerCase()
+      )
+    ) {
+      showPopup('Validation Error', 'Category name already exists.', 'warning');
+      return null;
+    }
+    try {
+      const response = await updateCategoryAdmin({
+        token,
+        categoryId,
+        payload: {
+          name: normalizedName,
+          description: String(payload?.description || '').trim()
+        }
+      });
+      const updatedCategory = response?.data || null;
+      setAdminCategories((prev) =>
+        prev.map((item) =>
+          item.id === categoryId
+            ? {
+                ...item,
+                ...(updatedCategory || {}),
+                description:
+                  updatedCategory?.description !== undefined
+                    ? updatedCategory.description
+                    : String(payload?.description || '').trim() || null,
+                name: updatedCategory?.name || normalizedName
+              }
+            : item
+        )
+      );
+      showPopup('Category Updated', 'Category details updated successfully.', 'success');
+      return updatedCategory || {
+        id: categoryId,
+        name: normalizedName,
+        description: String(payload?.description || '').trim() || null
+      };
+    } catch (error) {
+      showPopup('Update Failed', error?.message || 'Unable to update category details.', 'error');
+      return null;
+    }
+  };
+
   const deleteAdminCategoryById = async (categoryId) => {
     if (!token || userRole !== 'ADMIN' || !categoryId) return false;
     try {
@@ -2469,6 +2524,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
             adminCategoryDraft={adminCategoryDraft}
             setAdminCategoryDraft={setAdminCategoryDraft}
             onCreateAdminCategory={createAdminCategory}
+            onUpdateAdminCategory={updateAdminCategoryDetails}
             onUpdateAdminCategoryStatus={updateAdminCategoryStatus}
             onDeleteAdminCategory={deleteAdminCategoryById}
             adminUsers={adminUsers}
