@@ -253,6 +253,16 @@ export async function updateCategoryStatus({ token, categoryId, status }) {
   });
 }
 
+export async function updateCategoryAdmin({ token, categoryId, payload }) {
+  return apiRequest(`/categories/${categoryId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: payload
+  });
+}
+
 export async function deleteCategoryAdmin({ token, categoryId }) {
   return apiRequest(`/categories/${categoryId}`, {
     method: 'DELETE',
