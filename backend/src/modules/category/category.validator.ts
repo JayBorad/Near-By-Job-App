@@ -17,6 +17,24 @@ export const updateCategoryStatusValidator = [
     .withMessage('Status must be PENDING, APPROVED or REJECTED')
 ];
 
+export const updateCategoryValidator = [
+  param('id').isUUID().withMessage('Category id must be a UUID'),
+  body()
+    .custom((_, { req }) => req.body?.name !== undefined || req.body?.description !== undefined)
+    .withMessage('At least one field is required: name or description'),
+  body('name')
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage('Category name cannot be empty'),
+  body('description')
+    .optional({ nullable: true })
+    .trim()
+    .isString()
+    .isLength({ max: 500 })
+    .withMessage('Description max length is 500')
+];
+
 export const deleteCategoryValidator = [
   param('id').isUUID().withMessage('Category id must be a UUID')
 ];

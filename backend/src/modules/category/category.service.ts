@@ -297,6 +297,78 @@ export const updateCategoryStatus = async (categoryId, adminId, status) => {
   return updated;
 };
 
+export const updateCategory = async (categoryId, payload) => {
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+    select: {
+      id: true,
+      name: true
+    }
+  });
+
+  if (!category) {
+    throw new ApiError(404, 'Category not found');
+  }
+
+  const updates: { name?: string; description?: string | null } = {};
+
+  if (payload?.name !== undefined) {
+    const normalizedName = String(payload.name || '')
+      .trim()
+      .replace(/\s+/g, ' ');
+
+    if (!normalizedName) {
+      throw new ApiError(400, 'Category name cannot be empty');
+    }
+
+    const duplicate = await prisma.category.findFirst({
+      where: {
+        id: { not: categoryId },
+        name: {
+          equals: normalizedName,
+          mode: 'insensitive'
+        }
+      },
+      select: { id: true }
+    });
+
+    if (duplicate) {
+      throw new ApiError(409, 'Category name already exists');
+    }
+
+    updates.name = normalizedName;
+  }
+
+  if (payload?.description !== undefined) {
+    const normalizedDescription = String(payload.description || '').trim();
+    updates.description = normalizedDescription || null;
+  }
+
+  if (!Object.keys(updates).length) {
+    throw new ApiError(400, 'Nothing to update');
+  }
+
+  try {
+    return await prisma.category.update({
+      where: { id: categoryId },
+      data: updates
+    });
+  } catch (error) {
+    if (isMissingDescriptionColumnError(error) && updates.description !== undefined) {
+      const { description: _description, ...fallbackUpdates } = updates;
+      if (!Object.keys(fallbackUpdates).length) {
+        return { ...category, description: null };
+      }
+      const fallback = await prisma.category.update({
+        where: { id: categoryId },
+        data: fallbackUpdates
+      });
+      return { ...fallback, description: null };
+    }
+    throw error;
+  }
+};
+
 export const deleteCategory = async (categoryId) => {
   const category = await prisma.category.findUnique({
     where: { id: categoryId },
