@@ -26,6 +26,11 @@ export const updateCategoryStatus = asyncHandler(async (req, res) => {
   return res.status(200).json({ success: true, message: `Category ${req.body.status.toLowerCase()}`, data: result });
 });
 
+export const updateCategory = asyncHandler(async (req, res) => {
+  const result = await service.updateCategory(req.params.id, req.body);
+  return res.status(200).json({ success: true, message: 'Category updated successfully', data: result });
+});
+
 export const deleteCategory = asyncHandler(async (req, res) => {
   const result = await service.deleteCategory(req.params.id);
   return res.status(200).json({ success: true, message: 'Category deleted successfully', data: result });

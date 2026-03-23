@@ -9,6 +9,7 @@ import {
   getAllCategoriesValidator,
   getApprovedCategoriesValidator,
   getMyCategoriesValidator,
+  updateCategoryValidator,
   updateCategoryStatusValidator
 } from './category.validator.js';
 
@@ -32,6 +33,14 @@ router.patch(
   updateCategoryStatusValidator,
   validate,
   controller.updateCategoryStatus
+);
+router.patch(
+  '/:id',
+  authenticate,
+  authorizeRoles('ADMIN'),
+  updateCategoryValidator,
+  validate,
+  controller.updateCategory
 );
 router.delete(
   '/:id',
