@@ -82,6 +82,32 @@ const getNotificationIconName = (notification) => {
   return 'notifications';
 };
 
+const formatNotificationTime = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const diffMs = Date.now() - date.getTime();
+  const threeHoursMs = 3 * 60 * 60 * 1000;
+
+  if (diffMs >= 0 && diffMs <= threeHoursMs) {
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return 'now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  }
+
+  const datePart = date.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+  const timePart = date
+    .toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
+    .toLowerCase();
+  return `${datePart}, ${timePart}`;
+};
+
 const getJobSeatStats = (job) => {
   const stats = getApplicationStats(job);
   const totalSeats = Math.max(1, Number(job?.requiredWorkers || 1));
@@ -5315,7 +5341,7 @@ function NotificationsPage({
               </View>
               <View style={styles.notificationItemFooter}>
                 <Text style={styles.notificationItemTime}>
-                  {item?.createdAt ? new Date(item.createdAt).toLocaleString('en-GB') : ''}
+                  {formatNotificationTime(item?.createdAt)}
                 </Text>
                 {!item?.isRead ? <View style={styles.notificationUnreadDot} /> : null}
               </View>
