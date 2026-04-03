@@ -896,16 +896,21 @@ export const createStyles = (colors) =>
       fontWeight: '700'
     },
     dashboardSalesDropdownMenu: {
-      position: 'absolute',
-      top: 32,
-      right: 0,
       width: 104,
       borderRadius: 10,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surface,
       overflow: 'hidden',
-      zIndex: 95
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      elevation: 12
+    },
+    dashboardSalesDropdownMenuFloating: {
+      position: 'absolute',
+      zIndex: 10
     },
     dashboardSalesDropdownItem: {
       height: 32,
@@ -923,9 +928,15 @@ export const createStyles = (colors) =>
     dashboardSalesDropdownItemTextActive: {
       color: colors.primary
     },
-    dashboardGlobalDismissLayer: {
+    dashboardDropdownModalRoot: {
+      ...StyleSheet.absoluteFillObject
+    },
+    dashboardDropdownModalBackdrop: {
+      ...StyleSheet.absoluteFillObject
+    },
+    dashboardDropdownModalOverlay: {
       ...StyleSheet.absoluteFillObject,
-      zIndex: 70
+      zIndex: 10
     },
     dashboardSalesGraphWrap: {
       marginTop: 8,
@@ -3537,6 +3548,707 @@ export const createStyles = (colors) =>
       color: colors.primary,
       fontSize: 12,
       fontWeight: '700'
+    },
+    reviewsScrollBody: {
+      paddingBottom: 32
+    },
+    reviewsHeroCard: {
+      marginBottom: 14,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      overflow: 'hidden',
+      position: 'relative'
+    },
+    reviewsHeroGlowPrimary: {
+      position: 'absolute',
+      right: -30,
+      top: -26,
+      width: 124,
+      height: 124,
+      borderRadius: 62,
+      backgroundColor: colors.primarySoft,
+      opacity: 0.9
+    },
+    reviewsHeroGlowSecondary: {
+      position: 'absolute',
+      left: -28,
+      bottom: -40,
+      width: 118,
+      height: 118,
+      borderRadius: 59,
+      backgroundColor: colors.surface,
+      opacity: 0.7
+    },
+    reviewsHeroTopRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12
+    },
+    reviewsHeroProfileRow: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'flex-start'
+    },
+    reviewsHeroProfileContent: {
+      flex: 1,
+      marginLeft: 12
+    },
+    reviewsHeroBadge: {
+      alignSelf: 'flex-start',
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4
+    },
+    reviewsHeroBadgeText: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    reviewsHeroName: {
+      marginTop: 10,
+      color: colors.textMain,
+      fontSize: 20,
+      fontWeight: '900'
+    },
+    reviewsHeroSubtitle: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    reviewsHeroScoreCard: {
+      minWidth: 88,
+      borderRadius: 18,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      alignItems: 'center'
+    },
+    reviewsHeroScoreValue: {
+      color: colors.textMain,
+      fontSize: 28,
+      fontWeight: '900'
+    },
+    reviewsHeroScoreLabel: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    reviewsHeroStarsRow: {
+      marginTop: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 4
+    },
+    reviewsHeroStarsText: {
+      marginLeft: 4,
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    reviewsHeroStatsRow: {
+      marginTop: 16,
+      flexDirection: 'row',
+      gap: 8
+    },
+    reviewsHeroStatCard: {
+      flex: 1,
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 12,
+      paddingHorizontal: 10,
+      alignItems: 'center'
+    },
+    reviewsHeroStatValue: {
+      color: colors.primary,
+      fontSize: 18,
+      fontWeight: '900'
+    },
+    reviewsHeroStatLabel: {
+      marginTop: 3,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700',
+      textAlign: 'center'
+    },
+    reviewsDistributionCard: {
+      marginBottom: 14,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 14
+    },
+    reviewsSectionHead: {
+      marginBottom: 10,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      rowGap: 8,
+      gap: 10
+    },
+    reviewsSectionHeadContent: {
+      flex: 1,
+      minWidth: 180
+    },
+    reviewsSectionTitle: {
+      color: colors.textMain,
+      fontSize: 16,
+      fontWeight: '800'
+    },
+    reviewsSectionSubtitle: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    reviewsSectionPill: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.primarySoft,
+      paddingHorizontal: 10,
+      minHeight: 32,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      maxWidth: '100%',
+      alignSelf: 'flex-start'
+    },
+    reviewsSectionPillText: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800',
+      flexShrink: 1
+    },
+    reviewsDistributionRow: {
+      marginTop: 10
+    },
+    reviewsDistributionLabelWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    reviewsDistributionLabel: {
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    reviewsDistributionCount: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    reviewsDistributionTrack: {
+      marginTop: 6,
+      height: 9,
+      borderRadius: 999,
+      backgroundColor: colors.sheet,
+      overflow: 'hidden'
+    },
+    reviewsDistributionFill: {
+      height: '100%',
+      borderRadius: 999,
+      backgroundColor: colors.primary
+    },
+    reviewsTrendCard: {
+      marginBottom: 14,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 14
+    },
+    reviewsTrendPill: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 10,
+      minHeight: 32,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      alignSelf: 'flex-start'
+    },
+    reviewsTrendPillText: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    reviewsTrendStatsRow: {
+      marginTop: 4,
+      marginBottom: 12,
+      flexDirection: 'row',
+      gap: 8
+    },
+    reviewsTrendStatCard: {
+      flex: 1,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingVertical: 10,
+      paddingHorizontal: 10,
+      alignItems: 'center'
+    },
+    reviewsTrendStatValue: {
+      color: colors.primary,
+      fontSize: 17,
+      fontWeight: '900'
+    },
+    reviewsTrendStatLabel: {
+      marginTop: 3,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    reviewsTrendCanvasWrap: {
+      minHeight: 220,
+      marginTop: 2
+    },
+    reviewsTrendSvg: {
+      borderRadius: 16
+    },
+    reviewsTrendYAxisWrap: {
+      position: 'absolute',
+      left: 0,
+      top: 18,
+      height: 168,
+      justifyContent: 'space-between'
+    },
+    reviewsTrendYAxisText: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    reviewsTrendXAxisWrap: {
+      marginTop: -16,
+      marginLeft: 28,
+      marginRight: 10,
+      flexDirection: 'row',
+      justifyContent: 'space-between'
+    },
+    reviewsTrendXAxisText: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '700',
+      textAlign: 'center'
+    },
+    reviewsTrendFootnote: {
+      marginTop: 10,
+      color: colors.textSecondary,
+      fontSize: 11,
+      lineHeight: 17
+    },
+    reviewsTrendEmptyState: {
+      marginTop: 8,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingVertical: 18,
+      paddingHorizontal: 14,
+      alignItems: 'center'
+    },
+    reviewsTrendEmptyTitle: {
+      marginTop: 8,
+      color: colors.textMain,
+      fontSize: 14,
+      fontWeight: '800'
+    },
+    reviewsTrendEmptyText: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18,
+      textAlign: 'center'
+    },
+    reviewsSpotlightCard: {
+      marginBottom: 14,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      padding: 14
+    },
+    reviewsSpotlightTop: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 10
+    },
+    reviewsSpotlightLabel: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5
+    },
+    reviewsSpotlightTitle: {
+      marginTop: 4,
+      color: colors.textMain,
+      fontSize: 17,
+      fontWeight: '800'
+    },
+    reviewsSpotlightAction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4
+    },
+    reviewsSpotlightActionText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    reviewsSpotlightQuote: {
+      marginTop: 10,
+      color: colors.textMain,
+      fontSize: 14,
+      lineHeight: 22,
+      fontWeight: '600'
+    },
+    reviewsSpotlightFooter: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8
+    },
+    reviewsSpotlightMeta: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    reviewsSpotlightRatingPill: {
+      borderRadius: 999,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 10,
+      minHeight: 30,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4
+    },
+    reviewsSpotlightRatingText: {
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    reviewsFilterScroller: {
+      marginBottom: 12
+    },
+    reviewsFilterRow: {
+      paddingRight: 12,
+      gap: 8
+    },
+    reviewsFilterChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 14,
+      minHeight: 36,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    reviewsFilterChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary
+    },
+    reviewsFilterChipText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    reviewsFilterChipTextActive: {
+      color: '#FFFFFF'
+    },
+    reviewCard: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 14,
+      marginBottom: 12
+    },
+    reviewCardTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    reviewCardMoodPill: {
+      alignSelf: 'flex-start',
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.primarySoft,
+      paddingHorizontal: 10,
+      minHeight: 30,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5
+    },
+    reviewCardMoodText: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    reviewCardStarsRow: {
+      marginTop: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3
+    },
+    reviewCardStarsText: {
+      marginLeft: 6,
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    reviewCardReviewerRow: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    reviewCardReviewerContent: {
+      flex: 1,
+      marginLeft: 10
+    },
+    reviewCardReviewerName: {
+      color: colors.textMain,
+      fontSize: 14,
+      fontWeight: '800'
+    },
+    reviewCardReviewerMeta: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    reviewCardMetaRow: {
+      marginTop: 12,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8
+    },
+    reviewCardMetaPill: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      paddingHorizontal: 10,
+      minHeight: 34,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6
+    },
+    reviewCardMetaPillWide: {
+      maxWidth: '100%'
+    },
+    reviewCardMetaPillText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700',
+      flexShrink: 1
+    },
+    reviewCardComment: {
+      marginTop: 12,
+      color: colors.textMain,
+      fontSize: 13,
+      lineHeight: 20
+    },
+    reviewCardHint: {
+      marginTop: 12,
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    reviewDetailModalCard: {
+      width: '100%',
+      maxWidth: 420,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      overflow: 'hidden'
+    },
+    reviewDetailHero: {
+      padding: 16
+    },
+    reviewDetailHeroHead: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12
+    },
+    reviewDetailHeroTextWrap: {
+      flex: 1
+    },
+    reviewDetailHeroEyebrow: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5
+    },
+    reviewDetailHeroTitle: {
+      marginTop: 4,
+      color: colors.textMain,
+      fontSize: 20,
+      fontWeight: '900'
+    },
+    reviewDetailHeroSubtitle: {
+      marginTop: 4,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    reviewDetailCloseBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface
+    },
+    reviewDetailRatingRow: {
+      marginTop: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10
+    },
+    reviewDetailStarsWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4
+    },
+    reviewDetailRatingText: {
+      marginLeft: 4,
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    reviewDetailMoodPill: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 10,
+      minHeight: 32,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5
+    },
+    reviewDetailMoodText: {
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    reviewDetailReviewerCard: {
+      margin: 16,
+      marginBottom: 12,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.sheet,
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    reviewDetailReviewerContent: {
+      flex: 1,
+      marginLeft: 12
+    },
+    reviewDetailReviewerName: {
+      color: colors.textMain,
+      fontSize: 16,
+      fontWeight: '800'
+    },
+    reviewDetailReviewerMeta: {
+      marginTop: 3,
+      color: colors.textSecondary,
+      fontSize: 12
+    },
+    reviewDetailStatsGrid: {
+      paddingHorizontal: 16,
+      flexDirection: 'row',
+      gap: 10
+    },
+    reviewDetailStatCard: {
+      flex: 1,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 12
+    },
+    reviewDetailStatLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.4
+    },
+    reviewDetailStatValue: {
+      marginTop: 6,
+      color: colors.textMain,
+      fontSize: 14,
+      fontWeight: '800',
+      lineHeight: 20
+    },
+    reviewDetailCommentCard: {
+      margin: 16,
+      marginTop: 12,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 14
+    },
+    reviewDetailSectionTitle: {
+      color: colors.textMain,
+      fontSize: 14,
+      fontWeight: '800'
+    },
+    reviewDetailComment: {
+      marginTop: 8,
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 21
+    },
+    reviewDetailPrimaryAction: {
+      height: 46,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    reviewDetailPrimaryActionText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '800'
     },
     myJobDetailModal: {
       width: '100%',
