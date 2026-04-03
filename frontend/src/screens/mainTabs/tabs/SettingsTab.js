@@ -143,6 +143,7 @@ export function SettingsTab({
   if (settingsPage === 'reviews' && userRole !== 'ADMIN') {
     return (
       <ReviewsPage
+        user={user}
         reviewsData={myReceivedReviews}
         isLoading={isMyReceivedReviewsLoading}
         onBack={onBackFromReviews}
