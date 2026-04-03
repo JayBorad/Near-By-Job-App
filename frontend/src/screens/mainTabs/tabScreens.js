@@ -13,10 +13,11 @@ import {
   useWindowDimensions,
   View
 } from 'react-native';
+import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 import { AdminListState } from '../../components/AdminListState';
 import { COUNTRY_CODES } from '../../constants/countryCodes';
 import {
@@ -58,6 +59,95 @@ const getRatingSummaryText = (summary) => {
     return 'No ratings yet';
   }
   return `${Number(average).toFixed(1)} / 5 (${total} review${total === 1 ? '' : 's'})`;
+};
+
+const formatReviewDate = (value) => {
+  if (!value) return 'No date available';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'No date available';
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
+
+const getReviewMood = (ratingValue) => {
+  const rating = Number(ratingValue || 0);
+  if (rating >= 4.5) {
+    return {
+      label: 'Outstanding',
+      icon: 'sparkles-outline',
+      caption: 'Clients consistently rate your work at the highest level.'
+    };
+  }
+  if (rating >= 4) {
+    return {
+      label: 'Strong',
+      icon: 'thumbs-up-outline',
+      caption: 'You are building solid trust with recent work.'
+    };
+  }
+  if (rating >= 3) {
+    return {
+      label: 'Good',
+      icon: 'chatbubble-ellipses-outline',
+      caption: 'Feedback is positive with a few areas to sharpen.'
+    };
+  }
+  if (rating >= 2) {
+    return {
+      label: 'Mixed',
+      icon: 'alert-circle-outline',
+      caption: 'Some reviews suggest opportunities to improve delivery.'
+    };
+  }
+  return {
+    label: 'Needs Care',
+    icon: 'refresh-circle-outline',
+    caption: 'Focus on communication and delivery consistency next.'
+  };
+};
+
+const getReadableUserModeLabel = (role, mode) => {
+  const raw = String(getUserModeLabel(role, mode) || '-');
+  if (raw === 'N/A' || raw === '-') return raw;
+  return raw
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const formatReviewTickLabel = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short'
+  });
+};
+
+const buildReviewCurvePath = (points) => {
+  if (!points.length) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+
+  return d;
 };
 
 const getApplicationStats = (job) => ({
@@ -4864,10 +4954,141 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
   );
 }
 
-function ReviewsPage({ reviewsData, isLoading, onBack, onRefresh, styles, colors }) {
+function ReviewsPage({ user, reviewsData, isLoading, onBack, onRefresh, styles, colors }) {
+  const [activeFilter, setActiveFilter] = useState('ALL');
+  const [selectedReview, setSelectedReview] = useState(null);
+  const [trendChartWidth, setTrendChartWidth] = useState(0);
   const summary = reviewsData?.summary || { averageRating: null, totalReviews: 0 };
   const reviews = Array.isArray(reviewsData?.reviews) ? reviewsData.reviews : [];
   const distribution = reviewsData?.distribution || {};
+
+  const sortedReviews = useMemo(
+    () =>
+      [...reviews].sort((a, b) => {
+        const aTime = new Date(a?.createdAt || 0).getTime();
+        const bTime = new Date(b?.createdAt || 0).getTime();
+        return bTime - aTime;
+      }),
+    [reviews]
+  );
+
+  const totalReviews = Math.max(Number(summary?.totalReviews || 0), sortedReviews.length);
+  const averageRating = totalReviews ? Number(summary?.averageRating || 0) : 0;
+  const fiveStarCount = Number(distribution?.[5] || 0);
+  const positiveCount = Number(distribution?.[5] || 0) + Number(distribution?.[4] || 0);
+  const reviewsWithComments = sortedReviews.filter((review) => String(review?.comment || '').trim()).length;
+  const latestReview = sortedReviews[0] || null;
+  const reviewMood = totalReviews
+    ? getReviewMood(averageRating || latestReview?.rating || 0)
+    : {
+        label: 'Getting Started',
+        icon: 'sparkles-outline',
+        caption: 'Your review profile will fill up here after completed jobs receive feedback.'
+      };
+
+  const filterOptions = [
+    { key: 'ALL', label: `All (${totalReviews})` },
+    { key: 'TOP', label: `4★ & up (${positiveCount})` },
+    { key: 'FIVE', label: `5★ (${fiveStarCount})` },
+    { key: 'COMMENTS', label: `With Notes (${reviewsWithComments})` }
+  ];
+
+  const filteredReviews = useMemo(() => {
+    if (activeFilter === 'TOP') {
+      return sortedReviews.filter((review) => Number(review?.rating || 0) >= 4);
+    }
+    if (activeFilter === 'FIVE') {
+      return sortedReviews.filter((review) => Number(review?.rating || 0) >= 5);
+    }
+    if (activeFilter === 'COMMENTS') {
+      return sortedReviews.filter((review) => String(review?.comment || '').trim());
+    }
+    return sortedReviews;
+  }, [activeFilter, sortedReviews]);
+
+  const reviewTrendSeries = useMemo(
+    () =>
+      sortedReviews
+        .slice(0, 6)
+        .reverse()
+        .map((review, index) => ({
+          key: review?.id || `trend-${index}`,
+          rating: clamp(Number(review?.rating || 0), 0, 5),
+          label: formatReviewTickLabel(review?.createdAt),
+          createdAt: review?.createdAt,
+          jobTitle: review?.job?.title || 'General feedback'
+        })),
+    [sortedReviews]
+  );
+
+  const reviewTrendChart = useMemo(() => {
+    const width = Math.max(trendChartWidth, 280);
+    const height = 220;
+    const padLeft = 28;
+    const padRight = 14;
+    const padTop = 18;
+    const padBottom = 34;
+    const graphWidth = width - padLeft - padRight;
+    const graphHeight = height - padTop - padBottom;
+    const baseY = height - padBottom;
+
+    const yTicks = [5, 4, 3, 2, 1].map((value) => ({
+      value,
+      y: padTop + ((5 - value) / 4) * graphHeight
+    }));
+
+    if (!reviewTrendSeries.length) {
+      return {
+        width,
+        height,
+        padLeft,
+        padRight,
+        padTop,
+        padBottom,
+        baseY,
+        yTicks,
+        points: [],
+        linePath: '',
+        areaPath: '',
+        averageRating: 0,
+        averageY: baseY
+      };
+    }
+
+    const points = reviewTrendSeries.map((item, index) => {
+      const x =
+        reviewTrendSeries.length === 1
+          ? padLeft + graphWidth / 2
+          : padLeft + (graphWidth * index) / Math.max(reviewTrendSeries.length - 1, 1);
+      const y = padTop + ((5 - item.rating) / 4) * graphHeight;
+      return { ...item, x, y };
+    });
+
+    const averageRating =
+      reviewTrendSeries.reduce((total, item) => total + Number(item.rating || 0), 0) / Math.max(reviewTrendSeries.length, 1);
+    const averageY = padTop + ((5 - averageRating) / 4) * graphHeight;
+    const linePath = points.length > 1 ? buildReviewCurvePath(points) : '';
+    const areaPath =
+      points.length > 1
+        ? `${linePath} L ${points[points.length - 1].x} ${baseY} L ${points[0].x} ${baseY} Z`
+        : '';
+
+    return {
+      width,
+      height,
+      padLeft,
+      padRight,
+      padTop,
+      padBottom,
+      baseY,
+      yTicks,
+      points,
+      linePath,
+      areaPath,
+      averageRating,
+      averageY
+    };
+  }, [reviewTrendSeries, trendChartWidth]);
 
   return (
     <View style={styles.settingsScreen}>
@@ -4884,48 +5105,425 @@ function ReviewsPage({ reviewsData, isLoading, onBack, onRefresh, styles, colors
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollBody}>
-        <View style={styles.myJobCard}>
-          <Text style={styles.optionTitle}>Overall Rating</Text>
-          <Text style={styles.profileHint}>{getRatingSummaryText(summary)}</Text>
-          <View style={styles.myJobMetaRow}>
-            {[5, 4, 3, 2, 1].map((rating) => (
-              <View key={`rating-dist-${rating}`} style={styles.myJobMetaPill}>
-                <Ionicons name="star" size={13} color="#F59E0B" />
-                <Text style={styles.myJobMetaPillText}>{rating}: {Number(distribution?.[rating] || 0)}</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollBody, styles.reviewsScrollBody]}>
+        <ExpoLinearGradient
+          colors={[colors.primarySoft, colors.surface, colors.sheet]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.reviewsHeroCard}
+        >
+          <View style={styles.reviewsHeroGlowPrimary} />
+          <View style={styles.reviewsHeroGlowSecondary} />
+
+          <View style={styles.reviewsHeroTopRow}>
+            <View style={styles.reviewsHeroProfileRow}>
+              <AvatarView imageUrl={user?.avatar || DEFAULT_AVATAR_URL} size={56} colors={colors} showBorder />
+              <View style={styles.reviewsHeroProfileContent}>
+                <View style={styles.reviewsHeroBadge}>
+                  <Ionicons name={reviewMood.icon} size={12} color={colors.primary} />
+                  <Text style={styles.reviewsHeroBadgeText}>Review Snapshot</Text>
+                </View>
+                <Text style={styles.reviewsHeroName}>{user?.name || 'Your profile'}</Text>
+                <Text style={styles.reviewsHeroSubtitle}>{reviewMood.caption}</Text>
               </View>
+            </View>
+
+            <View style={styles.reviewsHeroScoreCard}>
+              <Text style={styles.reviewsHeroScoreValue}>{totalReviews ? averageRating.toFixed(1) : '--'}</Text>
+              <Text style={styles.reviewsHeroScoreLabel}>Average</Text>
+            </View>
+          </View>
+
+          <View style={styles.reviewsHeroStarsRow}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <Ionicons
+                key={`hero-star-${star}`}
+                name={star <= Math.round(averageRating || latestReview?.rating || 0) ? 'star' : 'star-outline'}
+                size={15}
+                color="#F59E0B"
+              />
             ))}
+            <Text style={styles.reviewsHeroStarsText}>{getRatingSummaryText(summary)}</Text>
+          </View>
+
+          <View style={styles.reviewsHeroStatsRow}>
+            <View style={styles.reviewsHeroStatCard}>
+              <Text style={styles.reviewsHeroStatValue}>{totalReviews}</Text>
+              <Text style={styles.reviewsHeroStatLabel}>Total Reviews</Text>
+            </View>
+            <View style={styles.reviewsHeroStatCard}>
+              <Text style={styles.reviewsHeroStatValue}>{fiveStarCount}</Text>
+              <Text style={styles.reviewsHeroStatLabel}>5 Star Ratings</Text>
+            </View>
+            <View style={styles.reviewsHeroStatCard}>
+              <Text style={styles.reviewsHeroStatValue}>{totalReviews ? `${Math.round((reviewsWithComments / totalReviews) * 100)}%` : '0%'}</Text>
+              <Text style={styles.reviewsHeroStatLabel}>Written Feedback</Text>
+            </View>
+          </View>
+        </ExpoLinearGradient>
+
+        <View style={styles.reviewsDistributionCard}>
+          <View style={styles.reviewsSectionHead}>
+            <View style={styles.reviewsSectionHeadContent}>
+              <Text style={styles.reviewsSectionTitle}>Ratings Breakdown</Text>
+              <Text style={styles.reviewsSectionSubtitle}>See how each score contributes to your reputation.</Text>
+            </View>
+            <View style={styles.reviewsSectionPill}>
+              <Ionicons name="analytics-outline" size={13} color={colors.primary} />
+              <Text style={styles.reviewsSectionPillText}>{reviewMood.label}</Text>
+            </View>
+          </View>
+
+          {[5, 4, 3, 2, 1].map((rating) => {
+            const count = Number(distribution?.[rating] || 0);
+            const fillWidth = totalReviews ? `${Math.max((count / totalReviews) * 100, count ? 8 : 0)}%` : '0%';
+
+            return (
+              <View key={`rating-breakdown-${rating}`} style={styles.reviewsDistributionRow}>
+                <View style={styles.reviewsDistributionLabelWrap}>
+                  <Text style={styles.reviewsDistributionLabel}>{rating} Star</Text>
+                  <Text style={styles.reviewsDistributionCount}>{count}</Text>
+                </View>
+                <View style={styles.reviewsDistributionTrack}>
+                  <View style={[styles.reviewsDistributionFill, { width: fillWidth }]} />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.reviewsTrendCard}>
+          <View style={styles.reviewsSectionHead}>
+            <View style={styles.reviewsSectionHeadContent}>
+              <Text style={styles.reviewsSectionTitle}>Review Journey</Text>
+              <Text style={styles.reviewsSectionSubtitle}>A visual look at how your latest ratings are trending over time.</Text>
+            </View>
+            <View style={styles.reviewsTrendPill}>
+              <Ionicons name="pulse-outline" size={13} color={colors.primary} />
+              <Text style={styles.reviewsTrendPillText}>
+                {reviewTrendSeries.length ? `Last ${reviewTrendSeries.length}` : 'Waiting'}
+              </Text>
+            </View>
+          </View>
+
+          {reviewTrendSeries.length ? (
+            <>
+              <View style={styles.reviewsTrendStatsRow}>
+                <View style={styles.reviewsTrendStatCard}>
+                  <Text style={styles.reviewsTrendStatValue}>{reviewTrendChart.averageRating.toFixed(1)}</Text>
+                  <Text style={styles.reviewsTrendStatLabel}>Recent Avg</Text>
+                </View>
+                <View style={styles.reviewsTrendStatCard}>
+                  <Text style={styles.reviewsTrendStatValue}>{reviewTrendSeries[reviewTrendSeries.length - 1]?.rating?.toFixed(1) || '--'}</Text>
+                  <Text style={styles.reviewsTrendStatLabel}>Latest Score</Text>
+                </View>
+                <View style={styles.reviewsTrendStatCard}>
+                  <Text style={styles.reviewsTrendStatValue}>{reviewTrendSeries.length}</Text>
+                  <Text style={styles.reviewsTrendStatLabel}>Shown</Text>
+                </View>
+              </View>
+
+              <View style={styles.reviewsTrendCanvasWrap} onLayout={(event) => setTrendChartWidth(event.nativeEvent.layout.width)}>
+                <Svg width={reviewTrendChart.width} height={reviewTrendChart.height} style={styles.reviewsTrendSvg}>
+                  <Defs>
+                    <LinearGradient id="reviewsTrendAreaFill" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0%" stopColor={colors.primary} stopOpacity="0.28" />
+                      <Stop offset="100%" stopColor={colors.primary} stopOpacity="0.03" />
+                    </LinearGradient>
+                  </Defs>
+
+                  {reviewTrendChart.yTicks.map((tick) => (
+                    <Line
+                      key={`reviews-trend-grid-${tick.value}`}
+                      x1={reviewTrendChart.padLeft}
+                      y1={tick.y}
+                      x2={reviewTrendChart.width - reviewTrendChart.padRight}
+                      y2={tick.y}
+                      stroke={colors.border}
+                      strokeDasharray="4,6"
+                      strokeWidth={1}
+                    />
+                  ))}
+
+                  <Line
+                    x1={reviewTrendChart.padLeft}
+                    y1={reviewTrendChart.averageY}
+                    x2={reviewTrendChart.width - reviewTrendChart.padRight}
+                    y2={reviewTrendChart.averageY}
+                    stroke={colors.textSecondary}
+                    strokeDasharray="6,6"
+                    strokeWidth={1.4}
+                    opacity={0.7}
+                  />
+
+                  {reviewTrendChart.areaPath ? <Path d={reviewTrendChart.areaPath} fill="url(#reviewsTrendAreaFill)" /> : null}
+                  {reviewTrendChart.linePath ? (
+                    <Path d={reviewTrendChart.linePath} stroke={colors.primary} strokeWidth={3} fill="none" />
+                  ) : null}
+
+                  {reviewTrendChart.points.length === 1 ? (
+                    <Line
+                      x1={reviewTrendChart.padLeft}
+                      y1={reviewTrendChart.points[0].y}
+                      x2={reviewTrendChart.width - reviewTrendChart.padRight}
+                      y2={reviewTrendChart.points[0].y}
+                      stroke={colors.primary}
+                      strokeWidth={2}
+                      strokeDasharray="5,5"
+                      opacity={0.85}
+                    />
+                  ) : null}
+
+                  {reviewTrendChart.points.map((point) => (
+                    <Circle key={`reviews-trend-point-${point.key}`} cx={point.x} cy={point.y} r={5} fill="#FFFFFF" stroke={colors.primary} strokeWidth={3} />
+                  ))}
+                </Svg>
+
+                <View style={styles.reviewsTrendYAxisWrap}>
+                  {reviewTrendChart.yTicks.map((tick) => (
+                    <Text key={`reviews-trend-y-${tick.value}`} style={styles.reviewsTrendYAxisText}>
+                      {tick.value}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.reviewsTrendXAxisWrap}>
+                {reviewTrendSeries.map((item) => (
+                  <Text key={`reviews-trend-x-${item.key}`} style={styles.reviewsTrendXAxisText}>
+                    {item.label}
+                  </Text>
+                ))}
+              </View>
+
+              <Text style={styles.reviewsTrendFootnote}>
+                Dashed line shows your recent average rating across the latest feedback.
+              </Text>
+            </>
+          ) : (
+            <View style={styles.reviewsTrendEmptyState}>
+              <Ionicons name="analytics-outline" size={20} color={colors.primary} />
+              <Text style={styles.reviewsTrendEmptyTitle}>Graph will appear here soon</Text>
+              <Text style={styles.reviewsTrendEmptyText}>Once you receive reviews, this section will turn them into a clear visual trend.</Text>
+            </View>
+          )}
+        </View>
+
+        {latestReview ? (
+          <Pressable style={styles.reviewsSpotlightCard} onPress={() => setSelectedReview(latestReview)}>
+            <View style={styles.reviewsSpotlightTop}>
+              <View>
+                <Text style={styles.reviewsSpotlightLabel}>Latest Feedback</Text>
+                <Text style={styles.reviewsSpotlightTitle} numberOfLines={1}>
+                  {latestReview?.job?.title || 'Job feedback'}
+                </Text>
+              </View>
+              <View style={styles.reviewsSpotlightAction}>
+                <Text style={styles.reviewsSpotlightActionText}>Open</Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+              </View>
+            </View>
+
+            <Text style={styles.reviewsSpotlightQuote} numberOfLines={3}>
+              {String(latestReview?.comment || '').trim() || 'No written comment was included with this review.'}
+            </Text>
+
+            <View style={styles.reviewsSpotlightFooter}>
+              <Text style={styles.reviewsSpotlightMeta}>
+                {latestReview?.reviewer?.name || 'Anonymous reviewer'} • {formatReviewDate(latestReview?.createdAt)}
+              </Text>
+              <View style={styles.reviewsSpotlightRatingPill}>
+                <Ionicons name="star" size={13} color="#F59E0B" />
+                <Text style={styles.reviewsSpotlightRatingText}>{Number(latestReview?.rating || 0).toFixed(1)}</Text>
+              </View>
+            </View>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.reviewsSectionHead}>
+          <View>
+            <Text style={styles.reviewsSectionTitle}>Detailed Reviews</Text>
+            <Text style={styles.reviewsSectionSubtitle}>Tap any card to read the full feedback and job context.</Text>
           </View>
         </View>
 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.reviewsFilterRow}
+          style={styles.reviewsFilterScroller}
+        >
+          {filterOptions.map((option) => (
+            <Pressable
+              key={option.key}
+              style={[styles.reviewsFilterChip, activeFilter === option.key && styles.reviewsFilterChipActive]}
+              onPress={() => setActiveFilter(option.key)}
+            >
+              <Text
+                style={[styles.reviewsFilterChipText, activeFilter === option.key && styles.reviewsFilterChipTextActive]}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
         {isLoading ? (
           <AdminListState mode="loading" title="Loading reviews..." subtitle="Please wait..." colors={colors} />
-        ) : reviews.length ? (
-          reviews.map((review) => (
-            <View key={review.id} style={styles.myJobCard}>
-              <View style={styles.myJobHead}>
-                <Text style={styles.myJobTitle} numberOfLines={1}>{review?.job?.title || 'Job'}</Text>
-                <View style={styles.myJobStatusPill}>
-                  <Text style={styles.myJobStatusPillText}>{Number(review?.rating || 0)}/5</Text>
+        ) : filteredReviews.length ? (
+          filteredReviews.map((review, index) => {
+            const ratingValue = Number(review?.rating || 0);
+            const cardMood = getReviewMood(ratingValue);
+            const reviewKey = review?.id || `${review?.job?.title || 'review'}-${review?.createdAt || index}`;
+
+            return (
+              <Pressable key={reviewKey} style={styles.reviewCard} onPress={() => setSelectedReview(review)}>
+                <View style={styles.reviewCardTop}>
+                  <View style={styles.reviewCardMoodPill}>
+                    <Ionicons name={cardMood.icon} size={13} color={colors.primary} />
+                    <Text style={styles.reviewCardMoodText}>{cardMood.label}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
                 </View>
-              </View>
-              <Text style={styles.myJobMeta}>By: {review?.reviewer?.name || '-'}</Text>
-              <Text style={styles.myJobMeta}>Date: {review?.createdAt ? String(review.createdAt).slice(0, 10) : '-'}</Text>
-              <Text style={styles.myJobDescription}>
-                {String(review?.comment || '').trim() || 'No comment added.'}
-              </Text>
-            </View>
-          ))
+
+                <View style={styles.reviewCardStarsRow}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Ionicons
+                      key={`${reviewKey}-star-${star}`}
+                      name={star <= Math.round(ratingValue) ? 'star' : 'star-outline'}
+                      size={14}
+                      color="#F59E0B"
+                    />
+                  ))}
+                  <Text style={styles.reviewCardStarsText}>{ratingValue.toFixed(1)} / 5</Text>
+                </View>
+
+                <View style={styles.reviewCardReviewerRow}>
+                  <AvatarView imageUrl={review?.reviewer?.avatar || DEFAULT_AVATAR_URL} size={42} colors={colors} showBorder />
+                  <View style={styles.reviewCardReviewerContent}>
+                    <Text style={styles.reviewCardReviewerName} numberOfLines={1}>
+                      {review?.reviewer?.name || 'Anonymous reviewer'}
+                    </Text>
+                    <Text style={styles.reviewCardReviewerMeta} numberOfLines={1}>
+                      {getReadableUserModeLabel(review?.reviewer?.role, review?.reviewer?.userMode)} • {formatReviewDate(review?.createdAt)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.reviewCardMetaRow}>
+                  <View style={[styles.reviewCardMetaPill, styles.reviewCardMetaPillWide]}>
+                    <Ionicons name="briefcase-outline" size={13} color={colors.primary} />
+                    <Text style={styles.reviewCardMetaPillText} numberOfLines={1}>
+                      {review?.job?.title || 'General feedback'}
+                    </Text>
+                  </View>
+                  <View style={styles.reviewCardMetaPill}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={13} color={colors.primary} />
+                    <Text style={styles.reviewCardMetaPillText}>
+                      {String(review?.comment || '').trim() ? 'Commented' : 'Rating only'}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={styles.reviewCardComment} numberOfLines={3}>
+                  {String(review?.comment || '').trim() || 'No written comment was added for this review.'}
+                </Text>
+                <Text style={styles.reviewCardHint}>Tap to view full review details</Text>
+              </Pressable>
+            );
+          })
         ) : (
           <AdminListState
             mode="empty"
-            title="No reviews yet"
-            subtitle="Complete jobs to receive ratings from job posters."
+            title="No reviews in this filter"
+            subtitle="Try another filter or refresh to load the latest feedback."
             colors={colors}
             emptySource={ADMIN_EMPTY_ANIMATION}
           />
         )}
       </ScrollView>
+
+      <Modal visible={Boolean(selectedReview)} transparent animationType="fade" onRequestClose={() => setSelectedReview(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setSelectedReview(null)}>
+          <Pressable style={styles.reviewDetailModalCard} onPress={() => {}}>
+            <ExpoLinearGradient
+              colors={[colors.primarySoft, colors.surface]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.reviewDetailHero}
+            >
+              <View style={styles.reviewDetailHeroHead}>
+                <View style={styles.reviewDetailHeroTextWrap}>
+                  <Text style={styles.reviewDetailHeroEyebrow}>Review Details</Text>
+                  <Text style={styles.reviewDetailHeroTitle} numberOfLines={1}>
+                    {selectedReview?.job?.title || 'Job feedback'}
+                  </Text>
+                  <Text style={styles.reviewDetailHeroSubtitle}>{formatReviewDate(selectedReview?.createdAt)}</Text>
+                </View>
+                <Pressable style={styles.reviewDetailCloseBtn} onPress={() => setSelectedReview(null)}>
+                  <Ionicons name="close" size={18} color={colors.textMain} />
+                </Pressable>
+              </View>
+
+              <View style={styles.reviewDetailRatingRow}>
+                <View style={styles.reviewDetailStarsWrap}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Ionicons
+                      key={`modal-star-${star}`}
+                      name={star <= Math.round(Number(selectedReview?.rating || 0)) ? 'star' : 'star-outline'}
+                      size={16}
+                      color="#F59E0B"
+                    />
+                  ))}
+                  <Text style={styles.reviewDetailRatingText}>{Number(selectedReview?.rating || 0).toFixed(1)} / 5</Text>
+                </View>
+                <View style={styles.reviewDetailMoodPill}>
+                  <Ionicons
+                    name={getReviewMood(selectedReview?.rating).icon}
+                    size={13}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.reviewDetailMoodText}>{getReviewMood(selectedReview?.rating).label}</Text>
+                </View>
+              </View>
+            </ExpoLinearGradient>
+
+            <View style={styles.reviewDetailReviewerCard}>
+              <AvatarView imageUrl={selectedReview?.reviewer?.avatar || DEFAULT_AVATAR_URL} size={48} colors={colors} showBorder />
+              <View style={styles.reviewDetailReviewerContent}>
+                <Text style={styles.reviewDetailReviewerName}>{selectedReview?.reviewer?.name || 'Anonymous reviewer'}</Text>
+                <Text style={styles.reviewDetailReviewerMeta}>
+                  {getReadableUserModeLabel(selectedReview?.reviewer?.role, selectedReview?.reviewer?.userMode)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewDetailStatsGrid}>
+              <View style={styles.reviewDetailStatCard}>
+                <Text style={styles.reviewDetailStatLabel}>Job</Text>
+                <Text style={styles.reviewDetailStatValue} numberOfLines={2}>
+                  {selectedReview?.job?.title || 'General feedback'}
+                </Text>
+              </View>
+              <View style={styles.reviewDetailStatCard}>
+                <Text style={styles.reviewDetailStatLabel}>Reviewed On</Text>
+                <Text style={styles.reviewDetailStatValue}>{formatReviewDate(selectedReview?.createdAt)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewDetailCommentCard}>
+              <Text style={styles.reviewDetailSectionTitle}>Feedback</Text>
+              <Text style={styles.reviewDetailComment}>
+                {String(selectedReview?.comment || '').trim() || 'No written comment was included with this review.'}
+              </Text>
+            </View>
+
+            <Pressable style={styles.reviewDetailPrimaryAction} onPress={() => setSelectedReview(null)}>
+              <Text style={styles.reviewDetailPrimaryActionText}>Close</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -5444,7 +6042,7 @@ function SettingsPage({
           <SettingsOption
             icon="star-outline"
             title="My Reviews"
-            subtitle="View all ratings and comments received"
+            subtitle="Open your rating breakdown, comments, and review details"
             onPress={onOpenReviews}
             styles={styles}
             colors={colors}
