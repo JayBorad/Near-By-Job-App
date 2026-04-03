@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Image, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Animated, Easing, Image, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, Path, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
@@ -84,6 +84,12 @@ function compactAmount(value) {
   if (amount >= 100000) return `${(amount / 100000).toFixed(1)}L`;
   if (amount >= 1000) return `${(amount / 1000).toFixed(1)}k`;
   return String(Math.round(amount));
+}
+
+function getPeriodLabel(period) {
+  if (period === 'DAY') return 'Daily';
+  if (period === 'YEAR') return 'Yearly';
+  return 'Monthly';
 }
 
 function getJobBudgetTotal(job) {
@@ -205,6 +211,7 @@ export function DashboardTab({
   const [selectedJobType, setSelectedJobType] = useState('ALL');
   const [earnPeriod, setEarnPeriod] = useState('MONTH');
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
+  const [periodDropdownAnchor, setPeriodDropdownAnchor] = useState(null);
   const [adminRange, setAdminRange] = useState('30D');
   const [adminPage, setAdminPage] = useState('overview');
   const [adminJobStatusFilter, setAdminJobStatusFilter] = useState('ALL');
@@ -214,6 +221,7 @@ export function DashboardTab({
   const adminEarningsChartAnim = useRef(new Animated.Value(0)).current;
   const adminJobsBarAnims = useRef(Array.from({ length: 16 }, () => new Animated.Value(0))).current;
   const adminUsersBarAnims = useRef(Array.from({ length: 16 }, () => new Animated.Value(0))).current;
+  const periodTriggerRef = useRef(null);
   const [adminEarningsChartWidth, setAdminEarningsChartWidth] = useState(0);
   const salesGradientId = useMemo(() => `salesArea-${String(userRole || 'user').toLowerCase()}`, [userRole]);
 
@@ -896,56 +904,88 @@ export function DashboardTab({
     );
   };
 
+  const closePeriodDropdown = () => {
+    setShowPeriodDropdown(false);
+  };
+
+  const togglePeriodDropdown = () => {
+    if (showPeriodDropdown) {
+      closePeriodDropdown();
+      return;
+    }
+
+    if (typeof periodTriggerRef.current?.measureInWindow === 'function') {
+      periodTriggerRef.current.measureInWindow((x, y, width, height) => {
+        setPeriodDropdownAnchor({ x, y, width, height });
+        setShowPeriodDropdown(true);
+      });
+      return;
+    }
+
+    setPeriodDropdownAnchor(null);
+    setShowPeriodDropdown(true);
+  };
+
+  const periodDropdownPosition = periodDropdownAnchor
+    ? {
+        top: periodDropdownAnchor.y + periodDropdownAnchor.height + 6,
+        left: Math.max(12, periodDropdownAnchor.x + periodDropdownAnchor.width - 104)
+      }
+    : {
+        top: 96,
+        right: 12
+      };
+
   return (
-    <ScrollView
-      style={styles.dashboardHeaderOnlyWrap}
-      contentContainerStyle={styles.dashboardHeaderOnlyContent}
-      stickyHeaderIndices={[0]}
-    >
-      <View style={styles.dashboardHeaderShell}>
-        <View style={styles.dashboardTopHeader}>
-          <View style={styles.dashboardTopLeft}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.dashboardProfileImage} />
-            ) : (
-              <View style={styles.dashboardProfileFallback}>
-                <Text style={styles.dashboardProfileFallbackText}>{fallbackLetter}</Text>
-              </View>
-            )}
+    <>
+      <ScrollView
+        style={styles.dashboardHeaderOnlyWrap}
+        contentContainerStyle={styles.dashboardHeaderOnlyContent}
+        stickyHeaderIndices={[0]}
+      >
+        <View style={styles.dashboardHeaderShell}>
+          <View style={styles.dashboardTopHeader}>
+            <View style={styles.dashboardTopLeft}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.dashboardProfileImage} />
+              ) : (
+                <View style={styles.dashboardProfileFallback}>
+                  <Text style={styles.dashboardProfileFallbackText}>{fallbackLetter}</Text>
+                </View>
+              )}
 
-            <View style={styles.dashboardTopMeta}>
-              <Text style={styles.dashboardWelcomeText}>Welcome back</Text>
-              <Text style={styles.dashboardNameText} numberOfLines={1}>
-                {displayName}
-              </Text>
-            </View>
-          </View>
-
-          <Pressable
-            onPress={() => {
-              ringBell();
-              onOpenNotifications?.();
-            }}
-            style={styles.dashboardNotificationBtn}
-          >
-            <Animated.View style={{ transform: [{ rotate: bellRotate }] }}>
-              <Ionicons
-                name={isBellActive ? 'notifications' : 'notifications-outline'}
-                size={19}
-                color={colors.textMain}
-              />
-            </Animated.View>
-            {unreadNotificationCount > 0 ? (
-              <View style={styles.dashboardNotificationDot}>
-                <Text style={styles.dashboardNotificationDotText}>
-                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+              <View style={styles.dashboardTopMeta}>
+                <Text style={styles.dashboardWelcomeText}>Welcome back</Text>
+                <Text style={styles.dashboardNameText} numberOfLines={1}>
+                  {displayName}
                 </Text>
               </View>
-            ) : null}
-          </Pressable>
+            </View>
+
+            <Pressable
+              onPress={() => {
+                ringBell();
+                onOpenNotifications?.();
+              }}
+              style={styles.dashboardNotificationBtn}
+            >
+              <Animated.View style={{ transform: [{ rotate: bellRotate }] }}>
+                <Ionicons
+                  name={isBellActive ? 'notifications' : 'notifications-outline'}
+                  size={19}
+                  color={colors.textMain}
+                />
+              </Animated.View>
+              {unreadNotificationCount > 0 ? (
+                <View style={styles.dashboardNotificationDot}>
+                  <Text style={styles.dashboardNotificationDotText}>
+                    {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+          </View>
         </View>
-      </View>
-      {showPeriodDropdown ? <Pressable style={styles.dashboardGlobalDismissLayer} onPress={() => setShowPeriodDropdown(false)} /> : null}
 
       {isUserDashboard ? (
         <>
@@ -1032,47 +1072,19 @@ export function DashboardTab({
                 <Text style={styles.dashboardSalesTitle}>Sales Statistics</Text>
                 <Text style={styles.dashboardSalesTotal}>Total Earned: {formatCurrency(earningsTotalForPeriod)}</Text>
               </View>
-              <View style={styles.dashboardSalesPeriodWrap}>
+              <View ref={periodTriggerRef} collapsable={false} style={styles.dashboardSalesPeriodWrap}>
                 <Pressable
                   style={styles.dashboardSalesDropdownTrigger}
-                  onPress={() => setShowPeriodDropdown((prev) => !prev)}
+                  onPress={togglePeriodDropdown}
                 >
                   <Ionicons name="calendar-outline" size={13} color={colors.textSecondary} />
-                  <Text style={styles.dashboardSalesDropdownTriggerText}>
-                    {earnPeriod === 'DAY' ? 'Daily' : earnPeriod === 'MONTH' ? 'Monthly' : 'Yearly'}
-                  </Text>
+                  <Text style={styles.dashboardSalesDropdownTriggerText}>{getPeriodLabel(earnPeriod)}</Text>
                   <Ionicons
                     name={showPeriodDropdown ? 'chevron-up' : 'chevron-down'}
                     size={13}
                     color={colors.textSecondary}
                   />
                 </Pressable>
-                {showPeriodDropdown ? (
-                  <View style={styles.dashboardSalesDropdownMenu}>
-                    {PERIOD_OPTIONS.map((option) => (
-                      <Pressable
-                        key={option}
-                        style={[
-                          styles.dashboardSalesDropdownItem,
-                          earnPeriod === option && styles.dashboardSalesDropdownItemActive
-                        ]}
-                        onPress={() => {
-                          setEarnPeriod(option);
-                          setShowPeriodDropdown(false);
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.dashboardSalesDropdownItemText,
-                            earnPeriod === option && styles.dashboardSalesDropdownItemTextActive
-                          ]}
-                        >
-                          {option === 'DAY' ? 'Daily' : option === 'MONTH' ? 'Monthly' : 'Yearly'}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
               </View>
             </View>
 
@@ -1658,6 +1670,39 @@ export function DashboardTab({
           ) : null}
         </Animated.View>
       ) : null}
-    </ScrollView>
+      </ScrollView>
+
+      <Modal visible={showPeriodDropdown} transparent animationType="none" onRequestClose={closePeriodDropdown}>
+        <View style={styles.dashboardDropdownModalRoot}>
+          <Pressable style={styles.dashboardDropdownModalBackdrop} onPress={closePeriodDropdown} />
+          <View pointerEvents="box-none" style={styles.dashboardDropdownModalOverlay}>
+            <View style={[styles.dashboardSalesDropdownMenu, styles.dashboardSalesDropdownMenuFloating, periodDropdownPosition]}>
+              {PERIOD_OPTIONS.map((option) => (
+                <Pressable
+                  key={option}
+                  style={[
+                    styles.dashboardSalesDropdownItem,
+                    earnPeriod === option && styles.dashboardSalesDropdownItemActive
+                  ]}
+                  onPress={() => {
+                    setEarnPeriod(option);
+                    closePeriodDropdown();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.dashboardSalesDropdownItemText,
+                      earnPeriod === option && styles.dashboardSalesDropdownItemTextActive
+                    ]}
+                  >
+                    {getPeriodLabel(option)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
