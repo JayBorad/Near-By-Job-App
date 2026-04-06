@@ -215,12 +215,13 @@ export async function updateJob({ token, jobId, payload }) {
   });
 }
 
-export async function getAllJobs({ token, page = 1, limit = 20, status = 'ALL' }) {
+export async function getAllJobs({ token, page = 1, limit = 20, status = 'ALL', workMode }) {
   const query = new URLSearchParams({
     page: String(page),
     limit: String(limit),
     status
   });
+  if (workMode) query.set('workMode', workMode);
   return apiRequest(`/jobs?${query.toString()}`, {
     method: 'GET',
     headers: token

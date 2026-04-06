@@ -17,6 +17,13 @@ const getStaticMapUris = (latitude, longitude) => [
   `https://static-maps.yandex.ru/1.x/?lang=en_US&ll=${longitude},${latitude}&size=640,300&z=14&l=map&pt=${longitude},${latitude},pm2rdm`
 ];
 
+const getJobWorkModeLabel = (workMode) => {
+  const normalized = String(workMode || 'ONSITE').toUpperCase();
+  if (normalized === 'REMOTE') return 'Remote';
+  if (normalized === 'HYBRID') return 'Hybrid';
+  return 'Onsite';
+};
+
 export function JobLocationCard({ job, title = 'Location', styles, colors }) {
   const { latitude, longitude } = getJobCoordinates(job);
   const hasCoords = latitude !== null && longitude !== null;
@@ -74,6 +81,7 @@ export function JobLocationCard({ job, title = 'Location', styles, colors }) {
       )}
 
       <Text style={styles.jobMapAddressText}>{job?.address || '-'}</Text>
+      <Text style={styles.jobMapCoordsText}>Work Mode: {getJobWorkModeLabel(job?.workMode)}</Text>
       {hasCoords ? (
         <Text style={styles.jobMapCoordsText}>
           {latitude.toFixed(6)}, {longitude.toFixed(6)}
