@@ -3410,6 +3410,11 @@ export const createStyles = (colors) =>
       flexDirection: 'row',
       gap: 8
     },
+    myJobsFilterRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: 6
+    },
     myJobsStatChip: {
       flex: 1,
       borderWidth: 1,
