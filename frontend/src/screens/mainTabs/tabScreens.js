@@ -224,6 +224,25 @@ const getBudgetDisplay = (job) => {
   return `₹${budget} total (₹${(budget / requiredWorkers).toFixed(2)} per person)`;
 };
 
+const JOB_WORK_MODE_OPTIONS = ['REMOTE', 'HYBRID', 'ONSITE'];
+
+const normalizeJobWorkMode = (value) => {
+  const normalized = String(value || 'ONSITE').toUpperCase();
+  return JOB_WORK_MODE_OPTIONS.includes(normalized) ? normalized : 'ONSITE';
+};
+
+const getJobWorkMode = (job) => normalizeJobWorkMode(job?.workMode);
+
+const getJobWorkModeLabel = (jobOrMode) => {
+  const normalized =
+    typeof jobOrMode === 'string'
+      ? normalizeJobWorkMode(jobOrMode)
+      : getJobWorkMode(jobOrMode);
+  if (normalized === 'REMOTE') return 'Remote';
+  if (normalized === 'HYBRID') return 'Hybrid';
+  return 'Onsite';
+};
+
 const getPerWorkerBudget = (job) => {
   const budget = Number(job?.budget || 0);
   const requiredWorkers = Math.max(1, Number(job?.requiredWorkers || 1));
@@ -1974,6 +1993,7 @@ function AdminUsersPage({
                 <Text style={styles.adminJobMeta}>Email: {selectedUserJob?.owner?.email || '-'}</Text>
                 <Text style={styles.adminJobMeta}>Budget: {getBudgetDisplay(selectedUserJob)}</Text>
                 <Text style={styles.adminJobMeta}>Type: {String(selectedUserJob?.jobType || '').replace('_', ' ') || '-'}</Text>
+                <Text style={styles.adminJobMeta}>Work Mode: {getJobWorkModeLabel(selectedUserJob)}</Text>
                 <Text style={styles.adminJobMeta}>
                   Due Date: {selectedUserJob?.dueDate ? String(selectedUserJob.dueDate).slice(0, 10) : '-'}
                 </Text>
@@ -2259,6 +2279,7 @@ function AdminModerationPage({
 }) {
   const [jobSearch, setJobSearch] = useState('');
   const [jobStatusFilter, setJobStatusFilter] = useState('ALL');
+  const [jobWorkModeFilter, setJobWorkModeFilter] = useState('ALL');
   const [showJobFilterModal, setShowJobFilterModal] = useState(false);
   const [detailPage, setDetailPage] = useState('list');
   const [selectedJob, setSelectedJob] = useState(null);
@@ -2268,18 +2289,25 @@ function AdminModerationPage({
   const [pendingStatusChange, setPendingStatusChange] = useState(null);
   const [isUpdatingJobStatus, setIsUpdatingJobStatus] = useState(false);
   const jobFilterOptions = ['ALL', 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+  const jobWorkModeOptions = ['ALL', ...JOB_WORK_MODE_OPTIONS];
+  const activeJobFilterCount = [
+    String(jobSearch || '').trim().length > 0,
+    jobStatusFilter !== 'ALL',
+    jobWorkModeFilter !== 'ALL'
+  ].filter(Boolean).length;
   const filteredJobs = useMemo(
     () =>
       jobs.filter((job) => {
         const matchesStatus = jobStatusFilter === 'ALL' || String(job?.status || '').toUpperCase() === jobStatusFilter;
+        const matchesWorkMode = jobWorkModeFilter === 'ALL' || getJobWorkMode(job) === jobWorkModeFilter;
         const query = jobSearch.trim().toLowerCase();
         const matchesSearch =
           !query ||
           [job?.title, job?.description, job?.owner?.name, job?.category?.name]
             .some((value) => String(value || '').toLowerCase().includes(query));
-        return matchesStatus && matchesSearch;
+        return matchesStatus && matchesWorkMode && matchesSearch;
       }),
-    [jobs, jobSearch, jobStatusFilter]
+    [jobs, jobSearch, jobStatusFilter, jobWorkModeFilter]
   );
   const selectedJobStats = getApplicationStats(selectedJob);
   const currentJobStatus = String(selectedJob?.status || 'OPEN').toUpperCase();
@@ -2400,6 +2428,7 @@ function AdminModerationPage({
               <Text style={styles.adminJobMeta}>Email: {selectedJob?.owner?.email || '-'}</Text>
               <Text style={styles.adminJobMeta}>Budget: {getBudgetDisplay(selectedJob)}</Text>
               <Text style={styles.adminJobMeta}>Type: {String(selectedJob?.jobType || '').replace('_', ' ') || '-'}</Text>
+              <Text style={styles.adminJobMeta}>Work Mode: {getJobWorkModeLabel(selectedJob)}</Text>
               <Text style={styles.adminJobMeta}>Required Workers: {selectedJob?.requiredWorkers || 1}</Text>
               <Text style={styles.adminJobMeta}>Applied Users: {selectedJobStats.appliedCount}</Text>
               <Text style={styles.adminJobMeta}>Accepted Users: {selectedJobStats.acceptedCount}</Text>
@@ -2571,8 +2600,16 @@ function AdminModerationPage({
             style={styles.categorySearchInput}
           />
         </View>
-        <Pressable style={styles.categoryFilterIconBtn} onPress={() => setShowJobFilterModal(true)}>
-          <Ionicons name="filter-outline" size={18} color={colors.primary} />
+        <Pressable
+          style={[styles.categoryFilterIconBtn, activeJobFilterCount ? styles.categoryFilterIconBtnActive : null]}
+          onPress={() => setShowJobFilterModal(true)}
+        >
+          <Ionicons name="filter-outline" size={18} color={activeJobFilterCount ? '#FFFFFF' : colors.primary} />
+          {activeJobFilterCount ? (
+            <View style={styles.adminUserFilterBadge}>
+              <Text style={styles.adminUserFilterBadgeText}>{activeJobFilterCount}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
@@ -2597,6 +2634,7 @@ function AdminModerationPage({
               </View>
               <Text style={styles.adminJobMeta} numberOfLines={1}>By: {job?.owner?.name || '-'}</Text>
               <Text style={styles.adminJobMeta} numberOfLines={1}>Category: {job?.category?.name || '-'}</Text>
+              <Text style={styles.adminJobMeta} numberOfLines={1}>Work Mode: {getJobWorkModeLabel(job)}</Text>
               <Text style={styles.adminJobMeta} numberOfLines={1}>Applied: {Number(job?.applicationStats?.appliedCount || 0)}</Text>
               <View style={styles.adminJobBottomRow}>
                 <Text style={styles.adminJobBudget}>{getBudgetDisplay(job)}</Text>
@@ -2618,7 +2656,17 @@ function AdminModerationPage({
       <Modal visible={showJobFilterModal} transparent animationType="fade" onRequestClose={() => setShowJobFilterModal(false)}>
         <Pressable style={styles.filterBackdrop} onPress={() => setShowJobFilterModal(false)}>
           <Pressable style={styles.categoryFilterModal} onPress={() => {}}>
-            <Text style={styles.optionTitle}>Filter Jobs</Text>
+            <View style={styles.bottomSheetHeaderRow}>
+              <Text style={styles.optionTitle}>Filter Jobs</Text>
+              <Pressable
+                onPress={() => {
+                  setJobStatusFilter('ALL');
+                  setJobWorkModeFilter('ALL');
+                }}
+              >
+                <Text style={styles.bottomSheetResetText}>Reset</Text>
+              </Pressable>
+            </View>
             <Text style={styles.categoryFilterHint}>Choose status to refine jobs</Text>
             {jobFilterOptions.map((option) => (
               <Pressable
@@ -2640,6 +2688,26 @@ function AdminModerationPage({
                   </Text>
                 </View>
                 {jobStatusFilter === option ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+              </Pressable>
+            ))}
+            <Text style={styles.bottomSheetLabel}>Work Mode</Text>
+            {jobWorkModeOptions.map((option) => (
+              <Pressable
+                key={`admin-job-work-mode-${option}`}
+                style={[styles.categoryFilterOption, jobWorkModeFilter === option && styles.categoryFilterOptionActive]}
+                onPress={() => setJobWorkModeFilter(option)}
+              >
+                <View style={styles.categoryFilterOptionLeft}>
+                  <Ionicons
+                    name={option === 'ALL' ? 'apps-outline' : 'business-outline'}
+                    size={16}
+                    color={jobWorkModeFilter === option ? colors.primary : colors.textSecondary}
+                  />
+                  <Text style={[styles.categoryFilterOptionText, jobWorkModeFilter === option && styles.categoryFilterOptionTextActive]}>
+                    {option === 'ALL' ? 'All Modes' : getJobWorkModeLabel(option)}
+                  </Text>
+                </View>
+                {jobWorkModeFilter === option ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
               </Pressable>
             ))}
           </Pressable>
@@ -3271,6 +3339,10 @@ function CreateJobPage({
       scrollToField('jobType');
       return;
     }
+    if (fieldName === 'workMode') {
+      scrollToField('workMode');
+      return;
+    }
     if (fieldName === 'locationLink') {
       scrollToField('locationLink');
       setTimeout(() => locationLinkRef.current?.focus(), 120);
@@ -3474,6 +3546,7 @@ function CreateJobPage({
         label: 'Required workers must be at least 1'
       },
       { key: 'jobType', valid: Boolean(jobForm.jobType), label: 'Job type is required' },
+      { key: 'workMode', valid: Boolean(jobForm.workMode), label: 'Work mode is required' },
       { key: 'locationLink', valid: Boolean(jobForm.locationLink.trim()), label: 'Location link is required' },
       { key: 'address', valid: Boolean(jobForm.address.trim()), label: 'Address is required' },
       { key: 'status', valid: Boolean(jobForm.status), label: 'Status is required' },
@@ -3504,6 +3577,7 @@ function CreateJobPage({
       budgetType: jobForm.budgetType || 'TOTAL',
       requiredWorkers: Number.parseInt(jobForm.requiredWorkers, 10),
       jobType: jobForm.jobType,
+      workMode: jobForm.workMode,
       latitude: jobForm.latitude,
       longitude: jobForm.longitude,
       address: jobForm.address.trim(),
@@ -3829,6 +3903,31 @@ function CreateJobPage({
           </View>
           {errors.jobType ? <Text style={styles.createFieldErrorText}>{errors.jobType}</Text> : null}
 
+          <View onLayout={registerFieldY('workMode')}>
+            <Text style={styles.createFieldLabel}>Work Mode *</Text>
+          </View>
+          <View style={styles.createPillRow}>
+            {JOB_WORK_MODE_OPTIONS.map((type) => (
+              <Pressable
+                key={`work-mode-${type}`}
+                style={[
+                  styles.createPill,
+                  jobForm.workMode === type && styles.createPillActive,
+                  errors.workMode ? styles.createPillError : null
+                ]}
+                onPress={() => {
+                  setJobForm((prev) => ({ ...prev, workMode: type }));
+                  setErrors((prev) => ({ ...prev, workMode: '' }));
+                }}
+              >
+                <Text style={[styles.createPillText, jobForm.workMode === type && styles.createPillTextActive]}>
+                  {getJobWorkModeLabel(type)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {errors.workMode ? <Text style={styles.createFieldErrorText}>{errors.workMode}</Text> : null}
+
           <View onLayout={registerFieldY('locationLink')}>
             <Text style={styles.createFieldLabel}>Location Link *</Text>
           </View>
@@ -3960,10 +4059,14 @@ function CreateJobPage({
 }
 
 function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
+  const [workModeFilter, setWorkModeFilter] = useState('ALL');
   const openCount = jobs.filter((job) => String(job?.status || '').toUpperCase() === 'OPEN').length;
-  const inProgressCount = jobs.filter((job) => String(job?.status || '').toUpperCase() === 'IN_PROGRESS').length;
   const completedCount = jobs.filter((job) => String(job?.status || '').toUpperCase() === 'COMPLETED').length;
   const totalApplicants = jobs.reduce((count, job) => count + Number(job?.applicationCount || 0), 0);
+  const filteredJobs = useMemo(
+    () => jobs.filter((job) => workModeFilter === 'ALL' || getJobWorkMode(job) === workModeFilter),
+    [jobs, workModeFilter]
+  );
 
   return (
     <View style={styles.settingsScreen}>
@@ -4000,8 +4103,8 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
               <Text style={styles.myJobsStatLabel}>Open</Text>
             </View>
             <View style={styles.myJobsStatChip}>
-              <Text style={styles.myJobsStatValue}>{inProgressCount + completedCount}</Text>
-              <Text style={styles.myJobsStatLabel}>Active</Text>
+              <Text style={styles.myJobsStatValue}>{completedCount}</Text>
+              <Text style={styles.myJobsStatLabel}>Completed</Text>
             </View>
           </View>
           <Text style={styles.myJobOpenText}>
@@ -4010,7 +4113,23 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
         </View>
 
         {jobs.length ? (
-          jobs.map((item) => (
+          <View style={styles.myJobsFilterRow}>
+            {['ALL', ...JOB_WORK_MODE_OPTIONS].map((value) => (
+              <Pressable
+                key={`my-jobs-work-mode-${value}`}
+                style={[styles.createPill, workModeFilter === value && styles.createPillActive]}
+                onPress={() => setWorkModeFilter(value)}
+              >
+                <Text style={[styles.createPillText, workModeFilter === value && styles.createPillTextActive]}>
+                  {value === 'ALL' ? 'All Modes' : getJobWorkModeLabel(value)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        {filteredJobs.length ? (
+          filteredJobs.map((item) => (
             <Pressable key={item.id} style={styles.myJobCard} onPress={() => onOpenJob(item)}>
               <View style={styles.myJobHead}>
                 <Text style={styles.myJobTitle} numberOfLines={1}>
@@ -4035,6 +4154,10 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
                 <View style={styles.myJobMetaPill}>
                   <Ionicons name="briefcase-outline" size={13} color={colors.primary} />
                   <Text style={styles.myJobMetaPillText}>{String(item?.jobType || '').replace('_', ' ') || '-'}</Text>
+                </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="business-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>{getJobWorkModeLabel(item)}</Text>
                 </View>
                 <View style={styles.myJobMetaPill}>
                   <Ionicons name="people-outline" size={13} color={colors.primary} />
@@ -4063,7 +4186,7 @@ function MyJobsPage({ jobs, isLoading, onRefresh, onOpenJob, styles, colors }) {
           <AdminListState
             mode="empty"
             title="No jobs found"
-            subtitle="You have not posted any jobs yet."
+            subtitle={jobs.length ? 'No jobs match your selected work mode.' : 'You have not posted any jobs yet.'}
             colors={colors}
             emptySource={ADMIN_EMPTY_ANIMATION}
           />
@@ -4157,6 +4280,10 @@ function MyJobDetailsPage({
             <View style={styles.myJobMetaPill}>
               <Ionicons name="people-outline" size={13} color={colors.primary} />
               <Text style={styles.myJobMetaPillText}>Required: {requiredWorkers}</Text>
+            </View>
+            <View style={styles.myJobMetaPill}>
+              <Ionicons name="business-outline" size={13} color={colors.primary} />
+              <Text style={styles.myJobMetaPillText}>{getJobWorkModeLabel(job)}</Text>
             </View>
             <View style={styles.myJobMetaPill}>
               <Ionicons name="checkmark-done-outline" size={13} color={colors.primary} />
@@ -4445,17 +4572,19 @@ function PickerJobsPage({
 }) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [workModeFilter, setWorkModeFilter] = useState('ALL');
   const [minBudget, setMinBudget] = useState('');
   const [maxBudget, setMaxBudget] = useState('');
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const filterSheetAnim = useRef(new Animated.Value(0)).current;
   const statusOptions = ['ALL', 'OPEN', 'IN_PROGRESS'];
+  const workModeOptions = ['ALL', ...JOB_WORK_MODE_OPTIONS];
   const parsedMinBudget = Number.parseFloat(minBudget);
   const parsedMaxBudget = Number.parseFloat(maxBudget);
   const hasValidMinBudget = Number.isFinite(parsedMinBudget);
   const hasValidMaxBudget = Number.isFinite(parsedMaxBudget);
-  const hasAnyFilter = statusFilter !== 'ALL' || hasValidMinBudget || hasValidMaxBudget;
+  const hasAnyFilter = statusFilter !== 'ALL' || workModeFilter !== 'ALL' || hasValidMinBudget || hasValidMaxBudget;
 
   const openFilterSheet = () => {
     setShowFilterSheet(true);
@@ -4487,6 +4616,7 @@ function PickerJobsPage({
         const isVisibleStatus = status === 'OPEN' || status === 'IN_PROGRESS';
         if (!isVisibleStatus) return false;
         const okStatus = statusFilter === 'ALL' || status === statusFilter;
+        const okWorkMode = workModeFilter === 'ALL' || getJobWorkMode(job) === workModeFilter;
         const numericBudget = Number(job?.budget);
         const hasNumericBudget = Number.isFinite(numericBudget);
         const okMinBudget = !hasValidMinBudget || (hasNumericBudget && numericBudget >= parsedMinBudget);
@@ -4496,9 +4626,9 @@ function PickerJobsPage({
           !q ||
           [job?.title, job?.description, job?.category?.name, job?.owner?.name]
             .some((v) => String(v || '').toLowerCase().includes(q));
-        return okStatus && okMinBudget && okMaxBudget && okQuery;
+        return okStatus && okWorkMode && okMinBudget && okMaxBudget && okQuery;
       }),
-    [jobs, statusFilter, query, hasValidMinBudget, hasValidMaxBudget, parsedMinBudget, parsedMaxBudget]
+    [jobs, statusFilter, workModeFilter, query, hasValidMinBudget, hasValidMaxBudget, parsedMinBudget, parsedMaxBudget]
   );
 
   return (
@@ -4536,7 +4666,7 @@ function PickerJobsPage({
           {hasAnyFilter ? (
             <View style={styles.adminUserFilterBadge}>
               <Text style={styles.adminUserFilterBadgeText}>
-                {[statusFilter !== 'ALL', hasValidMinBudget, hasValidMaxBudget].filter(Boolean).length}
+                {[statusFilter !== 'ALL', workModeFilter !== 'ALL', hasValidMinBudget, hasValidMaxBudget].filter(Boolean).length}
               </Text>
             </View>
           ) : null}
@@ -4577,6 +4707,10 @@ function PickerJobsPage({
                 <View style={styles.myJobMetaPill}>
                   <Ionicons name="cash-outline" size={13} color={colors.primary} />
                   <Text style={styles.myJobMetaPillText}>{getBudgetDisplay(item)}</Text>
+                </View>
+                <View style={styles.myJobMetaPill}>
+                  <Ionicons name="business-outline" size={13} color={colors.primary} />
+                  <Text style={styles.myJobMetaPillText}>{getJobWorkModeLabel(item)}</Text>
                 </View>
                 <View style={styles.myJobMetaPill}>
                   <Ionicons name="people-outline" size={13} color={colors.primary} />
@@ -4629,6 +4763,7 @@ function PickerJobsPage({
                 <Pressable
                   onPress={() => {
                     setStatusFilter('ALL');
+                    setWorkModeFilter('ALL');
                     setMinBudget('');
                     setMaxBudget('');
                   }}
@@ -4646,6 +4781,21 @@ function PickerJobsPage({
                     onPress={() => setStatusFilter(value)}
                   >
                     <Text style={[styles.createPillText, statusFilter === value && styles.createPillTextActive]}>{value}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              <Text style={styles.bottomSheetLabel}>Work Mode</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.createPillRow}>
+                {workModeOptions.map((value) => (
+                  <Pressable
+                    key={`picker-work-mode-${value}`}
+                    style={[styles.createPill, workModeFilter === value && styles.createPillActive]}
+                    onPress={() => setWorkModeFilter(value)}
+                  >
+                    <Text style={[styles.createPillText, workModeFilter === value && styles.createPillTextActive]}>
+                      {value === 'ALL' ? 'All Modes' : getJobWorkModeLabel(value)}
+                    </Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -4704,6 +4854,7 @@ function PickerJobsPage({
               <Text style={styles.myJobMeta}>Category: {selectedJob?.category?.name || '-'}</Text>
               <Text style={styles.myJobMeta}>Posted By: {selectedJob?.owner?.name || '-'}</Text>
               <Text style={styles.myJobMeta}>Budget: {getBudgetDisplay(selectedJob)}</Text>
+              <Text style={styles.myJobMeta}>Work Mode: {getJobWorkModeLabel(selectedJob)}</Text>
               <Text style={styles.myJobMeta}>Applied Users: {stats.appliedCount}</Text>
               <Text style={styles.myJobMeta}>Accepted Users: {stats.acceptedCount}</Text>
               <Text style={styles.myJobMeta}>Pending Users: {stats.pendingCount}</Text>
@@ -4916,6 +5067,7 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
               <Text style={styles.myJobMeta}>Posted By: {selectedApplication?.job?.owner?.name || '-'}</Text>
               <Text style={styles.myJobMeta}>Poster Rating: {getRatingSummaryText(selectedApplication?.job?.owner?.ratingSummary)}</Text>
               <Text style={styles.myJobMeta}>Budget: {getBudgetDisplay(selectedApplication?.job)}</Text>
+              <Text style={styles.myJobMeta}>Work Mode: {getJobWorkModeLabel(selectedApplication?.job)}</Text>
               <Text style={styles.myJobMeta}>Total Seats: {stats.totalSeats}</Text>
               <Text style={styles.myJobMeta}>Total Applied: {stats.appliedCount}</Text>
               <Text style={styles.myJobMeta}>Filled Seats: {stats.filledSeats}</Text>

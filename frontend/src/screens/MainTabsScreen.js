@@ -167,6 +167,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     budget: '',
     budgetType: 'TOTAL',
     jobType: 'ONE_TIME',
+    workMode: 'ONSITE',
     locationLink: '',
     address: '',
     status: 'OPEN',
@@ -226,6 +227,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     budget: '',
     budgetType: 'TOTAL',
     jobType: 'ONE_TIME',
+    workMode: 'ONSITE',
     latitude: '',
     longitude: '',
     address: '',
@@ -1367,6 +1369,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       budget: String(job.budget || ''),
       budgetType: String(job.budgetType || 'TOTAL'),
       jobType: String(job.jobType || 'ONE_TIME'),
+      workMode: String(job.workMode || 'ONSITE'),
       latitude: String(toNumberOrNull(job.latitude) ?? ''),
       longitude: String(toNumberOrNull(job.longitude) ?? ''),
       address: String(job.address || ''),
@@ -1507,6 +1510,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
           budget: Number(editJobForm.budget),
           budgetType: editJobForm.budgetType,
           jobType: editJobForm.jobType,
+          workMode: editJobForm.workMode,
           latitude,
           longitude,
           address: editJobForm.address.trim(),
@@ -1549,6 +1553,7 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         budget: '',
         budgetType: 'TOTAL',
         jobType: 'ONE_TIME',
+        workMode: 'ONSITE',
         locationLink: '',
         address: '',
         status: 'OPEN',
@@ -2745,7 +2750,12 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
               </Pressable>
 
               <JobLocationCard
-                job={{ latitude: editJobForm.latitude, longitude: editJobForm.longitude, address: editJobForm.address }}
+                job={{
+                  latitude: editJobForm.latitude,
+                  longitude: editJobForm.longitude,
+                  address: editJobForm.address,
+                  workMode: editJobForm.workMode
+                }}
                 title="Map Preview"
                 styles={styles}
                 colors={colors}
@@ -2771,6 +2781,21 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
                   >
                     <Text style={[styles.createPillText, editJobForm.jobType === type && styles.createPillTextActive]}>
                       {type.replace('_', ' ')}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.createFieldLabel}>Work Mode</Text>
+              <View style={styles.createPillRow}>
+                {['REMOTE', 'HYBRID', 'ONSITE'].map((type) => (
+                  <Pressable
+                    key={`edit-work-mode-${type}`}
+                    style={[styles.createPill, editJobForm.workMode === type && styles.createPillActive]}
+                    onPress={() => setEditJobForm((prev) => ({ ...prev, workMode: type }))}
+                  >
+                    <Text style={[styles.createPillText, editJobForm.workMode === type && styles.createPillTextActive]}>
+                      {type === 'ONSITE' ? 'Onsite' : type.charAt(0) + type.slice(1).toLowerCase()}
                     </Text>
                   </Pressable>
                 ))}
