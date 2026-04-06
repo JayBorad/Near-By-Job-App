@@ -41,6 +41,12 @@ enum JobType {
   FULL_TIME
 }
 
+enum JobWorkMode {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
 enum BudgetType {
   TOTAL
   PER_PERSON
@@ -162,6 +168,7 @@ model Job {
   budget        Decimal           @db.Decimal(12, 2)
   budgetType    BudgetType        @default(TOTAL)
   jobType       JobType
+  workMode      JobWorkMode       @default(ONSITE)
   latitude      Decimal           @db.Decimal(9, 6)
   longitude     Decimal           @db.Decimal(9, 6)
   address       String
@@ -183,6 +190,7 @@ model Job {
   @@index([createdBy])
   @@index([deletedAt])
   @@index([dueDate])
+  @@index([workMode])
 }
 
 model JobApplication {
