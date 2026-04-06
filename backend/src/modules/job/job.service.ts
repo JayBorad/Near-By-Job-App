@@ -6,6 +6,8 @@ import { getReviewSummaryMapForUsers } from '../../utils/review-summary.js';
 import { emptyApplicationStats, getApplicationStatsMapForJobs } from '../../utils/application-stats.js';
 import { createNotificationsBulk } from '../notification/notification.service.js';
 
+const JOB_WORK_MODE_VALUES = ['REMOTE', 'HYBRID', 'ONSITE'] as const;
+
 const isBrokenJobLocationTriggerError = (error) =>
   String(error?.message || '').toLowerCase().includes('column `new` does not exist') ||
   String(error?.message || '').toLowerCase().includes('column "new" does not exist');
@@ -62,6 +64,7 @@ export const createJob = async (userId, payload) => {
     budget: new Prisma.Decimal(payload.budget),
     budgetType: payload.budgetType || 'TOTAL',
     jobType: payload.jobType,
+    workMode: payload.workMode || 'ONSITE',
     latitude: new Prisma.Decimal(payload.latitude),
     longitude: new Prisma.Decimal(payload.longitude),
     address: payload.address,
@@ -244,16 +247,24 @@ export const softDeleteJob = async (jobId, actor: { id?: string; role?: string }
 export const getAllJobs = async (query) => {
   const { page, limit, skip } = parsePagination(query);
   const requestedStatus = String(query?.status || '').trim().toUpperCase();
+  const requestedWorkMode = String(query?.workMode || '').trim().toUpperCase();
   const statusFilter: Prisma.JobWhereInput =
     requestedStatus === 'ALL'
       ? {}
       : requestedStatus && Object.values(JobStatus).includes(requestedStatus as JobStatus)
         ? { status: requestedStatus as JobStatus }
         : { status: 'OPEN' };
+  const workModeFilter: Prisma.JobWhereInput =
+    requestedWorkMode === 'ALL' || !requestedWorkMode
+      ? {}
+      : JOB_WORK_MODE_VALUES.includes(requestedWorkMode as (typeof JOB_WORK_MODE_VALUES)[number])
+        ? { workMode: requestedWorkMode as (typeof JOB_WORK_MODE_VALUES)[number] }
+        : {};
 
   const where = {
     deletedAt: null,
-    ...statusFilter
+    ...statusFilter,
+    ...workModeFilter
   };
 
   const [jobs, total] = await Promise.all([
