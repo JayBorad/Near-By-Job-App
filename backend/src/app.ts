@@ -10,6 +10,7 @@ import notFound from './middleware/notFound.middleware.js';
 import env from './config/env.js';
 
 const app = express();
+const LOCAL_DEV_ORIGIN_PATTERN = /^https?:\/\/(?:localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3})(?::\d+)?$/;
 
 app.use(helmet());
 const allowedOrigins = [
@@ -17,16 +18,18 @@ const allowedOrigins = [
   'http://localhost:8081',
   'http://127.0.0.1:8081',
   'http://localhost:19006',
-  'http://127.0.0.1:19006',
-  'http://192.168.31.157:8081',
-  'http://192.168.31.157:19006'
+  'http://127.0.0.1:19006'
 ].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (env.clientUrl === '*' || allowedOrigins.includes(origin)) {
+      if (
+        env.clientUrl === '*' ||
+        allowedOrigins.includes(origin) ||
+        (env.nodeEnv !== 'production' && LOCAL_DEV_ORIGIN_PATTERN.test(origin))
+      ) {
         return callback(null, true);
       }
       return callback(new Error(`CORS blocked for origin: ${origin}`));
