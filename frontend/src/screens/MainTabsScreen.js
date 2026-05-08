@@ -58,6 +58,7 @@ import {
 } from '../services/authApi';
 import { io } from 'socket.io-client';
 import { COUNTRY_CODES } from '../constants/countryCodes';
+import { getSocketBaseUrl } from '../services/apiConfig';
 import {
   createStyles,
   darkTheme,
@@ -105,10 +106,7 @@ const STATIC_AVATARS = [
   'https://api.dicebear.com/9.x/adventurer-neutral/png?seed=Luna'
 ];
 const ADMIN_EMPTY_ANIMATION = require('../../assets/lottie/no-result-found.json');
-const SOCKET_BASE_URL = (Platform.OS === 'web'
-  ? (process.env.EXPO_PUBLIC_API_BASE_URL_WEB || 'http://localhost:8000/api/v1')
-  : (process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.31.157:8000/api/v1')
-).replace(/\/api\/v1\/?$/, '');
+const SOCKET_BASE_URL = getSocketBaseUrl();
 
 const formatChatTime = (value) => {
   if (!value) return '';

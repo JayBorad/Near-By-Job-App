@@ -1,15 +1,7 @@
-import { Platform } from 'react-native';
 import { clearSession, loadSession, saveSession } from './sessionStorage';
+import { getApiBaseUrl } from './apiConfig';
 
-const DEFAULT_WEB_API_BASE_URL = 'http://localhost:8000/api/v1';
-const DEFAULT_NATIVE_API_BASE_URL = 'http://192.168.31.157:8000/api/v1';
-
-const WEB_ENV_URL = process.env.EXPO_PUBLIC_API_BASE_URL_WEB;
-const NATIVE_ENV_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-
-const API_BASE_URL = Platform.OS === 'web'
-  ? (WEB_ENV_URL || DEFAULT_WEB_API_BASE_URL)
-  : (NATIVE_ENV_URL || DEFAULT_NATIVE_API_BASE_URL);
+const API_BASE_URL = getApiBaseUrl();
 
 let refreshInFlight = null;
 
