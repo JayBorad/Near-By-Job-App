@@ -85,7 +85,6 @@ export function ExploreTab({
         isLoading={isMyApplicationsLoading}
         onRefresh={onRefreshMyApplications}
         onOpenChat={onOpenChatWithJobPoster}
-        onBack={onBackFromPickerApplications}
         styles={styles}
         colors={colors}
       />
@@ -97,7 +96,6 @@ export function ExploreTab({
       jobs={pickerJobs}
       isLoading={isPickerJobsLoading}
       onRefresh={onRefreshPickerJobs}
-      onOpenMyApplications={onOpenPickerApplications}
       onApplyJob={onApplyJob}
       isApplying={isApplyingJob}
       styles={styles}

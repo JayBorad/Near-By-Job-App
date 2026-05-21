@@ -4566,7 +4566,6 @@ function PickerJobsPage({
   onRefresh,
   onApplyJob,
   isApplying,
-  onOpenMyApplications,
   styles,
   colors
 }) {
@@ -4634,11 +4633,7 @@ function PickerJobsPage({
   return (
     <View style={styles.settingsScreen}>
       <View style={styles.settingsNav}>
-        <View style={styles.settingsNavRight}>
-          <Pressable style={[styles.settingsNavIconBtn, { alignSelf: 'flex-start' }]} onPress={onOpenMyApplications}>
-            <Ionicons name="document-text-outline" size={18} color={colors.primary} />
-          </Pressable>
-        </View>
+        <View style={styles.settingsNavRight} />
         <Text style={styles.settingsNavTitle}>All Jobs</Text>
         <View style={styles.settingsNavRight}>
           <Pressable style={styles.settingsNavIconBtn} onPress={onRefresh}>

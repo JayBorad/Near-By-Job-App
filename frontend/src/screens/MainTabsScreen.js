@@ -2306,11 +2306,19 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     ]).start();
   };
 
-  const switchTab = (nextKey) => {
+  const switchTab = (nextKey, options = {}) => {
     if (showNotificationsPage) {
       setShowNotificationsPage(false);
     }
+    const nextPickerExplorePage =
+      options.pickerExplorePage ||
+      (userRole === 'USER' && userMode === 'JOB_PICKER' && nextKey === 'explore'
+        ? 'applications'
+        : pickerExplorePage);
     if (nextKey === activeTab) {
+      if (nextPickerExplorePage !== pickerExplorePage) {
+        setPickerExplorePage(nextPickerExplorePage);
+      }
       animateIcon(nextKey);
       return;
     }
@@ -2321,6 +2329,9 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     ]).start(() => {
       setActiveTab(nextKey);
       if (nextKey !== 'settings') setSettingsPage('main');
+      if (nextKey === 'explore' && userRole === 'USER' && userMode === 'JOB_PICKER') {
+        setPickerExplorePage(nextPickerExplorePage);
+      }
       if (nextKey !== 'explore') {
         setPickerExplorePage('jobs');
         setMyJobsPage('list');
@@ -2373,6 +2384,15 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const handleCenterAction = () => {
     if (showNotificationsPage) {
       setShowNotificationsPage(false);
+    }
+    if (userRole === 'USER' && userMode === 'JOB_PICKER') {
+      if (activeTab !== 'explore') {
+        switchTab('explore', { pickerExplorePage: 'jobs' });
+        return;
+      }
+      setPickerExplorePage('jobs');
+      animateIcon(centerTab.key);
+      return;
     }
     switchTab(centerTab.key);
   };
@@ -3055,7 +3075,9 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
         <View style={styles.tabBar}>
           {visibleTabs.map((tab) => {
             const isCenter = tab.key === 'create';
-            const active = activeTab === tab.key;
+            const active =
+              activeTab === tab.key &&
+              !(userRole === 'USER' && userMode === 'JOB_PICKER' && tab.key === 'explore' && pickerExplorePage === 'jobs');
 
             if (isCenter) return <View key={tab.key} style={styles.tabSlot} />;
 
@@ -3092,7 +3114,12 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
             }}
           >
             <Ionicons
-              name={activeTab === centerTab.key ? centerTab.activeIcon : centerTab.icon}
+              name={
+                activeTab === centerTab.key ||
+                (userRole === 'USER' && userMode === 'JOB_PICKER' && activeTab === 'explore' && pickerExplorePage === 'jobs')
+                  ? centerTab.activeIcon
+                  : centerTab.icon
+              }
               size={24}
               color="#FFFFFF"
             />

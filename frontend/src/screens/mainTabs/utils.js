@@ -54,7 +54,9 @@ export const getTabsByRoleAndMode = (role, mode) => {
   const createTab = tabs.find((tab) => tab.key === 'create');
   const messagesTab = tabs.find((tab) => tab.key === 'messages');
   if (exploreTab) {
-    exploreTab.label = mode === 'JOB_POSTER' ? 'My Jobs' : 'All Jobs';
+    exploreTab.label = mode === 'JOB_POSTER' ? 'My Jobs' : 'My Apps';
+    exploreTab.icon = mode === 'JOB_POSTER' ? 'briefcase-outline' : 'document-text-outline';
+    exploreTab.activeIcon = mode === 'JOB_POSTER' ? 'briefcase' : 'document-text';
   }
   if (createTab) {
     createTab.icon = mode === 'JOB_POSTER' ? 'add' : 'search-outline';
