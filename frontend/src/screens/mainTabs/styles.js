@@ -768,7 +768,58 @@ export const createStyles = (colors) =>
       paddingHorizontal: 14,
       paddingTop: 14,
       paddingBottom: 12,
-      overflow: 'hidden'
+      overflow: 'hidden',
+      position: 'relative'
+    },
+    dashboardProfitAnalyticsBtn: {
+      position: 'absolute',
+      top: 12,
+      right: 12,
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.18)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.24)',
+      zIndex: 2
+    },
+    dashboardAnalyticsHint: {
+      position: 'absolute',
+      top: 58,
+      right: 12,
+      width: 178,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.72)',
+      zIndex: 3
+    },
+    dashboardAnalyticsHintTitle: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '900'
+    },
+    dashboardAnalyticsHintText: {
+      marginTop: 2,
+      color: colors.primary,
+      opacity: 0.78,
+      fontSize: 11,
+      lineHeight: 15,
+      fontWeight: '700'
+    },
+    dashboardAnalyticsHintPointer: {
+      position: 'absolute',
+      top: -6,
+      right: 18,
+      width: 12,
+      height: 12,
+      borderRadius: 2,
+      backgroundColor: '#FFFFFF',
+      transform: [{ rotate: '45deg' }]
     },
     dashboardUserProfitGlowA: {
       position: 'absolute',
@@ -950,9 +1001,10 @@ export const createStyles = (colors) =>
       justifyContent: 'space-between'
     },
     dashboardSalesXAxisWrap: {
+      display: 'none',
       marginTop: -16,
       marginLeft: 28,
-      marginRight: 8,
+      marginRight: 28,
       flexDirection: 'row',
       justifyContent: 'space-between'
     },
@@ -963,12 +1015,678 @@ export const createStyles = (colors) =>
       minWidth: 18,
       textAlign: 'center'
     },
+    dashboardSalesPointTap: {
+      position: 'absolute',
+      width: 32,
+      height: 32,
+      borderRadius: 16
+    },
+    dashboardSalesTooltip: {
+      position: 'absolute',
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      backgroundColor: colors.primaryDark || colors.primary,
+      borderWidth: 1,
+      borderColor: colors.primaryBorder || colors.border
+    },
+    dashboardSalesTooltipTitle: {
+      color: 'rgba(255,255,255,0.84)',
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    dashboardSalesTooltipAmount: {
+      marginTop: 3,
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '900'
+    },
+    analyticsHeaderCard: {
+      marginHorizontal: 12,
+      marginTop: 10,
+      borderRadius: 18,
+      padding: 14,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    analyticsScreenContent: {
+      paddingTop: TOP_SAFE_PADDING
+    },
+    analyticsHeaderTop: {
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    analyticsBackBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    analyticsHeaderCopy: {
+      flex: 1,
+      marginLeft: 10
+    },
+    analyticsEyebrow: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '800',
+      textTransform: 'uppercase'
+    },
+    analyticsTitle: {
+      marginTop: 2,
+      color: colors.textMain,
+      fontSize: 20,
+      fontWeight: '900'
+    },
+    analyticsHeaderIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary
+    },
+    analyticsHeaderSub: {
+      marginTop: 12,
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: '600'
+    },
+    analyticsDateNavCard: {
+      marginHorizontal: 12,
+      marginTop: 12,
+      borderRadius: 16,
+      padding: 10,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10
+    },
+    analyticsDateArrowBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    analyticsDateCenterBtn: {
+      flex: 1,
+      minHeight: 50,
+      borderRadius: 14,
+      paddingHorizontal: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primarySoft,
+      borderWidth: 1,
+      borderColor: colors.primaryBorder || colors.border
+    },
+    analyticsDateCenterIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+      marginRight: 9
+    },
+    analyticsDateCenterCopy: {
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    analyticsDateCenterLabel: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '900',
+      textAlign: 'center'
+    },
+    analyticsDateCenterSub: {
+      marginTop: 2,
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '800',
+      textAlign: 'center'
+    },
+    analyticsQuietStateCard: {
+      marginHorizontal: 12,
+      marginTop: 12,
+      borderRadius: 16,
+      padding: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primarySoft,
+      borderWidth: 1,
+      borderColor: colors.primaryBorder || colors.border
+    },
+    analyticsQuietStateIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+      marginRight: 10
+    },
+    analyticsQuietStateCopy: {
+      flex: 1
+    },
+    analyticsQuietStateTitle: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '900'
+    },
+    analyticsQuietStateSub: {
+      marginTop: 3,
+      color: colors.textSecondary,
+      fontSize: 11,
+      lineHeight: 16,
+      fontWeight: '700'
+    },
+    analyticsCalendarBackdrop: {
+      flex: 1,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(15, 23, 42, 0.42)'
+    },
+    analyticsCalendarCard: {
+      width: '100%',
+      maxWidth: 420,
+      borderRadius: 22,
+      padding: 14,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    analyticsCalendarHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    analyticsCalendarEyebrow: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '800',
+      textTransform: 'uppercase'
+    },
+    analyticsCalendarTitle: {
+      marginTop: 3,
+      color: colors.textMain,
+      fontSize: 19,
+      fontWeight: '900'
+    },
+    analyticsCalendarCloseBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    analyticsRangePickerRow: {
+      marginTop: 14,
+      flexDirection: 'row',
+      gap: 10
+    },
+    analyticsRangePickerPill: {
+      flex: 1,
+      minHeight: 48,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    analyticsRangePickerPillActive: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.primaryBorder || colors.primary
+    },
+    analyticsRangePickerLabel: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '900',
+      textTransform: 'uppercase'
+    },
+    analyticsRangePickerLabelActive: {
+      color: colors.primary
+    },
+    analyticsRangePickerValue: {
+      marginTop: 3,
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '900'
+    },
+    analyticsRangePickerValueActive: {
+      color: colors.primary
+    },
+    analyticsCalendarNavRow: {
+      marginTop: 14,
+      minHeight: 42,
+      borderRadius: 14,
+      paddingHorizontal: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    analyticsCalendarNavBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 11,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    analyticsCalendarNavTitle: {
+      flex: 1,
+      textAlign: 'center',
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '900'
+    },
+    analyticsCalendarWeekRow: {
+      marginTop: 14,
+      flexDirection: 'row'
+    },
+    analyticsCalendarWeekText: {
+      width: '14.285%',
+      textAlign: 'center',
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '900'
+    },
+    analyticsCalendarGrid: {
+      marginTop: 8,
+      flexDirection: 'row',
+      flexWrap: 'wrap'
+    },
+    analyticsCalendarDayCell: {
+      width: '14.285%',
+      aspectRatio: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 13,
+      borderWidth: 1,
+      borderColor: 'transparent'
+    },
+    analyticsCalendarDayInRange: {
+      backgroundColor: colors.primarySoft
+    },
+    analyticsCalendarDayMuted: {
+      opacity: 0.42
+    },
+    analyticsCalendarDayToday: {
+      borderColor: colors.primaryBorder || colors.primary
+    },
+    analyticsCalendarDaySelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary
+    },
+    analyticsCalendarDayText: {
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    analyticsCalendarDayTextMuted: {
+      color: colors.textSecondary
+    },
+    analyticsCalendarDayTextToday: {
+      color: colors.primary
+    },
+    analyticsCalendarDayTextSelected: {
+      color: '#FFFFFF'
+    },
+    analyticsCalendarFooter: {
+      marginTop: 12,
+      minHeight: 38,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    analyticsCalendarTodayBtn: {
+      height: 36,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.primarySoft,
+      borderWidth: 1,
+      borderColor: colors.primaryBorder || colors.border
+    },
+    analyticsCalendarTodayText: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '900'
+    },
+    analyticsCalendarHint: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    analyticsKpiGrid: {
+      marginHorizontal: 12,
+      marginTop: 12,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between'
+    },
+    analyticsKpiCard: {
+      width: '48.5%',
+      minHeight: 116,
+      borderRadius: 14,
+      padding: 12,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 10
+    },
+    analyticsKpiIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    analyticsKpiLabel: {
+      marginTop: 10,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    analyticsKpiValue: {
+      marginTop: 5,
+      color: colors.textMain,
+      fontSize: 20,
+      fontWeight: '900'
+    },
+    analyticsChartCard: {
+      marginHorizontal: 12,
+      marginTop: 2,
+      borderRadius: 16,
+      padding: 12,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    analyticsSectionHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8
+    },
+    analyticsSectionTitle: {
+      color: colors.textMain,
+      fontSize: 14,
+      fontWeight: '900'
+    },
+    analyticsSectionSub: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '600'
+    },
+    analyticsChartWrap: {
+      minHeight: 210,
+      position: 'relative'
+    },
+    analyticsChartPointTap: {
+      position: 'absolute',
+      width: 36,
+      height: 36,
+      borderRadius: 18
+    },
+    analyticsChartTooltip: {
+      position: 'absolute',
+      borderRadius: 13,
+      paddingHorizontal: 11,
+      paddingVertical: 9,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: colors.primaryBorder || colors.border
+    },
+    analyticsChartTooltipTitle: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: '900'
+    },
+    analyticsChartTooltipAmount: {
+      marginTop: 4,
+      color: colors.textMain,
+      fontSize: 15,
+      fontWeight: '900'
+    },
+    analyticsChartTooltipMeta: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '800'
+    },
+    analyticsChartEmptyOverlay: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 6,
+      bottom: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 18
+    },
+    analyticsChartEmptyGlyph: {
+      width: 46,
+      height: 46,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primarySoft,
+      borderWidth: 1,
+      borderColor: colors.primaryBorder || colors.border,
+      marginBottom: 10
+    },
+    analyticsChartEmptyTitle: {
+      color: colors.textMain,
+      fontSize: 14,
+      fontWeight: '900',
+      textAlign: 'center'
+    },
+    analyticsChartEmptySub: {
+      marginTop: 5,
+      color: colors.textSecondary,
+      fontSize: 11,
+      lineHeight: 16,
+      fontWeight: '700',
+      textAlign: 'center'
+    },
+    analyticsChartEmptyBars: {
+      marginTop: 14,
+      height: 68,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 8
+    },
+    analyticsChartEmptyBar: {
+      width: 10,
+      borderRadius: 999,
+      backgroundColor: colors.primarySoft,
+      borderWidth: 1,
+      borderColor: colors.primaryBorder || colors.border
+    },
+    analyticsSplitGrid: {
+      marginHorizontal: 12,
+      marginTop: 12,
+      marginBottom: 24
+    },
+    analyticsBreakdownCard: {
+      borderRadius: 16,
+      padding: 12,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 12
+    },
+    analyticsBarRow: {
+      marginTop: 12
+    },
+    analyticsBarMeta: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    },
+    analyticsBarLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '800',
+      textTransform: 'capitalize'
+    },
+    analyticsBarValue: {
+      color: colors.textMain,
+      fontSize: 12,
+      fontWeight: '900'
+    },
+    analyticsBarTrack: {
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: colors.background,
+      overflow: 'hidden',
+      marginTop: 6
+    },
+    analyticsBarFill: {
+      height: '100%',
+      borderRadius: 999,
+      backgroundColor: colors.primary
+    },
+    analyticsBarFillAlt: {
+      height: '100%',
+      borderRadius: 999,
+      backgroundColor: '#7C3AED'
+    },
+    analyticsBreakdownEmpty: {
+      marginTop: 12,
+      minHeight: 58,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primarySoft,
+      borderWidth: 1,
+      borderColor: colors.primaryBorder || colors.border,
+      gap: 8
+    },
+    analyticsBreakdownEmptyAlt: {
+      marginTop: 12,
+      minHeight: 58,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(124, 58, 237, 0.10)',
+      borderWidth: 1,
+      borderColor: 'rgba(124, 58, 237, 0.18)',
+      gap: 8
+    },
+    analyticsBreakdownEmptyText: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '800'
+    },
     dashboardTypeFilterRow: {
       marginTop: 12,
       marginHorizontal: 12,
+      position: 'relative',
+      zIndex: 20
+    },
+    dashboardTypeDropdownTrigger: {
+      minHeight: 54,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 12,
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8
+      alignItems: 'center'
+    },
+    dashboardTypeDropdownIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primarySoft,
+      marginRight: 10
+    },
+    dashboardTypeDropdownCopy: {
+      flex: 1
+    },
+    dashboardTypeDropdownLabel: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '900',
+      textTransform: 'uppercase'
+    },
+    dashboardTypeDropdownValue: {
+      marginTop: 2,
+      color: colors.textMain,
+      fontSize: 14,
+      fontWeight: '900'
+    },
+    dashboardTypeDropdownMenu: {
+      position: 'absolute',
+      top: 62,
+      left: 0,
+      right: 0,
+      marginTop: 8,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      padding: 6,
+      zIndex: 25
+    },
+    dashboardTypeDropdownItem: {
+      minHeight: 42,
+      borderRadius: 12,
+      paddingHorizontal: 10,
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    dashboardTypeDropdownItemActive: {
+      backgroundColor: colors.primarySoft
+    },
+    dashboardTypeDropdownItemIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+      marginRight: 9
+    },
+    dashboardTypeDropdownItemIconActive: {
+      backgroundColor: colors.surface
+    },
+    dashboardTypeDropdownItemText: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: '800'
+    },
+    dashboardTypeDropdownItemTextActive: {
+      color: colors.primary
     },
     dashboardTypeFilterChip: {
       height: 32,
@@ -997,12 +1715,13 @@ export const createStyles = (colors) =>
       color: colors.primary
     },
     dashboardStatusMiniGrid: {
-      marginTop: 10,
+      marginTop: 12,
       marginHorizontal: 12,
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'space-between',
-      marginBottom: 12
+      marginBottom: 12,
+      zIndex: 1
     },
     dashboardStatusMiniCardWrap: {
       width: '48.8%',
@@ -1012,9 +1731,10 @@ export const createStyles = (colors) =>
       backgroundColor: colors.sheet,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 10,
-      paddingVertical: 10,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      paddingTop: 12,
+      paddingBottom: 11,
       overflow: 'hidden'
     },
     dashboardStatusMiniHead: {
@@ -1022,31 +1742,31 @@ export const createStyles = (colors) =>
       alignItems: 'center'
     },
     dashboardStatusMiniIcon: {
-      width: 20,
-      height: 20,
+      width: 26,
+      height: 26,
       borderRadius: 10,
-      backgroundColor: 'rgba(255,255,255,0.75)',
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: 6
+      marginRight: 8
     },
     dashboardStatusMiniLabel: {
       flex: 1,
       color: colors.textSecondary,
       fontSize: 11,
-      fontWeight: '700'
+      lineHeight: 15,
+      fontWeight: '900'
     },
     dashboardStatusMiniValue: {
-      marginTop: 8,
+      marginTop: 10,
       color: colors.textMain,
-      fontSize: 30,
+      fontSize: 31,
       fontWeight: '900'
     },
     dashboardStatusMiniMeta: {
-      marginTop: 4,
+      marginTop: 5,
       color: colors.textSecondary,
       fontSize: 10,
-      fontWeight: '600'
+      fontWeight: '700'
     },
     dashboardFilterChip: {
       height: 30,
@@ -4905,12 +5625,18 @@ export const createStyles = (colors) =>
     createMapFullWrap: {
       flex: 1,
       padding: 12,
-      backgroundColor: colors.background
+      backgroundColor: colors.background,
+      position: 'relative'
+    },
+    createMapSearchLayer: {
+      position: 'relative',
+      zIndex: 30,
+      marginBottom: 8
     },
     createMapSearchRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 8
+      marginBottom: 0
     },
     createMapSearchInputWrap: {
       flex: 1,
@@ -4939,12 +5665,16 @@ export const createStyles = (colors) =>
       justifyContent: 'center'
     },
     createMapResultsCard: {
+      position: 'absolute',
+      top: 48,
+      left: 0,
+      right: 0,
+      zIndex: 40,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 12,
       backgroundColor: colors.surface,
-      marginBottom: 8,
-      maxHeight: 180
+      maxHeight: 190
     },
     createMapResultItem: {
       flexDirection: 'row',
@@ -4979,6 +5709,27 @@ export const createStyles = (colors) =>
     },
     createMapNativePressable: {
       flex: 1
+    },
+    createGoogleMapWrap: {
+      flex: 1,
+      position: 'relative',
+      backgroundColor: colors.surface
+    },
+    createGoogleMapLoader: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface
+    },
+    createGoogleMapLoaderText: {
+      marginTop: 8,
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '700'
     },
     createMapTilesCanvas: {
       flex: 1,
