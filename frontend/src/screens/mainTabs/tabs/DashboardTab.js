@@ -2,14 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Defs, Path, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
+import Svg, { Circle, Defs, Path, Stop, Text as SvgText, LinearGradient as SvgLinearGradient } from 'react-native-svg';
 
 const WEB_SAFE_NATIVE_DRIVER = Platform.OS !== 'web';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PERIOD_OPTIONS = ['DAY', 'MONTH', 'YEAR'];
-const ADMIN_RANGE_OPTIONS = ['7D', '30D', '12M'];
+const ADMIN_RANGE_OPTIONS = ['TODAY', 'THIS_MONTH', 'THIS_YEAR'];
 
 const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const CALENDAR_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function startOfWeekMonday(baseDate) {
   const date = new Date(baseDate);
@@ -87,9 +88,178 @@ function compactAmount(value) {
 }
 
 function getPeriodLabel(period) {
-  if (period === 'DAY') return 'Daily';
-  if (period === 'YEAR') return 'Yearly';
-  return 'Monthly';
+  if (period === 'DAY') return 'Today';
+  if (period === 'YEAR') return 'This Year';
+  return 'This Month';
+}
+
+function getSalesAxisLabels(series, period, points, width) {
+  const compactWidth = width < 330;
+  const roomyWidth = width >= 380;
+  let indexes = [];
+
+  if (period === 'YEAR') {
+    indexes = roomyWidth ? [0, 2, 4, 6, 8, 10, 11] : [0, 3, 6, 9, 11];
+  } else if (period === 'DAY') {
+    indexes = compactWidth ? [0, 6, 12, 18, 23] : [0, 4, 8, 12, 16, 20, 23];
+  } else {
+    const count = series.length;
+    if (count <= 1) {
+      indexes = [0];
+    } else {
+      const candidates = compactWidth
+        ? [0, 6, 12, 18, 24, count - 1]
+        : [0, 4, 9, 14, 19, 24, count - 1];
+      indexes = candidates
+        .map((idx) => Math.min(Math.max(idx, 0), count - 1))
+        .filter((idx, position, arr) => arr.indexOf(idx) === position);
+    }
+  }
+
+  return indexes
+    .map((idx) => {
+      const item = series[idx];
+      const point = points[idx];
+      if (!item || !point) return null;
+      return {
+        key: `x-${item.label}-${idx}`,
+        label: item.label,
+        x: point.x,
+        idx
+      };
+    })
+    .filter(Boolean)
+    .map((item, visibleIdx, visibleItems) => ({
+      ...item,
+      y: 166,
+      anchor: visibleIdx === 0 ? 'start' : visibleIdx === visibleItems.length - 1 ? 'end' : 'middle'
+    }));
+}
+
+function getAdminRangeLabel(range) {
+  if (range === 'TODAY') return 'Today';
+  if (range === 'THIS_YEAR') return 'This Year';
+  return 'This Month';
+}
+
+function getSalesTooltipTitle(period, item) {
+  const now = new Date();
+  if (period === 'DAY') {
+    const hour = Number(item?.index || 0);
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, 0, 0, 0);
+    const end = new Date(start);
+    end.setMinutes(59);
+    return `${start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}`;
+  }
+  if (period === 'YEAR') {
+    const date = new Date(now.getFullYear(), Number(item?.index || 0), 1);
+    return date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  }
+  const date = new Date(now.getFullYear(), now.getMonth(), Number(item?.label || 1));
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function getAnalyticsTooltipTitle(bucket) {
+  const start = bucket?.start ? new Date(bucket.start) : null;
+  const end = bucket?.end ? new Date(bucket.end) : null;
+  if (!start || Number.isNaN(start.getTime())) return bucket?.label || 'Selected point';
+  if (end && !Number.isNaN(end.getTime()) && getDateKey(start) === getDateKey(end) && end.getTime() - start.getTime() <= 60 * 60 * 1000) {
+    return `${start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}`;
+  }
+  if (end && !Number.isNaN(end.getTime()) && (start.getMonth() !== end.getMonth() || start.getDate() !== end.getDate())) {
+    return start.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  }
+  return start.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function endOfDay(dateValue) {
+  const date = new Date(dateValue);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function addDays(dateValue, amount) {
+  const date = startOfDay(dateValue);
+  date.setDate(date.getDate() + amount);
+  return date;
+}
+
+function addMonths(dateValue, amount) {
+  const date = new Date(dateValue);
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function addYears(dateValue, amount) {
+  const date = new Date(dateValue);
+  return new Date(date.getFullYear() + amount, date.getMonth(), 1);
+}
+
+function getAnalyticsDayWindow(dateValue) {
+  const start = startOfDay(dateValue);
+  const label = isSameDay(start, new Date())
+    ? 'Today'
+    : start.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  return { start, end: endOfDay(start), label };
+}
+
+function getAnalyticsRangeWindow(startValue, endValue) {
+  const first = startOfDay(startValue);
+  const second = startOfDay(endValue || startValue);
+  const start = first <= second ? first : second;
+  const endStart = first <= second ? second : first;
+  const label = isSameDay(start, endStart)
+    ? getAnalyticsDayWindow(start).label
+    : `${start.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} - ${endStart.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+  return { start, end: endOfDay(endStart), label };
+}
+
+function getDateDisplayLabel(startValue, endValue) {
+  if (isSameDay(startValue, endValue)) {
+    return isSameDay(startValue, new Date()) ? 'Today' : new Date(startValue).toLocaleDateString('en-IN', { weekday: 'short' });
+  }
+  return 'Date range';
+}
+
+function getDateDisplaySubLabel(startValue, endValue) {
+  if (isSameDay(startValue, endValue)) {
+    return new Date(startValue).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+  }
+  const start = startOfDay(startValue);
+  const end = startOfDay(endValue);
+  const first = start <= end ? start : end;
+  const second = start <= end ? end : start;
+  return `${first.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} - ${second.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+}
+
+function getRangeDurationDays(startValue, endValue) {
+  const start = startOfDay(startValue);
+  const end = startOfDay(endValue || startValue);
+  return Math.max(1, Math.round(Math.abs(end.getTime() - start.getTime()) / DAY_MS) + 1);
+}
+
+function isDateWithinRange(dateValue, startValue, endValue) {
+  const date = startOfDay(dateValue);
+  const start = startOfDay(startValue);
+  const end = startOfDay(endValue || startValue);
+  const first = start <= end ? start : end;
+  const second = start <= end ? end : start;
+  return date >= first && date <= second;
+}
+
+function getCalendarCells(monthDate) {
+  const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const cursor = startOfDay(monthStart);
+  cursor.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(cursor);
+    date.setDate(cursor.getDate() + index);
+    return {
+      key: getDateKey(date),
+      date,
+      isCurrentMonth: date.getMonth() === monthStart.getMonth()
+    };
+  });
 }
 
 function getJobBudgetTotal(job) {
@@ -184,7 +354,9 @@ function buildMonotonePath(points) {
 export function DashboardTab({
   user,
   userRole,
+  userMode,
   myApplications,
+  myJobs = [],
   adminJobs = [],
   adminUsers = [],
   onRefreshAdminJobs,
@@ -198,6 +370,7 @@ export function DashboardTab({
   const bellAnim = useRef(new Animated.Value(0)).current;
   const profitAnim = useRef(new Animated.Value(0)).current;
   const filterAnim = useRef(new Animated.Value(0)).current;
+  const analyticsHintAnim = useRef(new Animated.Value(0)).current;
   const statAnims = useRef([
     new Animated.Value(0),
     new Animated.Value(0),
@@ -209,10 +382,24 @@ export function DashboardTab({
   const [chartWidth, setChartWidth] = useState(0);
   const [statsChartWidth, setStatsChartWidth] = useState(0);
   const [selectedJobType, setSelectedJobType] = useState('ALL');
+  const [showJobTypeDropdown, setShowJobTypeDropdown] = useState(false);
   const [earnPeriod, setEarnPeriod] = useState('MONTH');
+  const [selectedSalesIndex, setSelectedSalesIndex] = useState(null);
+  const [selectedAnalyticsIndex, setSelectedAnalyticsIndex] = useState(null);
+  const [showUserAnalytics, setShowUserAnalytics] = useState(false);
+  const [showAnalyticsHint, setShowAnalyticsHint] = useState(true);
+  const [analyticsFocusDate, setAnalyticsFocusDate] = useState(() => startOfDay(new Date()));
+  const [analyticsEndDate, setAnalyticsEndDate] = useState(() => startOfDay(new Date()));
+  const [analyticsCalendarSelection, setAnalyticsCalendarSelection] = useState('START');
+  const [showAnalyticsCalendar, setShowAnalyticsCalendar] = useState(false);
+  const [analyticsCalendarMonth, setAnalyticsCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [analyticsChartWidth, setAnalyticsChartWidth] = useState(0);
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
   const [periodDropdownAnchor, setPeriodDropdownAnchor] = useState(null);
-  const [adminRange, setAdminRange] = useState('30D');
+  const [adminRange, setAdminRange] = useState('THIS_MONTH');
   const [adminPage, setAdminPage] = useState('overview');
   const [adminJobStatusFilter, setAdminJobStatusFilter] = useState('ALL');
   const [adminEarningFilter, setAdminEarningFilter] = useState('ALL');
@@ -224,6 +411,16 @@ export function DashboardTab({
   const periodTriggerRef = useRef(null);
   const [adminEarningsChartWidth, setAdminEarningsChartWidth] = useState(0);
   const salesGradientId = useMemo(() => `salesArea-${String(userRole || 'user').toLowerCase()}`, [userRole]);
+  const jobTypeOptions = useMemo(
+    () => [
+      { key: 'ALL', label: 'All job types', shortLabel: 'All', icon: 'apps-outline' },
+      { key: 'ONE_TIME', label: 'One Time', shortLabel: 'One Time', icon: 'flash-outline' },
+      { key: 'PART_TIME', label: 'Part Time', shortLabel: 'Part Time', icon: 'timer-outline' },
+      { key: 'FULL_TIME', label: 'Full Time', shortLabel: 'Full Time', icon: 'briefcase-outline' }
+    ],
+    []
+  );
+  const selectedJobTypeOption = jobTypeOptions.find((item) => item.key === selectedJobType) || jobTypeOptions[0];
 
   const displayName = useMemo(() => {
     const candidate = String(user?.name || user?.username || user?.email || 'User').trim();
@@ -360,6 +557,14 @@ export function DashboardTab({
     ).start();
   }, [filterAnim, profitAnim, statAnims]);
 
+  useEffect(() => {
+    setSelectedSalesIndex(null);
+  }, [earnPeriod]);
+
+  useEffect(() => {
+    setSelectedAnalyticsIndex(null);
+  }, [analyticsEndDate, analyticsFocusDate]);
+
   const chart = useMemo(() => {
     const values = analytics.days.map((day) => day.amount);
     const maxValue = Math.max(...values, 1);
@@ -399,22 +604,21 @@ export function DashboardTab({
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     if (earnPeriod === 'DAY') {
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const points = Array.from({ length: daysInMonth }, (_, idx) => ({
-        label: String(idx + 1),
+      const todayKey = getDateKey(now);
+      const points = Array.from({ length: 24 }, (_, idx) => ({
+        index: idx,
+        label: idx === 0 ? '12a' : idx === 12 ? '12p' : idx % 6 === 0 ? String(idx) : '',
         value: 0,
-        showLabel: idx === 0 || (idx + 1) % 5 === 0 || idx === daysInMonth - 1
+        showLabel: idx === 0 || idx === 6 || idx === 12 || idx === 18 || idx === 23
       }));
 
       accepted.forEach((item) => {
         const at = new Date(item?.updatedAt || item?.createdAt);
         if (Number.isNaN(at.getTime())) return;
-        if (at.getFullYear() !== year || at.getMonth() !== month) return;
+        if (getDateKey(at) !== todayKey) return;
         const budget = Number(item?.job?.budget || 0);
         if (!Number.isFinite(budget) || budget <= 0) return;
-        points[at.getDate() - 1].value += budget;
+        points[at.getHours()].value += budget;
       });
 
       return points;
@@ -422,31 +626,33 @@ export function DashboardTab({
 
     if (earnPeriod === 'YEAR') {
       const currentYear = now.getFullYear();
-      const years = Array.from({ length: 6 }, (_, idx) => currentYear - 5 + idx);
-      const yearMap = Object.fromEntries(years.map((year, idx) => [year, idx]));
-      const points = years.map((year) => ({ label: String(year), value: 0, showLabel: true }));
-
+      const points = monthNames.map((label, index) => ({ index, label, value: 0, showLabel: true }));
       accepted.forEach((item) => {
         const at = new Date(item?.updatedAt || item?.createdAt);
-        if (Number.isNaN(at.getTime())) return;
-        const idx = yearMap[at.getFullYear()];
-        if (idx === undefined) return;
+        if (Number.isNaN(at.getTime()) || at.getFullYear() !== currentYear) return;
         const budget = Number(item?.job?.budget || 0);
         if (!Number.isFinite(budget) || budget <= 0) return;
-        points[idx].value += budget;
+        points[at.getMonth()].value += budget;
       });
-
       return points;
     }
 
-    const currentYear = now.getFullYear();
-    const points = monthNames.map((label) => ({ label, value: 0, showLabel: true }));
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const points = Array.from({ length: daysInMonth }, (_, idx) => ({
+      index: idx,
+      label: String(idx + 1),
+      value: 0,
+      showLabel: idx === 0 || (idx + 1) % 5 === 0 || idx === daysInMonth - 1
+    }));
     accepted.forEach((item) => {
       const at = new Date(item?.updatedAt || item?.createdAt);
-      if (Number.isNaN(at.getTime()) || at.getFullYear() !== currentYear) return;
+      if (Number.isNaN(at.getTime())) return;
+      if (at.getFullYear() !== year || at.getMonth() !== month) return;
       const budget = Number(item?.job?.budget || 0);
       if (!Number.isFinite(budget) || budget <= 0) return;
-      points[at.getMonth()].value += budget;
+      points[at.getDate() - 1].value += budget;
     });
     return points;
   }, [earnPeriod, myApplications]);
@@ -460,7 +666,7 @@ export function DashboardTab({
     const width = Math.max(statsChartWidth, 260);
     const height = 180;
     const padLeft = 28;
-    const padRight = 10;
+    const padRight = 28;
     const padTop = 10;
     const padBottom = 28;
     const usableWidth = width - padLeft - padRight;
@@ -484,9 +690,39 @@ export function DashboardTab({
       const y = padTop + ratio * usableHeight;
       return { y, value };
     });
+    const xLabels = earningsStatsSeries
+      ? getSalesAxisLabels(earningsStatsSeries, earnPeriod, points, width)
+      : [];
+    const selectedPoint = selectedSalesIndex !== null ? points[selectedSalesIndex] : null;
+    const selectedItem = selectedSalesIndex !== null ? earningsStatsSeries[selectedSalesIndex] : null;
+    const selectedValue = Number(selectedItem?.value || 0);
+    const tooltipWidth = 136;
+    const tooltipLeft = selectedPoint
+      ? Math.max(8, Math.min(width - tooltipWidth - 8, selectedPoint.x - tooltipWidth / 2))
+      : 0;
+    const tooltipTop = selectedPoint
+      ? Math.max(8, Math.min(height - padBottom - 62, selectedPoint.y - 70))
+      : 0;
 
-    return { width, height, padBottom, points, path, areaPath, yTicks };
-  }, [earningsStatsSeries, statsChartWidth]);
+    return {
+      width,
+      height,
+      padBottom,
+      padLeft,
+      padRight,
+      points,
+      path,
+      areaPath,
+      yTicks,
+      xLabels,
+      selectedPoint,
+      selectedItem,
+      selectedValue,
+      tooltipLeft,
+      tooltipTop,
+      tooltipWidth
+    };
+  }, [earnPeriod, earningsStatsSeries, selectedSalesIndex, statsChartWidth]);
 
   const profitGradient = useMemo(() => {
     const base = normalizeHex(colors?.primary);
@@ -495,6 +731,157 @@ export function DashboardTab({
   }, [colors?.primary]);
   const statsLineColor = useMemo(() => shiftHexColor(colors?.primary || '#0F766E', 10) || '#0F766E', [colors?.primary]);
   const themedBarColor = useMemo(() => normalizeHex(colors?.primary) || '#197D74', [colors?.primary]);
+  const isPosterMode = String(userMode || '').toUpperCase() === 'JOB_POSTER';
+
+  const userAnalytics = useMemo(() => {
+    const window = getAnalyticsRangeWindow(analyticsFocusDate, analyticsEndDate);
+    const source = isPosterMode
+      ? (Array.isArray(myJobs) ? myJobs : []).map((job) => ({
+          id: job?.id,
+          title: job?.title || 'Untitled job',
+          date: job?.createdAt || job?.updatedAt,
+          status: String(job?.status || 'OPEN').toUpperCase(),
+          type: String(job?.jobType || 'ONE_TIME').toUpperCase(),
+          amount: getJobBudgetTotal(job),
+          applications: Number(job?.applicationCount || 0),
+          accepted: Number(job?.acceptedApplicationCount || 0),
+          pending: Number(job?.pendingApplicationCount || 0)
+        }))
+      : (Array.isArray(myApplications) ? myApplications : []).map((application) => ({
+          id: application?.id,
+          title: application?.job?.title || 'Untitled job',
+          date: application?.updatedAt || application?.createdAt,
+          status: String(application?.status || 'PENDING').toUpperCase(),
+          type: String(application?.job?.jobType || 'ONE_TIME').toUpperCase(),
+          amount: String(application?.status || '').toUpperCase() === 'ACCEPTED' ? Number(application?.job?.budget || 0) : 0,
+          applications: 1,
+          accepted: String(application?.status || '').toUpperCase() === 'ACCEPTED' ? 1 : 0,
+          pending: String(application?.status || '').toUpperCase() === 'PENDING' ? 1 : 0
+        }));
+
+    const records = source.filter((item) => {
+      const date = new Date(item.date);
+      return !Number.isNaN(date.getTime()) && date >= window.start && date <= window.end;
+    });
+
+    const statusCounts = records.reduce((acc, item) => {
+      acc[item.status] = (acc[item.status] || 0) + 1;
+      return acc;
+    }, {});
+    const typeCounts = records.reduce((acc, item) => {
+      acc[item.type] = (acc[item.type] || 0) + 1;
+      return acc;
+    }, {});
+
+    const totalAmount = records.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const totalApplications = records.reduce((sum, item) => sum + Number(item.applications || 0), 0);
+    const acceptedTotal = records.reduce((sum, item) => sum + Number(item.accepted || 0), 0);
+    const pendingTotal = records.reduce((sum, item) => sum + Number(item.pending || 0), 0);
+
+    const durationDays = Math.max(1, Math.ceil((window.end.getTime() - window.start.getTime()) / DAY_MS));
+    const buckets = [];
+    const bucketMap = {};
+    const useHourly = durationDays <= 1;
+    const useMonthly = durationDays > 62;
+
+    if (useHourly) {
+      for (let hour = 0; hour < 24; hour += 1) {
+        const key = `h-${hour}`;
+        bucketMap[key] = buckets.length;
+        buckets.push({
+          key,
+          start: new Date(window.start.getFullYear(), window.start.getMonth(), window.start.getDate(), hour, 0, 0, 0),
+          end: new Date(window.start.getFullYear(), window.start.getMonth(), window.start.getDate(), hour, 59, 59, 999),
+          label: hour === 0 ? '12a' : hour === 12 ? '12p' : hour % 6 === 0 ? String(hour) : '',
+          value: 0,
+          count: 0
+        });
+      }
+    } else if (useMonthly) {
+      const cursor = new Date(window.start.getFullYear(), window.start.getMonth(), 1);
+      while (cursor <= window.end) {
+        const key = getMonthKey(cursor);
+        bucketMap[key] = buckets.length;
+        buckets.push({
+          key,
+          start: new Date(cursor),
+          end: new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59, 999),
+          label: getShortMonthLabel(cursor),
+          value: 0,
+          count: 0
+        });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    } else {
+      const cursor = startOfDay(window.start);
+      while (cursor <= window.end) {
+        const key = getDateKey(cursor);
+        bucketMap[key] = buckets.length;
+        buckets.push({
+          key,
+          start: new Date(cursor),
+          end: endOfDay(cursor),
+          label: String(cursor.getDate()),
+          value: 0,
+          count: 0
+        });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
+    records.forEach((item) => {
+      const date = new Date(item.date);
+      const key = useHourly ? `h-${date.getHours()}` : useMonthly ? getMonthKey(date) : getDateKey(date);
+      const idx = bucketMap[key];
+      if (idx === undefined) return;
+      buckets[idx].value += Number(item.amount || 0);
+      buckets[idx].count += 1;
+    });
+
+    const maxValue = Math.max(1, ...buckets.map((item) => Number(item.value || item.count || 0)));
+    const chartWidthValue = Math.max(analyticsChartWidth, 280);
+    const chartHeight = 210;
+    const padLeft = 12;
+    const padRight = 12;
+    const padTop = 22;
+    const padBottom = 34;
+    const usableWidth = chartWidthValue - padLeft - padRight;
+    const usableHeight = chartHeight - padTop - padBottom;
+    const points = buckets.map((bucket, index) => {
+      const metric = Number(bucket.value || bucket.count || 0);
+      return {
+        x: padLeft + (usableWidth * index) / Math.max(buckets.length - 1, 1),
+        y: padTop + (1 - metric / maxValue) * usableHeight
+      };
+    });
+    const path = buildMonotonePath(points);
+    const first = points[0] || { x: padLeft, y: chartHeight - padBottom };
+    const last = points[points.length - 1] || first;
+    const areaPath = `${path} L ${last.x} ${chartHeight - padBottom} L ${first.x} ${chartHeight - padBottom} Z`;
+    const labelStep = buckets.length > 16 ? Math.ceil(buckets.length / 5) : buckets.length > 8 ? 2 : 1;
+
+    return {
+      window,
+      records,
+      hasData: records.length > 0,
+      totalAmount,
+      totalApplications,
+      acceptedTotal,
+      pendingTotal,
+      statusCounts,
+      typeCounts,
+      buckets,
+      chart: {
+        width: chartWidthValue,
+        height: chartHeight,
+        padBottom,
+        points,
+        path,
+        areaPath,
+        labelStep
+      }
+    };
+  }, [analyticsChartWidth, analyticsEndDate, analyticsFocusDate, isPosterMode, myApplications, myJobs]);
 
   const ringBell = () => {
     bellAnim.stopAnimation();
@@ -518,7 +905,30 @@ export function DashboardTab({
 
   const isUserDashboard = String(userRole || '').toUpperCase() === 'USER';
   const isAdminDashboard = String(userRole || '').toUpperCase() === 'ADMIN';
-  const adminRangeDays = adminRange === '7D' ? 7 : adminRange === '30D' ? 30 : 365;
+  const adminRangeLabel = getAdminRangeLabel(adminRange);
+
+  useEffect(() => {
+    if (!isUserDashboard || showUserAnalytics || !showAnalyticsHint) return undefined;
+    analyticsHintAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(analyticsHintAnim, {
+        toValue: 1,
+        duration: 340,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: WEB_SAFE_NATIVE_DRIVER
+      }),
+      Animated.delay(1700),
+      Animated.timing(analyticsHintAnim, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: WEB_SAFE_NATIVE_DRIVER
+      })
+    ]).start(({ finished }) => {
+      if (finished) setShowAnalyticsHint(false);
+    });
+    return () => analyticsHintAnim.stopAnimation();
+  }, [analyticsHintAnim, isUserDashboard, showAnalyticsHint, showUserAnalytics]);
 
   useEffect(() => {
     if (!isAdminDashboard) return;
@@ -533,10 +943,16 @@ export function DashboardTab({
   const adminDateWindow = useMemo(() => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
-    const start = startOfDay(end);
-    start.setDate(start.getDate() - (adminRangeDays - 1));
+    let start;
+    if (adminRange === 'TODAY') {
+      start = startOfDay(end);
+    } else if (adminRange === 'THIS_YEAR') {
+      start = new Date(end.getFullYear(), 0, 1, 0, 0, 0, 0);
+    } else {
+      start = new Date(end.getFullYear(), end.getMonth(), 1, 0, 0, 0, 0);
+    }
     return { start, end };
-  }, [adminRangeDays]);
+  }, [adminRange]);
 
   const adminJobMetrics = useMemo(() => {
     const jobs = Array.isArray(adminJobs) ? adminJobs : [];
@@ -616,8 +1032,8 @@ export function DashboardTab({
 
     const daySeries = [];
     const dayMap = {};
-    const dayCount = adminRange === '7D' ? 7 : adminRange === '30D' ? 10 : 12;
-    if (adminRange === '12M') {
+    const dayCount = adminRange === 'TODAY' ? 24 : adminRange === 'THIS_MONTH' ? 10 : 12;
+    if (adminRange === 'THIS_YEAR') {
       const cursor = new Date();
       cursor.setDate(1);
       for (let index = dayCount - 1; index >= 0; index -= 1) {
@@ -632,14 +1048,30 @@ export function DashboardTab({
         if (idx === undefined) return;
         daySeries[idx].value += getJobBudgetTotal(job);
       });
+    } else if (adminRange === 'TODAY') {
+      const todayKey = getDateKey(new Date());
+      for (let index = 0; index < dayCount; index += 1) {
+        daySeries.push({
+          key: `hour-${index}`,
+          hour: index,
+          label: index === 0 ? '12a' : index === 12 ? '12p' : index % 6 === 0 ? String(index) : '',
+          value: 0
+        });
+      }
+      completedJobs.forEach((job) => {
+        const date = new Date(job?.updatedAt || job?.createdAt);
+        if (Number.isNaN(date.getTime()) || getDateKey(date) !== todayKey) return;
+        daySeries[date.getHours()].value += getJobBudgetTotal(job);
+      });
     } else {
-      const bucketSize = adminRange === '30D' ? 3 : 1;
-      for (let index = dayCount - 1; index >= 0; index -= 1) {
-        const date = startOfDay(new Date());
-        date.setDate(date.getDate() - index * bucketSize);
+      const bucketSize = 3;
+      const cursor = startOfDay(adminDateWindow.start);
+      while (cursor <= adminDateWindow.end) {
+        const date = new Date(cursor);
         const end = new Date(date);
         end.setDate(end.getDate() + bucketSize - 1);
         end.setHours(23, 59, 59, 999);
+        if (end > adminDateWindow.end) end.setTime(adminDateWindow.end.getTime());
         const key = `${getDateKey(date)}_${getDateKey(end)}`;
         dayMap[key] = daySeries.length;
         daySeries.push({
@@ -650,6 +1082,7 @@ export function DashboardTab({
             + `-${end.getDate()}`,
           value: 0
         });
+        cursor.setDate(cursor.getDate() + bucketSize);
       }
       completedJobs.forEach((job) => {
         const date = new Date(job?.updatedAt || job?.createdAt);
@@ -936,6 +1369,451 @@ export function DashboardTab({
         right: 12
       };
 
+  const analyticsDateLabel = getDateDisplayLabel(analyticsFocusDate, analyticsEndDate);
+  const analyticsDateSubLabel = getDateDisplaySubLabel(analyticsFocusDate, analyticsEndDate);
+  const analyticsCalendarTitle = analyticsCalendarMonth.toLocaleDateString('en-IN', {
+    month: 'long',
+    year: 'numeric'
+  });
+  const analyticsCalendarCells = getCalendarCells(analyticsCalendarMonth);
+  const moveAnalyticsWindow = (direction) => {
+    const step = getRangeDurationDays(analyticsFocusDate, analyticsEndDate) * direction;
+    setAnalyticsFocusDate((current) => addDays(current, step));
+    setAnalyticsEndDate((current) => addDays(current, step));
+  };
+  const openAnalyticsCalendar = () => {
+    setAnalyticsCalendarMonth(new Date(analyticsFocusDate.getFullYear(), analyticsFocusDate.getMonth(), 1));
+    setAnalyticsCalendarSelection('START');
+    setShowAnalyticsCalendar(true);
+  };
+  const jumpAnalyticsToToday = () => {
+    const today = startOfDay(new Date());
+    setAnalyticsFocusDate(today);
+    setAnalyticsEndDate(today);
+    setAnalyticsCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setAnalyticsCalendarSelection('START');
+    setShowAnalyticsCalendar(false);
+  };
+  const selectAnalyticsCalendarDate = (dateValue) => {
+    const date = startOfDay(dateValue);
+    if (analyticsCalendarSelection === 'START') {
+      setAnalyticsFocusDate(date);
+      setAnalyticsEndDate(date);
+      setAnalyticsCalendarSelection('END');
+      return;
+    }
+    if (date < startOfDay(analyticsFocusDate)) {
+      setAnalyticsEndDate(analyticsFocusDate);
+      setAnalyticsFocusDate(date);
+    } else {
+      setAnalyticsEndDate(date);
+    }
+    setShowAnalyticsCalendar(false);
+  };
+
+  if (isUserDashboard && showUserAnalytics) {
+    const statusRows = Object.entries(userAnalytics.statusCounts).map(([key, value]) => ({
+      key,
+      label: key.replace(/_/g, ' '),
+      value
+    }));
+    const typeRows = Object.entries(userAnalytics.typeCounts).map(([key, value]) => ({
+      key,
+      label: key.replace(/_/g, ' '),
+      value
+    }));
+    const maxStatus = Math.max(1, ...statusRows.map((item) => item.value));
+    const maxType = Math.max(1, ...typeRows.map((item) => item.value));
+    const selectedAnalyticsBucket = selectedAnalyticsIndex !== null ? userAnalytics.buckets[selectedAnalyticsIndex] : null;
+    const selectedAnalyticsPoint = selectedAnalyticsIndex !== null ? userAnalytics.chart.points[selectedAnalyticsIndex] : null;
+    const analyticsTooltipWidth = 152;
+    const analyticsTooltipLeft = selectedAnalyticsPoint
+      ? Math.max(8, Math.min(userAnalytics.chart.width - analyticsTooltipWidth - 8, selectedAnalyticsPoint.x - analyticsTooltipWidth / 2))
+      : 0;
+    const analyticsTooltipTop = selectedAnalyticsPoint
+      ? Math.max(8, Math.min(userAnalytics.chart.height - 82, selectedAnalyticsPoint.y - 74))
+      : 0;
+
+    return (
+      <>
+      <ScrollView
+        style={styles.dashboardHeaderOnlyWrap}
+        contentContainerStyle={[styles.dashboardHeaderOnlyContent, styles.analyticsScreenContent]}
+      >
+        <View style={styles.analyticsHeaderCard}>
+          <View style={styles.analyticsHeaderTop}>
+            <Pressable style={styles.analyticsBackBtn} onPress={() => setShowUserAnalytics(false)}>
+              <Ionicons name="chevron-back" size={18} color={colors.textMain} />
+            </Pressable>
+            <View style={styles.analyticsHeaderCopy}>
+              <Text style={styles.analyticsEyebrow}>{isPosterMode ? 'Poster analytics' : 'Picker analytics'}</Text>
+              <Text style={styles.analyticsTitle}>Performance Analytics</Text>
+            </View>
+            <View style={styles.analyticsHeaderIcon}>
+              <Ionicons name="analytics-outline" size={20} color="#FFFFFF" />
+            </View>
+          </View>
+          <Text style={styles.analyticsHeaderSub}>
+            {isPosterMode
+              ? 'Track posted jobs, applicants, hiring progress, and budget performance.'
+              : 'Track applications, accepted work, earnings, and job type momentum.'}
+          </Text>
+        </View>
+
+        <View style={styles.analyticsDateNavCard}>
+          <Pressable
+            style={styles.analyticsDateArrowBtn}
+            onPress={() => moveAnalyticsWindow(-1)}
+          >
+            <Ionicons name="chevron-back" size={18} color={colors.textMain} />
+          </Pressable>
+
+          <Pressable style={styles.analyticsDateCenterBtn} onPress={openAnalyticsCalendar}>
+            <View style={styles.analyticsDateCenterCopy}>
+              <Text style={styles.analyticsDateCenterLabel}>{analyticsDateLabel}</Text>
+              <Text style={styles.analyticsDateCenterSub}>{analyticsDateSubLabel}</Text>
+            </View>
+          </Pressable>
+
+          <Pressable
+            style={styles.analyticsDateArrowBtn}
+            onPress={() => moveAnalyticsWindow(1)}
+          >
+            <Ionicons name="chevron-forward" size={18} color={colors.textMain} />
+          </Pressable>
+        </View>
+
+        {userAnalytics.hasData ? null : (
+          <View style={styles.analyticsQuietStateCard}>
+            <View style={styles.analyticsQuietStateIcon}>
+              <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+            </View>
+            <View style={styles.analyticsQuietStateCopy}>
+              <Text style={styles.analyticsQuietStateTitle}>No activity in this window</Text>
+              <Text style={styles.analyticsQuietStateSub}>
+                Pick another date range or jump to today to see fresh performance.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.analyticsKpiGrid}>
+          {[
+            {
+              label: isPosterMode ? 'Posted Value' : 'Earned',
+              value: formatCurrency(userAnalytics.totalAmount),
+              icon: 'cash-outline',
+              tone: '#0F766E'
+            },
+            {
+              label: isPosterMode ? 'Jobs Posted' : 'Applications',
+              value: isPosterMode ? userAnalytics.records.length : userAnalytics.totalApplications,
+              icon: 'briefcase-outline',
+              tone: '#0369A1'
+            },
+            {
+              label: isPosterMode ? 'Accepted Applicants' : 'Accepted',
+              value: userAnalytics.acceptedTotal,
+              icon: 'checkmark-done-outline',
+              tone: '#7C3AED'
+            },
+            {
+              label: 'Pending',
+              value: userAnalytics.pendingTotal,
+              icon: 'time-outline',
+              tone: '#CA8A04'
+            }
+          ].map((item) => (
+            <View key={item.label} style={styles.analyticsKpiCard}>
+              <View style={[styles.analyticsKpiIcon, { backgroundColor: hexToRgba(item.tone, 0.12) }]}>
+                <Ionicons name={item.icon} size={16} color={item.tone} />
+              </View>
+              <Text style={styles.analyticsKpiLabel}>{item.label}</Text>
+              <Text style={styles.analyticsKpiValue}>{item.value}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.analyticsChartCard}>
+          <View style={styles.analyticsSectionHead}>
+            <View>
+              <Text style={styles.analyticsSectionTitle}>{isPosterMode ? 'Budget Momentum' : 'Earning Momentum'}</Text>
+              <Text style={styles.analyticsSectionSub}>Filtered trend across selected dates</Text>
+            </View>
+            <Ionicons name="trending-up-outline" size={18} color={colors.primary} />
+          </View>
+          <Pressable
+            style={styles.analyticsChartWrap}
+            onPress={() => setSelectedAnalyticsIndex(null)}
+            onLayout={(event) => setAnalyticsChartWidth(event.nativeEvent.layout.width)}
+          >
+            <Svg width={userAnalytics.chart.width} height={userAnalytics.chart.height}>
+              <Defs>
+                <SvgLinearGradient id="analyticsAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor={statsLineColor} stopOpacity={0.32} />
+                  <Stop offset="100%" stopColor={statsLineColor} stopOpacity={0.03} />
+                </SvgLinearGradient>
+              </Defs>
+              <Path d={userAnalytics.chart.areaPath} fill="url(#analyticsAreaGradient)" />
+              <Path d={userAnalytics.chart.path} stroke={statsLineColor} strokeWidth={3} fill="none" />
+              {userAnalytics.chart.points.map((point, idx) => {
+                const bucket = userAnalytics.buckets[idx];
+                const selected = selectedAnalyticsIndex === idx;
+                if (!Number(bucket?.value || bucket?.count || 0)) return null;
+                return (
+                  <Circle
+                    key={`analytics-dot-${bucket.key}`}
+                    cx={point.x}
+                    cy={point.y}
+                    r={selected ? 5.4 : 3.6}
+                    fill={selected ? '#FFFFFF' : statsLineColor}
+                    stroke={statsLineColor}
+                    strokeWidth={selected ? 2.4 : 0}
+                  />
+                );
+              })}
+              {userAnalytics.buckets.map((bucket, idx) => {
+                if (idx % userAnalytics.chart.labelStep !== 0 && idx !== userAnalytics.buckets.length - 1) return null;
+                const point = userAnalytics.chart.points[idx];
+                if (!point) return null;
+                return (
+                  <SvgText
+                    key={`analytics-label-${bucket.key}`}
+                    x={point.x}
+                    y={userAnalytics.chart.height - 8}
+                    fill={colors.textSecondary}
+                    fontSize="10"
+                    fontWeight="700"
+                    textAnchor={idx === 0 ? 'start' : idx === userAnalytics.buckets.length - 1 ? 'end' : 'middle'}
+                  >
+                    {bucket.label}
+                  </SvgText>
+                );
+              })}
+            </Svg>
+            {userAnalytics.chart.points.map((point, idx) => {
+              const bucket = userAnalytics.buckets[idx];
+              if (!Number(bucket?.value || bucket?.count || 0)) return null;
+              return (
+                <Pressable
+                  key={`analytics-tap-${bucket.key}`}
+                  style={[
+                    styles.analyticsChartPointTap,
+                    {
+                      left: point.x - 18,
+                      top: point.y - 18
+                    }
+                  ]}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    setSelectedAnalyticsIndex(idx);
+                  }}
+                />
+              );
+            })}
+            {selectedAnalyticsBucket && selectedAnalyticsPoint ? (
+              <View
+                style={[
+                  styles.analyticsChartTooltip,
+                  {
+                    left: analyticsTooltipLeft,
+                    top: analyticsTooltipTop,
+                    width: analyticsTooltipWidth
+                  }
+                ]}
+                onStartShouldSetResponder={() => true}
+              >
+                <Text style={styles.analyticsChartTooltipTitle}>{getAnalyticsTooltipTitle(selectedAnalyticsBucket)}</Text>
+                <Text style={styles.analyticsChartTooltipAmount}>{formatCurrency(selectedAnalyticsBucket.value || 0)}</Text>
+                <Text style={styles.analyticsChartTooltipMeta}>
+                  {`${selectedAnalyticsBucket.count || 0} ${isPosterMode ? 'records' : 'applications'}`}
+                </Text>
+              </View>
+            ) : null}
+            {userAnalytics.hasData ? null : (
+              <View style={styles.analyticsChartEmptyOverlay}>
+                <View style={styles.analyticsChartEmptyGlyph}>
+                  <Ionicons name="analytics-outline" size={22} color={colors.primary} />
+                </View>
+                <Text style={styles.analyticsChartEmptyTitle}>Your trend will appear here</Text>
+                <Text style={styles.analyticsChartEmptySub}>Try a wider range to compare applications, accepted work, and earnings.</Text>
+                <View style={styles.analyticsChartEmptyBars}>
+                  {[0.34, 0.52, 0.42, 0.72, 0.58].map((height, index) => (
+                    <View key={`empty-bar-${index}`} style={[styles.analyticsChartEmptyBar, { height: 28 + height * 34 }]} />
+                  ))}
+                </View>
+              </View>
+            )}
+          </Pressable>
+        </View>
+
+        <View style={styles.analyticsSplitGrid}>
+          <View style={styles.analyticsBreakdownCard}>
+            <Text style={styles.analyticsSectionTitle}>Status Breakdown</Text>
+            {statusRows.length ? (
+              statusRows.map((item) => (
+                <View key={item.key} style={styles.analyticsBarRow}>
+                  <View style={styles.analyticsBarMeta}>
+                    <Text style={styles.analyticsBarLabel}>{item.label}</Text>
+                    <Text style={styles.analyticsBarValue}>{item.value}</Text>
+                  </View>
+                  <View style={styles.analyticsBarTrack}>
+                    <View style={[styles.analyticsBarFill, { width: `${Math.max(4, (item.value / maxStatus) * 100)}%` }]} />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.analyticsBreakdownEmpty}>
+                <Ionicons name="file-tray-outline" size={18} color={colors.primary} />
+                <Text style={styles.analyticsBreakdownEmptyText}>No statuses for this selection</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.analyticsBreakdownCard}>
+            <Text style={styles.analyticsSectionTitle}>Job Type Mix</Text>
+            {typeRows.length ? (
+              typeRows.map((item) => (
+                <View key={item.key} style={styles.analyticsBarRow}>
+                  <View style={styles.analyticsBarMeta}>
+                    <Text style={styles.analyticsBarLabel}>{item.label}</Text>
+                    <Text style={styles.analyticsBarValue}>{item.value}</Text>
+                  </View>
+                  <View style={styles.analyticsBarTrack}>
+                    <View style={[styles.analyticsBarFillAlt, { width: `${Math.max(4, (item.value / maxType) * 100)}%` }]} />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.analyticsBreakdownEmptyAlt}>
+                <Ionicons name="options-outline" size={18} color="#7C3AED" />
+                <Text style={styles.analyticsBreakdownEmptyText}>No job type mix yet</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+
+      <Modal
+        transparent
+        visible={showAnalyticsCalendar}
+        animationType="fade"
+        onRequestClose={() => setShowAnalyticsCalendar(false)}
+      >
+        <Pressable style={styles.analyticsCalendarBackdrop} onPress={() => setShowAnalyticsCalendar(false)}>
+          <Pressable style={styles.analyticsCalendarCard} onPress={(event) => event.stopPropagation?.()}>
+            <View style={styles.analyticsCalendarHeader}>
+              <View>
+                <Text style={styles.analyticsCalendarEyebrow}>Select date range</Text>
+                <Text style={styles.analyticsCalendarTitle}>{analyticsCalendarTitle}</Text>
+              </View>
+              <Pressable style={styles.analyticsCalendarCloseBtn} onPress={() => setShowAnalyticsCalendar(false)}>
+                <Ionicons name="close" size={18} color={colors.textMain} />
+              </Pressable>
+            </View>
+
+            <View style={styles.analyticsRangePickerRow}>
+              {[
+                { key: 'START', label: 'From', value: analyticsFocusDate },
+                { key: 'END', label: 'To', value: analyticsEndDate }
+              ].map((item) => (
+                <Pressable
+                  key={item.key}
+                  style={[
+                    styles.analyticsRangePickerPill,
+                    analyticsCalendarSelection === item.key && styles.analyticsRangePickerPillActive
+                  ]}
+                  onPress={() => setAnalyticsCalendarSelection(item.key)}
+                >
+                  <Text
+                    style={[
+                      styles.analyticsRangePickerLabel,
+                      analyticsCalendarSelection === item.key && styles.analyticsRangePickerLabelActive
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.analyticsRangePickerValue,
+                      analyticsCalendarSelection === item.key && styles.analyticsRangePickerValueActive
+                    ]}
+                  >
+                    {new Date(item.value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.analyticsCalendarNavRow}>
+              <Pressable style={styles.analyticsCalendarNavBtn} onPress={() => setAnalyticsCalendarMonth((current) => addYears(current, -1))}>
+                <Ionicons name="play-back-outline" size={16} color={colors.textSecondary} />
+              </Pressable>
+              <Pressable style={styles.analyticsCalendarNavBtn} onPress={() => setAnalyticsCalendarMonth((current) => addMonths(current, -1))}>
+                <Ionicons name="chevron-back" size={17} color={colors.textMain} />
+              </Pressable>
+              <Text style={styles.analyticsCalendarNavTitle}>{analyticsCalendarTitle}</Text>
+              <Pressable style={styles.analyticsCalendarNavBtn} onPress={() => setAnalyticsCalendarMonth((current) => addMonths(current, 1))}>
+                <Ionicons name="chevron-forward" size={17} color={colors.textMain} />
+              </Pressable>
+              <Pressable style={styles.analyticsCalendarNavBtn} onPress={() => setAnalyticsCalendarMonth((current) => addYears(current, 1))}>
+                <Ionicons name="play-forward-outline" size={16} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={styles.analyticsCalendarWeekRow}>
+              {CALENDAR_WEEKDAYS.map((day) => (
+                <Text key={day} style={styles.analyticsCalendarWeekText}>{day}</Text>
+              ))}
+            </View>
+
+            <View style={styles.analyticsCalendarGrid}>
+              {analyticsCalendarCells.map((cell) => {
+                const selected = isSameDay(cell.date, analyticsFocusDate) || isSameDay(cell.date, analyticsEndDate);
+                const inRange = isDateWithinRange(cell.date, analyticsFocusDate, analyticsEndDate);
+                const today = isSameDay(cell.date, new Date());
+                return (
+                  <Pressable
+                    key={cell.key}
+                    style={[
+                      styles.analyticsCalendarDayCell,
+                      inRange && styles.analyticsCalendarDayInRange,
+                      !cell.isCurrentMonth && styles.analyticsCalendarDayMuted,
+                      today && styles.analyticsCalendarDayToday,
+                      selected && styles.analyticsCalendarDaySelected
+                    ]}
+                    onPress={() => selectAnalyticsCalendarDate(cell.date)}
+                  >
+                    <Text
+                      style={[
+                        styles.analyticsCalendarDayText,
+                        !cell.isCurrentMonth && styles.analyticsCalendarDayTextMuted,
+                        today && styles.analyticsCalendarDayTextToday,
+                        selected && styles.analyticsCalendarDayTextSelected
+                      ]}
+                    >
+                      {cell.date.getDate()}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={styles.analyticsCalendarFooter}>
+              <Pressable style={styles.analyticsCalendarTodayBtn} onPress={jumpAnalyticsToToday}>
+                <Ionicons name="locate-outline" size={15} color={colors.primary} />
+                <Text style={styles.analyticsCalendarTodayText}>Today</Text>
+              </Pressable>
+              <Text style={styles.analyticsCalendarHint}>
+                {analyticsCalendarSelection === 'START' ? 'Choose start date' : 'Choose end date'}
+              </Text>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      </>
+    );
+  }
+
   return (
     <>
       <ScrollView
@@ -1010,6 +1888,36 @@ export function DashboardTab({
             >
               <View style={styles.dashboardUserProfitGlowA} />
               <View style={styles.dashboardUserProfitGlowB} />
+              <Pressable
+                style={styles.dashboardProfitAnalyticsBtn}
+                onPress={() => setShowUserAnalytics(true)}
+                hitSlop={10}
+              >
+                <Ionicons name="analytics-outline" size={20} color="#FFFFFF" />
+              </Pressable>
+              {showAnalyticsHint ? (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.dashboardAnalyticsHint,
+                    {
+                      opacity: analyticsHintAnim,
+                      transform: [
+                        {
+                          translateY: analyticsHintAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-8, 0]
+                          })
+                        }
+                      ]
+                    }
+                  ]}
+                >
+                  <Text style={styles.dashboardAnalyticsHintTitle}>Full analytics</Text>
+                  <Text style={styles.dashboardAnalyticsHintText}>Tap here for deeper job insights</Text>
+                  <View style={styles.dashboardAnalyticsHintPointer} />
+                </Animated.View>
+              ) : null}
               <Text style={styles.dashboardUserProfitCardLabel}>Profit amount</Text>
               <Text style={styles.dashboardUserProfitCardAmount}>{formatCurrency(analytics.totalEarned)}</Text>
               <View style={styles.dashboardUserProfitCardTrendRow}>
@@ -1088,12 +1996,16 @@ export function DashboardTab({
               </View>
             </View>
 
-            <View style={styles.dashboardSalesGraphWrap} onLayout={(event) => setStatsChartWidth(event.nativeEvent.layout.width)}>
+            <Pressable
+              style={styles.dashboardSalesGraphWrap}
+              onPress={() => setSelectedSalesIndex(null)}
+              onLayout={(event) => setStatsChartWidth(event.nativeEvent.layout.width)}
+            >
               <Svg width={earningsGraph.width} height={earningsGraph.height}>
                 {earningsGraph.yTicks.map((tick, idx) => (
                   <Path
                     key={`y-${idx}`}
-                    d={`M 28 ${tick.y} L ${earningsGraph.width - 10} ${tick.y}`}
+                    d={`M ${earningsGraph.padLeft} ${tick.y} L ${earningsGraph.width - earningsGraph.padRight} ${tick.y}`}
                     stroke={hexToRgba(colors?.textSecondary, 0.24)}
                     strokeDasharray="4,6"
                     strokeWidth={1}
@@ -1109,6 +2021,36 @@ export function DashboardTab({
 
                 <Path d={earningsGraph.areaPath} fill={`url(#${salesGradientId})`} />
                 <Path d={earningsGraph.path} stroke={statsLineColor} strokeWidth={2.6} fill="none" />
+                {earningsGraph.points.map((point, idx) => {
+                  const value = Number(earningsStatsSeries[idx]?.value || 0);
+                  const isSelected = selectedSalesIndex === idx;
+                  if (!value && !isSelected) return null;
+                  return (
+                    <Circle
+                      key={`sales-dot-${idx}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r={isSelected ? 5 : 3.3}
+                      fill={isSelected ? '#FFFFFF' : statsLineColor}
+                      stroke={statsLineColor}
+                      strokeWidth={isSelected ? 2.4 : 0}
+                      opacity={isSelected ? 1 : 0.9}
+                    />
+                  );
+                })}
+                {earningsGraph.xLabels.map((item) => (
+                  <SvgText
+                    key={item.key}
+                    x={item.x}
+                    y={item.y}
+                    fill={colors.textSecondary}
+                    fontSize="10"
+                    fontWeight="700"
+                    textAnchor={item.anchor}
+                  >
+                    {item.label}
+                  </SvgText>
+                ))}
               </Svg>
 
               <View style={styles.dashboardSalesYAxisWrap}>
@@ -1119,14 +2061,45 @@ export function DashboardTab({
                 ))}
               </View>
 
-              <View style={styles.dashboardSalesXAxisWrap}>
-                {earningsStatsSeries.map((item, idx) => (
-                  <Text key={`x-${item.label}-${idx}`} style={styles.dashboardSalesAxisText}>
-                    {item.showLabel ? item.label : ''}
+              {earningsGraph.points.map((point, idx) => (
+                <Pressable
+                  key={`sales-tap-${idx}`}
+                  style={[
+                    styles.dashboardSalesPointTap,
+                    {
+                      left: point.x - 16,
+                      top: point.y - 16
+                    }
+                  ]}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    setSelectedSalesIndex(idx);
+                  }}
+                />
+              ))}
+
+              {earningsGraph.selectedPoint ? (
+                <View
+                  style={[
+                    styles.dashboardSalesTooltip,
+                    {
+                      left: earningsGraph.tooltipLeft,
+                      top: earningsGraph.tooltipTop,
+                      width: earningsGraph.tooltipWidth
+                    }
+                  ]}
+                  onStartShouldSetResponder={() => true}
+                >
+                  <Text style={styles.dashboardSalesTooltipTitle}>
+                    {getSalesTooltipTitle(earnPeriod, earningsGraph.selectedItem)}
                   </Text>
-                ))}
-              </View>
-            </View>
+                  <Text style={styles.dashboardSalesTooltipAmount}>
+                    {formatCurrency(earningsGraph.selectedValue)}
+                  </Text>
+                </View>
+              ) : null}
+
+            </Pressable>
           </View>
 
           <Animated.View
@@ -1145,33 +2118,49 @@ export function DashboardTab({
               }
             ]}
           >
-            {[
-              { key: 'ALL', label: 'All', icon: 'apps-outline' },
-              { key: 'ONE_TIME', label: 'One Time', icon: 'flash-outline' },
-              { key: 'PART_TIME', label: 'Part Time', icon: 'timer-outline' },
-              { key: 'FULL_TIME', label: 'Full Time', icon: 'briefcase-outline' }
-            ].map((item) => (
-              <Pressable
-                key={item.key}
-                style={[styles.dashboardTypeFilterChip, selectedJobType === item.key && styles.dashboardTypeFilterChipActive]}
-                onPress={() => setSelectedJobType(item.key)}
-              >
-                <Ionicons
-                  name={item.icon}
-                  size={13}
-                  color={selectedJobType === item.key ? colors.primary : colors.textSecondary}
-                  style={styles.dashboardTypeFilterChipIcon}
-                />
-                <Text
-                  style={[
-                    styles.dashboardTypeFilterChipText,
-                    selectedJobType === item.key && styles.dashboardTypeFilterChipTextActive
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            ))}
+            <Pressable
+              style={styles.dashboardTypeDropdownTrigger}
+              onPress={() => setShowJobTypeDropdown((current) => !current)}
+            >
+              <View style={styles.dashboardTypeDropdownIcon}>
+                <Ionicons name={selectedJobTypeOption.icon} size={15} color={colors.primary} />
+              </View>
+              <View style={styles.dashboardTypeDropdownCopy}>
+                <Text style={styles.dashboardTypeDropdownLabel}>Filter jobs</Text>
+                <Text style={styles.dashboardTypeDropdownValue}>{selectedJobTypeOption.label}</Text>
+              </View>
+              <Ionicons
+                name={showJobTypeDropdown ? 'chevron-up' : 'chevron-down'}
+                size={17}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+
+            {showJobTypeDropdown ? (
+              <View style={styles.dashboardTypeDropdownMenu}>
+                {jobTypeOptions.map((item) => {
+                  const active = selectedJobType === item.key;
+                  return (
+                    <Pressable
+                      key={item.key}
+                      style={[styles.dashboardTypeDropdownItem, active && styles.dashboardTypeDropdownItemActive]}
+                      onPress={() => {
+                        setSelectedJobType(item.key);
+                        setShowJobTypeDropdown(false);
+                      }}
+                    >
+                      <View style={[styles.dashboardTypeDropdownItemIcon, active && styles.dashboardTypeDropdownItemIconActive]}>
+                        <Ionicons name={item.icon} size={14} color={active ? colors.primary : colors.textSecondary} />
+                      </View>
+                      <Text style={[styles.dashboardTypeDropdownItemText, active && styles.dashboardTypeDropdownItemTextActive]}>
+                        {item.label}
+                      </Text>
+                      {active ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
           </Animated.View>
 
           <View style={styles.dashboardStatusMiniGrid}>
@@ -1181,65 +2170,71 @@ export function DashboardTab({
                 value: statusCards.COMPLETED,
                 icon: 'checkmark-done-outline',
                 iconColor: '#0284C7',
-                tone: ['#F0F9FF', '#E0F2FE']
+                accent: '#0284C7',
+                tone: ['#FFFFFF', '#FFFFFF']
               },
               {
                 label: 'In Progress',
                 value: statusCards.IN_PROGRESS,
                 icon: 'time-outline',
                 iconColor: '#0F766E',
-                tone: ['#ECFEFF', '#CCFBF1']
+                accent: '#0F766E',
+                tone: ['#FFFFFF', '#FFFFFF']
               },
               {
                 label: 'Cancelled Jobs',
                 value: statusCards.CANCELLED,
                 icon: 'close-outline',
                 iconColor: '#DC2626',
-                tone: ['#FEF2F2', '#FEE2E2']
+                accent: '#DC2626',
+                tone: ['#FFFFFF', '#FFFFFF']
               },
               {
                 label: 'Open Jobs',
                 value: statusCards.OPEN,
                 icon: 'briefcase-outline',
                 iconColor: '#CA8A04',
-                tone: ['#FFFBEB', '#FEF3C7']
+                accent: '#CA8A04',
+                tone: ['#FFFFFF', '#FFFFFF']
               }
-            ].map((card, idx) => (
-              <Animated.View
-                key={card.label}
-                style={[
-                  styles.dashboardStatusMiniCardWrap,
-                  {
-                    opacity: statAnims[idx],
-                    transform: [
-                      {
-                        translateY: statAnims[idx].interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [18, 0]
-                        })
-                      },
-                      {
-                        scale: statAnims[idx].interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.96, 1]
-                        })
-                      }
-                    ]
-                  }
-                ]}
-              >
-                <LinearGradient colors={card.tone} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.dashboardStatusMiniCard}>
-                  <View style={styles.dashboardStatusMiniHead}>
-                    <View style={styles.dashboardStatusMiniIcon}>
-                      <Ionicons name={card.icon} size={13} color={card.iconColor} />
+            ].map((card, idx) => {
+              return (
+                <Animated.View
+                  key={card.label}
+                  style={[
+                    styles.dashboardStatusMiniCardWrap,
+                    {
+                      opacity: statAnims[idx],
+                      transform: [
+                        {
+                          translateY: statAnims[idx].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [18, 0]
+                          })
+                        },
+                        {
+                          scale: statAnims[idx].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.96, 1]
+                          })
+                        }
+                      ]
+                    }
+                  ]}
+                >
+                  <LinearGradient colors={card.tone} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.dashboardStatusMiniCard}>
+                    <View style={styles.dashboardStatusMiniHead}>
+                      <View style={[styles.dashboardStatusMiniIcon, { backgroundColor: hexToRgba(card.accent, 0.12) }]}>
+                        <Ionicons name={card.icon} size={14} color={card.iconColor} />
+                      </View>
+                      <Text style={styles.dashboardStatusMiniLabel}>{card.label}</Text>
                     </View>
-                    <Text style={styles.dashboardStatusMiniLabel}>{card.label}</Text>
-                  </View>
-                  <Text style={styles.dashboardStatusMiniValue}>{card.value}</Text>
-                  <Text style={styles.dashboardStatusMiniMeta}>Update: {nowLabel}</Text>
-                </LinearGradient>
-              </Animated.View>
-            ))}
+                    <Text style={styles.dashboardStatusMiniValue}>{card.value}</Text>
+                    <Text style={styles.dashboardStatusMiniMeta}>Updated {nowLabel}</Text>
+                  </LinearGradient>
+                </Animated.View>
+              );
+            })}
           </View>
         </>
       ) : isAdminDashboard ? (
@@ -1275,7 +2270,7 @@ export function DashboardTab({
                     adminRange === option && styles.adminOverviewFilterChipTextActive
                   ]}
                 >
-                  {option}
+                  {getAdminRangeLabel(option)}
                 </Text>
               </Pressable>
             ))}
@@ -1292,7 +2287,7 @@ export function DashboardTab({
                 <Text style={styles.adminOverviewHeroLabel}>Admin Analytics</Text>
                 <Text style={styles.adminOverviewHeroTitle}>Platform Overview</Text>
                 <Text style={styles.adminOverviewHeroSub}>
-                  {`${adminRange} window • ${adminJobMetrics.filteredCount} jobs • ${adminUserMetrics.filteredCount} users`}
+                  {`${adminRangeLabel} window • ${adminJobMetrics.filteredCount} jobs • ${adminUserMetrics.filteredCount} users`}
                 </Text>
               </LinearGradient>
 
@@ -1564,7 +2559,7 @@ export function DashboardTab({
                   </View>
                   <View style={styles.adminOverviewKpiRow}>
                     <View style={styles.adminOverviewKpiPill}>
-                      <Text style={styles.adminOverviewKpiLabel}>In {adminRange}</Text>
+                      <Text style={styles.adminOverviewKpiLabel}>In {adminRangeLabel}</Text>
                       <Text style={styles.adminOverviewKpiValue}>{formatCurrency(adminEarningMetrics.rangeEarning)}</Text>
                     </View>
                     <View style={styles.adminOverviewKpiPill}>
