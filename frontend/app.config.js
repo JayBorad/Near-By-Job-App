@@ -1,0 +1,41 @@
+const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
+module.exports = {
+  expo: {
+    name: 'New Auth UI',
+    slug: 'new-auth-ui',
+    version: '1.0.0',
+    orientation: 'portrait',
+    userInterfaceStyle: 'light',
+    assetBundlePatterns: ['**/*'],
+    ios: {
+      supportsTablet: true,
+      config: googleMapsApiKey ? { googleMapsApiKey } : {},
+      infoPlist: {
+        NSPhotoLibraryUsageDescription: 'Allow access to your photos to update your profile image.',
+        NSCameraUsageDescription: 'Allow camera access to capture your profile image.',
+        NSPhotoLibraryAddUsageDescription: 'Allow saving edited profile images.'
+      }
+    },
+    android: {
+      permissions: ['CAMERA', 'READ_MEDIA_IMAGES', 'READ_EXTERNAL_STORAGE'],
+      config: googleMapsApiKey
+        ? {
+            googleMaps: {
+              apiKey: googleMapsApiKey
+            }
+          }
+        : {}
+    },
+    plugins: [
+      [
+        'expo-image-picker',
+        {
+          photosPermission: 'Allow access to your photos to update your profile image.',
+          cameraPermission: 'Allow camera access to capture your profile image.'
+        }
+      ]
+    ],
+    web: {}
+  }
+};
