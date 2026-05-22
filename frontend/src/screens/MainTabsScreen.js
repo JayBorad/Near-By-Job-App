@@ -91,7 +91,15 @@ import {
   toNumberOrNull
 } from './mainTabs/utils';
 import { PageContent } from './mainTabs/tabs/PageContent';
-import { NotificationsPage } from './mainTabs/tabScreens';
+import {
+  GoogleMapPicker,
+  NativeGoogleMapPicker,
+  NotificationsPage,
+  canUseGoogleMaps,
+  canUseNativeGoogleMaps,
+  shouldUseGoogleMapSurface,
+  searchLocationCandidates
+} from './mainTabs/tabScreens';
 
 const DEFAULT_AVATAR_URL = null;
 const THEME_MODE_KEY = 'app_theme_mode';
@@ -213,6 +221,10 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
   const [editMapZoom, setEditMapZoom] = useState(13);
   const [editMapCanvasLayout, setEditMapCanvasLayout] = useState({ width: 0, height: 0 });
   const [editDraftCoordinate, setEditDraftCoordinate] = useState({ latitude: 22.3039, longitude: 70.8022 });
+  const [editMapSearchQuery, setEditMapSearchQuery] = useState('');
+  const [editMapSearchResults, setEditMapSearchResults] = useState([]);
+  const [isSearchingEditMap, setIsSearchingEditMap] = useState(false);
+  const editMapSearchSelectionRef = useRef(false);
   const editPinchStartDistanceRef = useRef(null);
   const editPinchStartZoomRef = useRef(editMapZoom);
   const editIsPinchingRef = useRef(false);
@@ -1378,6 +1390,8 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
     const longitude = toNumberOrNull(job.longitude) ?? 70.8022;
     setEditDraftCoordinate({ latitude, longitude });
     setEditMapZoom(13);
+    setEditMapSearchQuery('');
+    setEditMapSearchResults([]);
     setShowEditCategoryPicker(false);
     setShowEditDueDatePicker(false);
     setShowEditJobModal(true);
@@ -1452,6 +1466,57 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
       editPinchStartDistanceRef.current = null;
     }
   };
+
+  const searchEditMapLocation = async () => {
+    const query = String(editMapSearchQuery || '').trim();
+    if (!query) {
+      setEditMapSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearchingEditMap(true);
+      setEditMapSearchResults(await searchLocationCandidates(query));
+    } catch (_error) {
+      setEditMapSearchResults([]);
+      showPopup('Search Failed', 'Unable to search this location right now.', 'warning');
+    } finally {
+      setIsSearchingEditMap(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showEditMapPicker) return undefined;
+    if (editMapSearchSelectionRef.current) {
+      editMapSearchSelectionRef.current = false;
+      return undefined;
+    }
+
+    const query = String(editMapSearchQuery || '').trim();
+    if (query.length < 2) {
+      setEditMapSearchResults([]);
+      setIsSearchingEditMap(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        setIsSearchingEditMap(true);
+        const items = await searchLocationCandidates(query);
+        if (!cancelled) setEditMapSearchResults(items);
+      } catch (_error) {
+        if (!cancelled) setEditMapSearchResults([]);
+      } finally {
+        if (!cancelled) setIsSearchingEditMap(false);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [editMapSearchQuery, showEditMapPicker]);
 
   const confirmEditMapSelection = () => {
     setEditJobForm((prev) => ({
@@ -2982,6 +3047,51 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
               </Text>
             </View>
 
+            <View style={styles.createMapSearchLayer}>
+              <View style={styles.createMapSearchRow}>
+                <View style={styles.createMapSearchInputWrap}>
+                  <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+                  <TextInput
+                    value={editMapSearchQuery}
+                    onChangeText={setEditMapSearchQuery}
+                    onSubmitEditing={searchEditMapLocation}
+                    style={styles.createMapSearchInput}
+                    placeholder="Search city, area, landmark..."
+                    placeholderTextColor={colors.textSecondary}
+                    returnKeyType="search"
+                  />
+                  {isSearchingEditMap ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+                </View>
+              </View>
+
+              {editMapSearchResults.length ? (
+                <View style={styles.createMapResultsCard}>
+                  {editMapSearchResults.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      style={styles.createMapResultItem}
+                      onPress={() => {
+                        editMapSearchSelectionRef.current = true;
+                        setEditDraftCoordinate({
+                          latitude: Number(item.latitude),
+                          longitude: Number(item.longitude)
+                        });
+                        setEditMapZoom(14);
+                        setEditMapSearchResults([]);
+                        setEditMapSearchQuery(item.region ? `${item.name}, ${item.region}` : item.name);
+                      }}
+                    >
+                      <Ionicons name="location-outline" size={16} color={colors.primary} />
+                      <View style={styles.createMapResultTextWrap}>
+                        <Text style={styles.createMapResultTitle}>{item.name}</Text>
+                        {item.region ? <Text style={styles.createMapResultSub}>{item.region}</Text> : null}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
             <View
               style={[
                 styles.createMapNativeContainer,
@@ -2993,32 +3103,56 @@ export function MainTabsScreen({ user, token, onUserUpdated, onLogout }) {
                 }
               ]}
             >
-              <Pressable
-                style={styles.createMapNativePressable}
-                onLayout={(event) => setEditMapCanvasLayout(event.nativeEvent.layout)}
-                onPress={pickEditLocationFromMapPress}
-                onTouchStart={onEditMapTouchStart}
-                onTouchMove={onEditMapTouchMove}
-                onTouchEnd={onEditMapTouchEnd}
-              >
-                <View style={styles.createMapTilesCanvas}>
-                  {editMapTiles.map((tile) => (
-                    <Image key={tile.key} source={{ uri: tile.url }} style={[styles.createMapTileImage, { left: tile.left, top: tile.top }]} />
-                  ))}
-                </View>
-                <View style={styles.createMapNativeCrosshair}>
-                  <Ionicons name="location" size={22} color={colors.primary} />
-                </View>
-              </Pressable>
-              <View style={styles.createMapNativeControls}>
-                <Pressable style={styles.createMapZoomBtn} onPress={() => setEditMapZoom((prev) => clamp(prev - 1, 2, 18))}>
-                  <Ionicons name="remove" size={16} color={colors.textMain} />
+              {canUseGoogleMaps() ? (
+                <GoogleMapPicker
+                  coordinate={editDraftCoordinate}
+                  zoom={editMapZoom}
+                  onPick={setEditDraftCoordinate}
+                  onZoomChange={(nextZoom) => setEditMapZoom(clamp(Math.round(nextZoom), 2, 18))}
+                  colors={colors}
+                  styles={styles}
+                />
+              ) : canUseNativeGoogleMaps() ? (
+                <NativeGoogleMapPicker
+                  coordinate={editDraftCoordinate}
+                  zoom={editMapZoom}
+                  onPick={setEditDraftCoordinate}
+                  colors={colors}
+                  styles={styles}
+                />
+              ) : (
+                <Pressable
+                  style={styles.createMapNativePressable}
+                  onLayout={(event) => setEditMapCanvasLayout(event.nativeEvent.layout)}
+                  onPress={pickEditLocationFromMapPress}
+                  onTouchStart={onEditMapTouchStart}
+                  onTouchMove={onEditMapTouchMove}
+                  onTouchEnd={onEditMapTouchEnd}
+                >
+                  <View style={styles.createMapTilesCanvas}>
+                    {editMapTiles.map((tile) => (
+                      <Image key={tile.key} source={{ uri: tile.url }} style={[styles.createMapTileImage, { left: tile.left, top: tile.top }]} />
+                    ))}
+                  </View>
+                  <View style={styles.createMapNativeCrosshair}>
+                    <Ionicons name="location" size={22} color={colors.primary} />
+                  </View>
+                  <View style={styles.createMapNativeHint}>
+                    <Text style={styles.createMapNativeHintText}>Tap map to select location</Text>
+                  </View>
                 </Pressable>
-                <Text style={styles.createMapZoomText}>Zoom {editMapZoom}</Text>
-                <Pressable style={styles.createMapZoomBtn} onPress={() => setEditMapZoom((prev) => clamp(prev + 1, 2, 18))}>
-                  <Ionicons name="add" size={16} color={colors.textMain} />
-                </Pressable>
-              </View>
+              )}
+              {!shouldUseGoogleMapSurface() ? (
+                <View style={styles.createMapNativeControls}>
+                  <Pressable style={styles.createMapZoomBtn} onPress={() => setEditMapZoom((prev) => clamp(prev - 1, 2, 18))}>
+                    <Ionicons name="remove" size={16} color={colors.textMain} />
+                  </Pressable>
+                  <Text style={styles.createMapZoomText}>Zoom {editMapZoom}</Text>
+                  <Pressable style={styles.createMapZoomBtn} onPress={() => setEditMapZoom((prev) => clamp(prev + 1, 2, 18))}>
+                    <Ionicons name="add" size={16} color={colors.textMain} />
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
 
             <View style={[styles.createMapWebCoords, styles.editMapCoordsWrap]}>
