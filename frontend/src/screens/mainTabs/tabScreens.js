@@ -42,6 +42,26 @@ import {
 
 const DEFAULT_AVATAR_URL = null;
 const TILE_SIZE = 256;
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+const ENABLE_NATIVE_GOOGLE_MAPS = process.env.EXPO_PUBLIC_ENABLE_NATIVE_GOOGLE_MAPS === 'true';
+let googleMapsLoaderPromise = null;
+let NativeMapView = null;
+let NativeMapMarker = null;
+let NATIVE_GOOGLE_PROVIDER = null;
+
+if (Platform.OS !== 'web' && ENABLE_NATIVE_GOOGLE_MAPS) {
+  try {
+    const NativeMaps = require('react-native-maps');
+    NativeMapView = NativeMaps.default;
+    NativeMapMarker = NativeMaps.Marker;
+    NATIVE_GOOGLE_PROVIDER = NativeMaps.PROVIDER_GOOGLE;
+  } catch (_error) {
+    NativeMapView = null;
+    NativeMapMarker = null;
+    NATIVE_GOOGLE_PROVIDER = null;
+  }
+}
+
 const STATIC_AVATARS = [
   'https://api.dicebear.com/9.x/adventurer-neutral/png?seed=Sky',
   'https://api.dicebear.com/9.x/adventurer-neutral/png?seed=Milo',
@@ -51,6 +71,316 @@ const STATIC_AVATARS = [
   'https://api.dicebear.com/9.x/adventurer-neutral/png?seed=Luna'
 ];
 const ADMIN_EMPTY_ANIMATION = require('../../../assets/lottie/no-result-found.json');
+
+const canUseGoogleMaps = () =>
+  Platform.OS === 'web' &&
+  Boolean(GOOGLE_MAPS_API_KEY) &&
+  typeof window !== 'undefined' &&
+  typeof document !== 'undefined';
+
+const canUseNativeGoogleMaps = () => Platform.OS !== 'web' && Boolean(GOOGLE_MAPS_API_KEY) && Boolean(NativeMapView);
+const shouldUseGoogleMapSurface = () => canUseGoogleMaps() || canUseNativeGoogleMaps();
+
+const getMapDeltaFromZoom = (zoom) => {
+  const normalizedZoom = clamp(Math.round(Number(zoom) || 14), 2, 18);
+  return Math.max(0.002, 360 / 2 ** normalizedZoom);
+};
+
+const loadGoogleMapsApi = () => {
+  if (!canUseGoogleMaps()) return Promise.resolve(null);
+  if (window.google?.maps) return Promise.resolve(window.google.maps);
+  if (googleMapsLoaderPromise) return googleMapsLoaderPromise;
+
+  googleMapsLoaderPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector('script[data-jobrixa-google-maps="true"]');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(window.google?.maps || null), { once: true });
+      existingScript.addEventListener('error', reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}`;
+    script.async = true;
+    script.defer = true;
+    script.dataset.jobrixaGoogleMaps = 'true';
+    script.onload = () => resolve(window.google?.maps || null);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  return googleMapsLoaderPromise;
+};
+
+const geocodeWithGoogleMaps = async (query) => {
+  if (Platform.OS !== 'web') {
+    if (!GOOGLE_MAPS_API_KEY) return [];
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}`
+    );
+    const data = await response.json();
+    if (data?.status === 'ZERO_RESULTS') return [];
+    if (data?.status !== 'OK') throw new Error(data?.status || 'GOOGLE_GEOCODE_FAILED');
+
+    return Array.isArray(data?.results)
+      ? data.results.slice(0, 6).map((item, index) => {
+          const location = item?.geometry?.location;
+          const latitude = location?.lat;
+          const longitude = location?.lng;
+          if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
+          const title = item.address_components?.[0]?.long_name || item.formatted_address || query;
+          return {
+            id: `google-native-${item.place_id || index}`,
+            name: title,
+            region: item.formatted_address,
+            latitude,
+            longitude,
+            provider: 'google'
+          };
+        }).filter(Boolean)
+      : [];
+  }
+
+  const maps = await loadGoogleMapsApi();
+  if (!maps?.Geocoder) return [];
+
+  const geocoder = new maps.Geocoder();
+  const results = await new Promise((resolve, reject) => {
+    geocoder.geocode({ address: query }, (items, status) => {
+      if (status === 'OK') {
+        resolve(items || []);
+        return;
+      }
+      if (status === 'ZERO_RESULTS') {
+        resolve([]);
+        return;
+      }
+      reject(new Error(status));
+    });
+  });
+
+  return results.slice(0, 6).map((item, index) => {
+    const location = item.geometry?.location;
+    const latitude = typeof location?.lat === 'function' ? location.lat() : null;
+    const longitude = typeof location?.lng === 'function' ? location.lng() : null;
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
+    const title = item.address_components?.[0]?.long_name || item.formatted_address || query;
+    return {
+      id: `google-${item.place_id || index}`,
+      name: title,
+      region: item.formatted_address,
+      latitude,
+      longitude,
+      provider: 'google'
+    };
+  }).filter(Boolean);
+};
+
+const searchLocationCandidates = async (query) => {
+  let items = [];
+
+  if (GOOGLE_MAPS_API_KEY && (canUseGoogleMaps() || Platform.OS !== 'web')) {
+    try {
+      items = await geocodeWithGoogleMaps(query);
+    } catch (_error) {
+      items = [];
+    }
+  }
+
+  if (items.length) return items;
+
+  const response = await fetch(
+    `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`
+  );
+  const data = await response.json();
+  return Array.isArray(data?.features)
+    ? data.features
+        .map((item, idx) => {
+          const lon = item?.geometry?.coordinates?.[0];
+          const lat = item?.geometry?.coordinates?.[1];
+          if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+          const props = item?.properties || {};
+          const name = props?.name || props?.city || props?.state || query;
+          const region = [props?.city, props?.state, props?.country].filter(Boolean).join(', ');
+          return {
+            id: `${name}-${lat}-${lon}-${idx}`,
+            name,
+            region,
+            latitude: lat,
+            longitude: lon
+          };
+        })
+        .filter(Boolean)
+    : [];
+};
+
+function GoogleMapPicker({ coordinate, zoom, onPick, onZoomChange, colors, styles }) {
+  const hostRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+  const clickListenerRef = useRef(null);
+  const zoomListenerRef = useRef(null);
+  const [isReady, setIsReady] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!canUseGoogleMaps()) return undefined;
+
+    loadGoogleMapsApi()
+      .then((maps) => {
+        if (cancelled || !maps || !hostRef.current) return;
+        const center = { lat: Number(coordinate.latitude), lng: Number(coordinate.longitude) };
+        const map = new maps.Map(hostRef.current, {
+          center,
+          zoom,
+          clickableIcons: true,
+          zoomControl: true,
+          streetViewControl: false,
+          fullscreenControl: false,
+          mapTypeControl: false,
+          keyboardShortcuts: false
+        });
+        const marker = new maps.Marker({
+          position: center,
+          map,
+          draggable: true
+        });
+
+        clickListenerRef.current = map.addListener('click', (event) => {
+          const lat = event.latLng?.lat?.();
+          const lng = event.latLng?.lng?.();
+          if (typeof lat === 'number' && typeof lng === 'number') {
+            onPick({ latitude: Number(lat.toFixed(6)), longitude: Number(lng.toFixed(6)) });
+          }
+        });
+        marker.addListener('dragend', (event) => {
+          const lat = event.latLng?.lat?.();
+          const lng = event.latLng?.lng?.();
+          if (typeof lat === 'number' && typeof lng === 'number') {
+            onPick({ latitude: Number(lat.toFixed(6)), longitude: Number(lng.toFixed(6)) });
+          }
+        });
+        zoomListenerRef.current = map.addListener('zoom_changed', () => {
+          const nextZoom = map.getZoom();
+          if (typeof nextZoom === 'number') onZoomChange(nextZoom);
+        });
+
+        mapRef.current = map;
+        markerRef.current = marker;
+        setIsReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setHasError(true);
+      });
+
+    return () => {
+      cancelled = true;
+      clickListenerRef.current?.remove?.();
+      zoomListenerRef.current?.remove?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || !markerRef.current || !window.google?.maps) return;
+    const nextPosition = new window.google.maps.LatLng(Number(coordinate.latitude), Number(coordinate.longitude));
+    markerRef.current.setPosition(nextPosition);
+    mapRef.current.panTo(nextPosition);
+  }, [coordinate.latitude, coordinate.longitude]);
+
+  useEffect(() => {
+    if (!mapRef.current || mapRef.current.getZoom?.() === zoom) return;
+    mapRef.current.setZoom(zoom);
+  }, [zoom]);
+
+  if (!canUseGoogleMaps() || hasError) return null;
+
+  return (
+    <View style={styles.createGoogleMapWrap}>
+      {React.createElement('div', {
+        ref: hostRef,
+        style: { width: '100%', height: '100%' }
+      })}
+      {!isReady ? (
+        <View style={styles.createGoogleMapLoader}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.createGoogleMapLoaderText}>Loading Google Maps...</Text>
+        </View>
+      ) : null}
+      <View style={styles.createMapNativeHint}>
+        <Text style={styles.createMapNativeHintText}>Search or tap map to select location</Text>
+      </View>
+    </View>
+  );
+}
+
+function NativeGoogleMapPicker({ coordinate, zoom, onPick, colors, styles }) {
+  const [region, setRegion] = useState(() => {
+    const latitudeDelta = getMapDeltaFromZoom(zoom);
+    return {
+      latitude: Number(coordinate.latitude),
+      longitude: Number(coordinate.longitude),
+      latitudeDelta,
+      longitudeDelta: latitudeDelta
+    };
+  });
+
+  useEffect(() => {
+    const latitudeDelta = getMapDeltaFromZoom(zoom);
+    setRegion((prev) => ({
+      ...prev,
+      latitude: Number(coordinate.latitude),
+      longitude: Number(coordinate.longitude),
+      latitudeDelta,
+      longitudeDelta: latitudeDelta
+    }));
+  }, [coordinate.latitude, coordinate.longitude, zoom]);
+
+  if (!canUseNativeGoogleMaps()) return null;
+
+  return (
+    <View style={styles.createGoogleMapWrap}>
+      <NativeMapView
+        provider={NATIVE_GOOGLE_PROVIDER}
+        style={styles.createMapNativeFull}
+        region={region}
+        showsUserLocation={false}
+        showsMyLocationButton={false}
+        zoomControlEnabled
+        toolbarEnabled={false}
+        onRegionChangeComplete={setRegion}
+        onPress={(event) => {
+          const next = event?.nativeEvent?.coordinate;
+          if (!next) return;
+          onPick({
+            latitude: Number(Number(next.latitude).toFixed(6)),
+            longitude: Number(Number(next.longitude).toFixed(6))
+          });
+        }}
+      >
+        <NativeMapMarker
+          coordinate={{
+            latitude: Number(coordinate.latitude),
+            longitude: Number(coordinate.longitude)
+          }}
+          draggable
+          pinColor={colors.primary}
+          onDragEnd={(event) => {
+            const next = event?.nativeEvent?.coordinate;
+            if (!next) return;
+            onPick({
+              latitude: Number(Number(next.latitude).toFixed(6)),
+              longitude: Number(Number(next.longitude).toFixed(6))
+            });
+          }}
+        />
+      </NativeMapView>
+      <View style={styles.createMapNativeHint}>
+        <Text style={styles.createMapNativeHintText}>Search or tap map to select location</Text>
+      </View>
+    </View>
+  );
+}
 
 const getRatingSummaryText = (summary) => {
   const total = Number(summary?.totalReviews || 0);
@@ -289,11 +619,9 @@ const getSmoothPathD = (points, minY, maxY) => {
 };
 
 const FINANCIAL_PERIOD_OPTIONS = [
-  { key: 'THIS_WEEK', label: 'This Week' },
-  { key: 'MONTHLY', label: 'Monthly' },
-  { key: 'LAST_MONTH', label: 'Last Month' },
-  { key: 'THIS_YEAR', label: 'This Year' },
-  { key: 'LAST_YEAR', label: 'Last Year' }
+  { key: 'TODAY', label: 'Today' },
+  { key: 'THIS_MONTH', label: 'This Month' },
+  { key: 'THIS_YEAR', label: 'This Year' }
 ];
 
 const startOfDay = (dateValue) => {
@@ -324,8 +652,8 @@ const getFinancialSeries = (entries, period) => {
   const now = new Date();
   const bars = [];
 
-  if (period === 'THIS_YEAR' || period === 'LAST_YEAR') {
-    const year = period === 'THIS_YEAR' ? now.getFullYear() : now.getFullYear() - 1;
+  if (period === 'THIS_YEAR') {
+    const year = now.getFullYear();
     const start = new Date(year, 0, 1, 0, 0, 0, 0);
     const end = new Date(year, 11, 31, 23, 59, 59, 999);
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -349,18 +677,10 @@ const getFinancialSeries = (entries, period) => {
 
   let start;
   let end;
-  if (period === 'THIS_WEEK') {
-    const today = startOfDay(now);
-    const day = today.getDay();
-    const mondayShift = day === 0 ? -6 : 1 - day;
-    start = new Date(today);
-    start.setDate(start.getDate() + mondayShift);
+  if (period === 'TODAY') {
+    start = startOfDay(now);
     end = new Date(start);
-    end.setDate(end.getDate() + 6);
     end.setHours(23, 59, 59, 999);
-  } else if (period === 'LAST_MONTH') {
-    start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-    end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
   } else {
     start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -373,7 +693,7 @@ const getFinancialSeries = (entries, period) => {
     valueByDate[key] = 0;
     bars.push({
       key,
-      label: period === 'THIS_WEEK'
+      label: period === 'TODAY'
         ? cursor.toLocaleDateString('en-IN', { weekday: 'short' }).slice(0, 1)
         : String(cursor.getDate()),
       value: 0
@@ -857,7 +1177,7 @@ function AdminUsersPage({
   const [userJobMaxBudget, setUserJobMaxBudget] = useState('');
   const [showUserJobFilterSheet, setShowUserJobFilterSheet] = useState(false);
   const [financialTab, setFinancialTab] = useState('EARNED');
-  const [financialPeriod, setFinancialPeriod] = useState('MONTHLY');
+  const [financialPeriod, setFinancialPeriod] = useState('THIS_MONTH');
   const [showFinancialPeriodModal, setShowFinancialPeriodModal] = useState(false);
   const [financialPlotWidth, setFinancialPlotWidth] = useState(0);
   const [userDetailHistory, setUserDetailHistory] = useState([]);
@@ -889,7 +1209,7 @@ function AdminUsersPage({
     setUserJobMaxBudget('');
     setShowUserJobFilterSheet(false);
     setFinancialTab('EARNED');
-    setFinancialPeriod('MONTHLY');
+    setFinancialPeriod('THIS_MONTH');
     setShowFinancialPeriodModal(false);
     setForm({
       name: String(user?.name || ''),
@@ -1082,7 +1402,7 @@ function AdminUsersPage({
     () => financialSeries.reduce((sum, item) => sum + Number(item?.value || 0), 0),
     [financialSeries]
   );
-  const financialPeriodLabel = FINANCIAL_PERIOD_OPTIONS.find((item) => item.key === financialPeriod)?.label || 'Monthly';
+  const financialPeriodLabel = FINANCIAL_PERIOD_OPTIONS.find((item) => item.key === financialPeriod)?.label || 'This Month';
   const financialChartMeta = useMemo(() => {
     const values = financialSeries.map((item) => Number(item?.value || 0));
     const maxValue = Math.max(1, ...values);
@@ -3281,6 +3601,7 @@ function CreateJobPage({
       ? { latitude: jobForm.latitude, longitude: jobForm.longitude }
       : { latitude: 22.3039, longitude: 70.8022 }
   );
+  const mapSearchSelectionRef = useRef(false);
   const pinchStartDistanceRef = useRef(null);
   const pinchStartZoomRef = useRef(mapZoom);
   const isPinchingRef = useRef(false);
@@ -3499,30 +3820,7 @@ function CreateJobPage({
 
     try {
       setIsSearchingMap(true);
-      const response = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`
-      );
-      const data = await response.json();
-      const items = Array.isArray(data?.features)
-        ? data.features
-            .map((item, idx) => {
-              const lon = item?.geometry?.coordinates?.[0];
-              const lat = item?.geometry?.coordinates?.[1];
-              if (typeof lat !== 'number' || typeof lon !== 'number') return null;
-              const props = item?.properties || {};
-              const name = props?.name || props?.city || props?.state || query;
-              const region = [props?.city, props?.state, props?.country].filter(Boolean).join(', ');
-              return {
-                id: `${name}-${lat}-${lon}-${idx}`,
-                name,
-                region,
-                latitude: lat,
-                longitude: lon
-              };
-            })
-            .filter(Boolean)
-        : [];
-      setMapSearchResults(items);
+      setMapSearchResults(await searchLocationCandidates(query));
     } catch (_error) {
       setMapSearchResults([]);
       if (onValidationError) {
@@ -3532,6 +3830,39 @@ function CreateJobPage({
       setIsSearchingMap(false);
     }
   };
+
+  useEffect(() => {
+    if (pickerPage !== 'map') return undefined;
+    if (mapSearchSelectionRef.current) {
+      mapSearchSelectionRef.current = false;
+      return undefined;
+    }
+
+    const query = String(mapSearchQuery || '').trim();
+    if (query.length < 2) {
+      setMapSearchResults([]);
+      setIsSearchingMap(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        setIsSearchingMap(true);
+        const items = await searchLocationCandidates(query);
+        if (!cancelled) setMapSearchResults(items);
+      } catch (_error) {
+        if (!cancelled) setMapSearchResults([]);
+      } finally {
+        if (!cancelled) setIsSearchingMap(false);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [mapSearchQuery, pickerPage]);
 
   const submitWithValidation = () => {
     const nextErrors = {};
@@ -3633,86 +3964,104 @@ function CreateJobPage({
         </View>
 
         <View style={styles.createMapFullWrap}>
-          <View style={styles.createMapSearchRow}>
-            <View style={styles.createMapSearchInputWrap}>
-              <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
-              <TextInput
-                value={mapSearchQuery}
-                onChangeText={setMapSearchQuery}
-                onSubmitEditing={searchMapLocation}
-                style={styles.createMapSearchInput}
-                placeholder="Search city, area, landmark..."
-                placeholderTextColor={colors.textSecondary}
-                returnKeyType="search"
-              />
+          <View style={styles.createMapSearchLayer}>
+            <View style={styles.createMapSearchRow}>
+              <View style={styles.createMapSearchInputWrap}>
+                <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+                <TextInput
+                  value={mapSearchQuery}
+                  onChangeText={setMapSearchQuery}
+                  onSubmitEditing={searchMapLocation}
+                  style={styles.createMapSearchInput}
+                  placeholder="Search city, area, landmark..."
+                  placeholderTextColor={colors.textSecondary}
+                  returnKeyType="search"
+                />
+                {isSearchingMap ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+              </View>
             </View>
-            <Pressable style={styles.createMapSearchBtn} onPress={searchMapLocation}>
-              {isSearchingMap ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-              )}
-            </Pressable>
-          </View>
-          {mapSearchResults.length ? (
-            <View style={styles.createMapResultsCard}>
-              {mapSearchResults.map((item) => (
-                <Pressable
-                  key={item.id}
-                  style={styles.createMapResultItem}
-                  onPress={() => {
-                    setDraftCoordinate({
-                      latitude: Number(item.latitude),
-                      longitude: Number(item.longitude)
-                    });
-                    setMapZoom(14);
-                    setMapSearchResults([]);
-                    setMapSearchQuery(item.region ? `${item.name}, ${item.region}` : item.name);
-                  }}
-                >
-                  <Ionicons name="location-outline" size={16} color={colors.primary} />
-                  <View style={styles.createMapResultTextWrap}>
-                    <Text style={styles.createMapResultTitle}>{item.name}</Text>
-                    {item.region ? <Text style={styles.createMapResultSub}>{item.region}</Text> : null}
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-          <View style={styles.createMapNativeContainer}>
-            <Pressable
-              style={styles.createMapNativePressable}
-              onLayout={(event) => setMapCanvasLayout(event.nativeEvent.layout)}
-              onPress={pickFromMapPress}
-              onTouchStart={onMapTouchStart}
-              onTouchMove={onMapTouchMove}
-              onTouchEnd={onMapTouchEnd}
-            >
-              <View style={styles.createMapTilesCanvas}>
-                {mapTiles.map((tile) => (
-                  <Image
-                    key={tile.key}
-                    source={{ uri: tile.url }}
-                    style={[styles.createMapTileImage, { left: tile.left, top: tile.top }]}
-                  />
+            {mapSearchResults.length ? (
+              <View style={styles.createMapResultsCard}>
+                {mapSearchResults.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    style={styles.createMapResultItem}
+                    onPress={() => {
+                      mapSearchSelectionRef.current = true;
+                      setDraftCoordinate({
+                        latitude: Number(item.latitude),
+                        longitude: Number(item.longitude)
+                      });
+                      setMapZoom(14);
+                      setMapSearchResults([]);
+                      setMapSearchQuery(item.region ? `${item.name}, ${item.region}` : item.name);
+                    }}
+                  >
+                    <Ionicons name="location-outline" size={16} color={colors.primary} />
+                    <View style={styles.createMapResultTextWrap}>
+                      <Text style={styles.createMapResultTitle}>{item.name}</Text>
+                      {item.region ? <Text style={styles.createMapResultSub}>{item.region}</Text> : null}
+                    </View>
+                  </Pressable>
                 ))}
               </View>
-              <View style={styles.createMapNativeCrosshair}>
-                <Ionicons name="location" size={22} color={colors.primary} />
-              </View>
-              <View style={styles.createMapNativeHint}>
-                <Text style={styles.createMapNativeHintText}>Tap map to select location</Text>
-              </View>
-            </Pressable>
-            <View style={styles.createMapNativeControls}>
-              <Pressable style={styles.createMapZoomBtn} onPress={() => setMapZoom((prev) => clamp(prev - 1, 2, 18))}>
-                <Ionicons name="remove" size={16} color={colors.textMain} />
+            ) : null}
+          </View>
+          <View style={styles.createMapNativeContainer}>
+            {canUseGoogleMaps() ? (
+              <GoogleMapPicker
+                coordinate={draftCoordinate}
+                zoom={mapZoom}
+                onPick={setDraftCoordinate}
+                onZoomChange={(nextZoom) => setMapZoom(clamp(Math.round(nextZoom), 2, 18))}
+                colors={colors}
+                styles={styles}
+              />
+            ) : canUseNativeGoogleMaps() ? (
+              <NativeGoogleMapPicker
+                coordinate={draftCoordinate}
+                zoom={mapZoom}
+                onPick={setDraftCoordinate}
+                colors={colors}
+                styles={styles}
+              />
+            ) : (
+              <Pressable
+                style={styles.createMapNativePressable}
+                onLayout={(event) => setMapCanvasLayout(event.nativeEvent.layout)}
+                onPress={pickFromMapPress}
+                onTouchStart={onMapTouchStart}
+                onTouchMove={onMapTouchMove}
+                onTouchEnd={onMapTouchEnd}
+              >
+                <View style={styles.createMapTilesCanvas}>
+                  {mapTiles.map((tile) => (
+                    <Image
+                      key={tile.key}
+                      source={{ uri: tile.url }}
+                      style={[styles.createMapTileImage, { left: tile.left, top: tile.top }]}
+                    />
+                  ))}
+                </View>
+                <View style={styles.createMapNativeCrosshair}>
+                  <Ionicons name="location" size={22} color={colors.primary} />
+                </View>
+                <View style={styles.createMapNativeHint}>
+                  <Text style={styles.createMapNativeHintText}>Tap map to select location</Text>
+                </View>
               </Pressable>
-              <Text style={styles.createMapZoomText}>Zoom {mapZoom}</Text>
-              <Pressable style={styles.createMapZoomBtn} onPress={() => setMapZoom((prev) => clamp(prev + 1, 2, 18))}>
-                <Ionicons name="add" size={16} color={colors.textMain} />
-              </Pressable>
-            </View>
+            )}
+            {!shouldUseGoogleMapSurface() ? (
+              <View style={styles.createMapNativeControls}>
+                <Pressable style={styles.createMapZoomBtn} onPress={() => setMapZoom((prev) => clamp(prev - 1, 2, 18))}>
+                  <Ionicons name="remove" size={16} color={colors.textMain} />
+                </Pressable>
+                <Text style={styles.createMapZoomText}>Zoom {mapZoom}</Text>
+                <Pressable style={styles.createMapZoomBtn} onPress={() => setMapZoom((prev) => clamp(prev + 1, 2, 18))}>
+                  <Ionicons name="add" size={16} color={colors.textMain} />
+                </Pressable>
+              </View>
+            ) : null}
           </View>
           <View style={styles.createMapWebCoords}>
             <TextInput
@@ -6264,5 +6613,12 @@ export {
   ReportsPage,
   ReviewsPage,
   NotificationsPage,
+  GoogleMapPicker,
+  NativeGoogleMapPicker,
+  canUseGoogleMaps,
+  canUseNativeGoogleMaps,
+  shouldUseGoogleMapSurface,
+  geocodeWithGoogleMaps,
+  searchLocationCandidates,
   SettingsPage
 };
