@@ -573,6 +573,33 @@ const getJobWorkModeLabel = (jobOrMode) => {
   return 'Onsite';
 };
 
+function DetailInfoRow({ icon, label, value, styles, colors }) {
+  const displayValue = value === undefined || value === null || value === '' ? '-' : value;
+  return (
+    <View style={styles.detailInfoRow}>
+      <View style={styles.detailInfoIcon}>
+        <Ionicons name={icon} size={15} color={colors.primary} />
+      </View>
+      <View style={styles.detailInfoTextWrap}>
+        <Text style={styles.detailInfoLabel}>{label}</Text>
+        <Text style={styles.detailInfoValue}>{displayValue}</Text>
+      </View>
+    </View>
+  );
+}
+
+function DetailMetricTile({ icon, label, value, styles, colors }) {
+  return (
+    <View style={styles.detailMetricTile}>
+      <View style={styles.detailMetricIcon}>
+        <Ionicons name={icon} size={14} color={colors.primary} />
+      </View>
+      <Text style={styles.detailMetricValue}>{value ?? '-'}</Text>
+      <Text style={styles.detailMetricLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const getPerWorkerBudget = (job) => {
   const budget = Number(job?.budget || 0);
   const requiredWorkers = Math.max(1, Number(job?.requiredWorkers || 1));
@@ -4770,22 +4797,52 @@ function MyJobDetailsPage({
               />
               <Text style={styles.adminUserDetailName}>{selectedApplicantRecord?.applicant?.name || 'Unknown User'}</Text>
               <Text style={styles.adminUserDetailEmail}>{selectedApplicantRecord?.applicant?.email || '-'}</Text>
+              <View style={styles.applicantHeroPill}>
+                <Ionicons name="briefcase-outline" size={13} color={colors.primary} />
+                <Text style={styles.applicantHeroPillText}>
+                  {String(selectedApplicantRecord?.status || 'PENDING')}
+                </Text>
+              </View>
             </View>
 
             <View style={styles.adminUserDetailCard}>
-              <Text style={styles.myJobMeta}>Phone: {selectedApplicantRecord?.applicant?.phone || '-'}</Text>
-              <Text style={styles.myJobMeta}>Rating: {getRatingSummaryText(selectedApplicantRecord?.applicant?.ratingSummary)}</Text>
-              <Text style={styles.myJobMeta}>Application Status: {selectedApplicantRecord?.status || '-'}</Text>
+              <DetailInfoRow
+                icon="call-outline"
+                label="Phone"
+                value={selectedApplicantRecord?.applicant?.phone || '-'}
+                styles={styles}
+                colors={colors}
+              />
+              <DetailInfoRow
+                icon="star-outline"
+                label="Rating"
+                value={getRatingSummaryText(selectedApplicantRecord?.applicant?.ratingSummary)}
+                styles={styles}
+                colors={colors}
+              />
+              <DetailInfoRow
+                icon="checkmark-circle-outline"
+                label="Application Status"
+                value={selectedApplicantRecord?.status || '-'}
+                styles={styles}
+                colors={colors}
+              />
               {selectedApplicantRecord?.ownerReview ? (
-                <Text style={styles.myJobMeta}>
-                  Your Review: {selectedApplicantRecord.ownerReview.rating}/5
-                  {selectedApplicantRecord.ownerReview.comment ? ` - ${selectedApplicantRecord.ownerReview.comment}` : ''}
-                </Text>
+                <DetailInfoRow
+                  icon="chatbox-ellipses-outline"
+                  label="Your Review"
+                  value={`${selectedApplicantRecord.ownerReview.rating}/5${selectedApplicantRecord.ownerReview.comment ? ` - ${selectedApplicantRecord.ownerReview.comment}` : ''}`}
+                  styles={styles}
+                  colors={colors}
+                />
               ) : null}
-              <Text style={styles.myJobMeta}>
-                Applied On: {selectedApplicantRecord?.createdAt ? String(selectedApplicantRecord.createdAt).slice(0, 10) : '-'}
-              </Text>
-              <Text style={styles.myJobMeta}>Applicant ID: {selectedApplicantRecord?.applicant?.id || '-'}</Text>
+              <DetailInfoRow
+                icon="calendar-outline"
+                label="Applied On"
+                value={selectedApplicantRecord?.createdAt ? String(selectedApplicantRecord.createdAt).slice(0, 10) : '-'}
+                styles={styles}
+                colors={colors}
+              />
             </View>
 
           </Pressable>
@@ -5393,39 +5450,67 @@ function MyApplicationsPage({ applications, isLoading, onRefresh, onOpenChat, on
       <Modal visible={Boolean(selectedApplication)} transparent animationType="fade" onRequestClose={() => setSelectedApplication(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.myJobDetailModal}>
-            <View style={styles.myJobDetailHeader}>
-              <Text style={styles.myJobDetailTitle} numberOfLines={2}>
-                {selectedApplication?.job?.title || 'Job Details'}
-              </Text>
-              <View style={styles.myJobStatusPill}>
-                <Text style={styles.myJobStatusPillText}>{String(selectedApplication?.status || 'PENDING')}</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.myJobDetailScroll}
+            >
+              <View style={styles.myJobDetailHero}>
+                <View style={styles.myJobDetailHeroTop}>
+                  <View style={styles.myJobDetailIconBadge}>
+                    <Ionicons name="briefcase-outline" size={19} color={colors.primary} />
+                  </View>
+                  <View style={styles.myJobStatusPill}>
+                    <Text style={styles.myJobStatusPillText}>{String(selectedApplication?.status || 'PENDING')}</Text>
+                  </View>
+                </View>
+                <Text style={styles.myJobDetailTitle} numberOfLines={2}>
+                  {selectedApplication?.job?.title || 'Job Details'}
+                </Text>
+                <Text style={styles.myJobDetailDescription}>
+                  {selectedApplication?.job?.description || 'No description provided.'}
+                </Text>
               </View>
-            </View>
-            <Text style={styles.myJobDetailDescription}>{selectedApplication?.job?.description || 'No description provided.'}</Text>
-            <View style={styles.myJobInfoCard}>
+
               {(() => {
                 const stats = getJobSeatStats(selectedApplication?.job);
                 return (
                   <>
-              <Text style={styles.myJobMeta}>Category: {selectedApplication?.job?.category?.name || '-'}</Text>
-              <Text style={styles.myJobMeta}>Posted By: {selectedApplication?.job?.owner?.name || '-'}</Text>
-              <Text style={styles.myJobMeta}>Poster Rating: {getRatingSummaryText(selectedApplication?.job?.owner?.ratingSummary)}</Text>
-              <Text style={styles.myJobMeta}>Budget: {getBudgetDisplay(selectedApplication?.job)}</Text>
-              <Text style={styles.myJobMeta}>Work Mode: {getJobWorkModeLabel(selectedApplication?.job)}</Text>
-              <Text style={styles.myJobMeta}>Total Seats: {stats.totalSeats}</Text>
-              <Text style={styles.myJobMeta}>Total Applied: {stats.appliedCount}</Text>
-              <Text style={styles.myJobMeta}>Filled Seats: {stats.filledSeats}</Text>
-              <Text style={styles.myJobMeta}>Seats Remaining: {stats.remainingSeats}</Text>
-              <Text style={styles.myJobMeta}>Remaining To Apply: {stats.remainingToApply}</Text>
-              <Text style={styles.myJobMeta}>Pending Users: {stats.pendingCount}</Text>
-              <Text style={styles.myJobMeta}>Rejected Users: {stats.rejectedCount}</Text>
-              <Text style={styles.myJobMeta}>Due Date: {selectedApplication?.job?.dueDate ? String(selectedApplication.job.dueDate).slice(0, 10) : '-'}</Text>
-              <Text style={styles.myJobMeta}>Applied On: {selectedApplication?.createdAt ? String(selectedApplication.createdAt).slice(0, 10) : '-'}</Text>
+                    <View style={styles.detailMetricGrid}>
+                      <DetailMetricTile icon="people-outline" label="Seats" value={stats.totalSeats} styles={styles} colors={colors} />
+                      <DetailMetricTile icon="person-add-outline" label="Applied" value={stats.appliedCount} styles={styles} colors={colors} />
+                      <DetailMetricTile icon="checkmark-done-outline" label="Filled" value={stats.filledSeats} styles={styles} colors={colors} />
+                      <DetailMetricTile icon="hourglass-outline" label="Left" value={stats.remainingSeats} styles={styles} colors={colors} />
+                    </View>
+
+                    <View style={styles.myJobInfoCard}>
+                      <DetailInfoRow icon="grid-outline" label="Category" value={selectedApplication?.job?.category?.name || '-'} styles={styles} colors={colors} />
+                      <DetailInfoRow icon="person-outline" label="Posted By" value={selectedApplication?.job?.owner?.name || '-'} styles={styles} colors={colors} />
+                      <DetailInfoRow icon="star-outline" label="Poster Rating" value={getRatingSummaryText(selectedApplication?.job?.owner?.ratingSummary)} styles={styles} colors={colors} />
+                      <DetailInfoRow icon="cash-outline" label="Budget" value={getBudgetDisplay(selectedApplication?.job)} styles={styles} colors={colors} />
+                      <DetailInfoRow icon="business-outline" label="Work Mode" value={getJobWorkModeLabel(selectedApplication?.job)} styles={styles} colors={colors} />
+                      <DetailInfoRow icon="time-outline" label="Pending Users" value={stats.pendingCount} styles={styles} colors={colors} />
+                      <DetailInfoRow icon="close-circle-outline" label="Rejected Users" value={stats.rejectedCount} styles={styles} colors={colors} />
+                      <DetailInfoRow
+                        icon="calendar-outline"
+                        label="Due Date"
+                        value={selectedApplication?.job?.dueDate ? String(selectedApplication.job.dueDate).slice(0, 10) : '-'}
+                        styles={styles}
+                        colors={colors}
+                      />
+                      <DetailInfoRow
+                        icon="receipt-outline"
+                        label="Applied On"
+                        value={selectedApplication?.createdAt ? String(selectedApplication.createdAt).slice(0, 10) : '-'}
+                        styles={styles}
+                        colors={colors}
+                      />
+                    </View>
                   </>
                 );
               })()}
-            </View>
-            <JobLocationCard job={selectedApplication?.job} title="Job Location" styles={styles} colors={colors} />
+
+              <JobLocationCard job={selectedApplication?.job} title="Job Location" styles={styles} colors={colors} />
+            </ScrollView>
             <View style={styles.optionActionsRow}>
               <Pressable style={[styles.optionCancel, styles.optionActionBtn]} onPress={() => setSelectedApplication(null)}>
                 <Text style={styles.optionCancelText}>Close</Text>
