@@ -3741,14 +3741,20 @@ export const createStyles = (colors) =>
     },
     adminUserDetailHero: {
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 16,
-      backgroundColor: colors.surface,
+      borderColor: colors.primarySoft,
+      borderRadius: 20,
+      backgroundColor: colors.sheet,
       padding: 16,
       marginBottom: 10,
-      alignItems: 'center'
+      alignItems: 'center',
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.05,
+      shadowRadius: 14,
+      elevation: 2
     },
     adminUserDetailName: {
+      marginTop: 10,
       color: colors.textMain,
       fontSize: 20,
       fontWeight: '800'
@@ -3763,13 +3769,28 @@ export const createStyles = (colors) =>
       borderColor: colors.border,
       borderRadius: 18,
       backgroundColor: colors.surface,
-      padding: 16,
+      padding: 10,
       marginBottom: 10,
       shadowColor: '#0F172A',
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.06,
       shadowRadius: 14,
       elevation: 2
+    },
+    applicantHeroPill: {
+      marginTop: 12,
+      borderRadius: 999,
+      backgroundColor: colors.primarySoft,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    applicantHeroPillText: {
+      marginLeft: 5,
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '800'
     },
     adminUserStatsGrid: {
       marginTop: 10,
@@ -4256,6 +4277,76 @@ export const createStyles = (colors) =>
     },
     myJobMetaPillText: {
       marginLeft: 4,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    detailInfoRow: {
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 6,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border
+    },
+    detailInfoIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10
+    },
+    detailInfoTextWrap: {
+      flex: 1
+    },
+    detailInfoLabel: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontWeight: '800',
+      textTransform: 'uppercase'
+    },
+    detailInfoValue: {
+      marginTop: 2,
+      color: colors.textMain,
+      fontSize: 13,
+      fontWeight: '700',
+      lineHeight: 18
+    },
+    detailMetricGrid: {
+      marginTop: 10,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8
+    },
+    detailMetricTile: {
+      flexBasis: '47%',
+      flexGrow: 1,
+      minHeight: 82,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      padding: 10
+    },
+    detailMetricIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    detailMetricValue: {
+      marginTop: 8,
+      color: colors.textMain,
+      fontSize: 18,
+      fontWeight: '800'
+    },
+    detailMetricLabel: {
+      marginTop: 2,
       color: colors.textSecondary,
       fontSize: 11,
       fontWeight: '700'
@@ -4978,11 +5069,20 @@ export const createStyles = (colors) =>
     myJobDetailModal: {
       width: '100%',
       maxWidth: 380,
-      borderRadius: 16,
+      maxHeight: '88%',
+      borderRadius: 22,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surface,
-      padding: 14
+      padding: 14,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 16 },
+      shadowOpacity: 0.2,
+      shadowRadius: 24,
+      elevation: 16
+    },
+    myJobDetailScroll: {
+      paddingBottom: 2
     },
     myJobDetailHeader: {
       flexDirection: 'row',
@@ -4995,27 +5095,50 @@ export const createStyles = (colors) =>
       alignItems: 'center',
       gap: 6
     },
+    myJobDetailHero: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.primarySoft,
+      backgroundColor: colors.sheet,
+      padding: 14,
+      overflow: 'hidden'
+    },
+    myJobDetailHeroTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12
+    },
+    myJobDetailIconBadge: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
     myJobDetailTitle: {
-      flex: 1,
-      marginRight: 8,
       color: colors.textMain,
-      fontSize: 17,
-      fontWeight: '800'
+      fontSize: 20,
+      fontWeight: '800',
+      lineHeight: 25
     },
     myJobDetailDescription: {
-      marginBottom: 6,
+      marginTop: 6,
       color: colors.textSecondary,
       fontSize: 13,
-      lineHeight: 19
+      lineHeight: 20
     },
     myJobInfoCard: {
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 10,
-      backgroundColor: colors.sheet,
-      padding: 10,
-      marginTop: 4,
-      marginBottom: 4
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      marginTop: 10,
+      marginBottom: 4,
+      overflow: 'hidden'
     },
     myJobEditIconBtn: {
       width: 30,
