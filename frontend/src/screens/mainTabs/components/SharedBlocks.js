@@ -150,6 +150,37 @@ const getJobWorkModeLabel = (workMode) => {
   return 'Onsite';
 };
 
+const tryOpenExternalUrl = async (url) => {
+  try {
+    const canOpen = await Linking.canOpenURL(url);
+    if (!canOpen) return false;
+    await Linking.openURL(url);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+};
+
+const openMapLocation = async ({ latitude, longitude, label }) => {
+  const coordinateQuery = `${latitude},${longitude}`;
+  const encodedQuery = encodeURIComponent(coordinateQuery);
+  const encodedLabel = encodeURIComponent(label || 'Job Location');
+  const browserUrl = `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
+  const mobileUrls =
+    Platform.OS === 'ios'
+      ? [`comgooglemaps://?q=${encodedQuery}`, `maps://?q=${encodedQuery}`]
+      : Platform.OS === 'android'
+        ? [`geo:${latitude},${longitude}?q=${encodedQuery}(${encodedLabel})`]
+        : [];
+
+  for (const url of mobileUrls) {
+    const opened = await tryOpenExternalUrl(url);
+    if (opened) return;
+  }
+
+  Linking.openURL(browserUrl);
+};
+
 export function JobLocationCard({ job, title = 'Location', styles, colors }) {
   const { latitude, longitude } = getJobCoordinates(job);
   const hasCoords = latitude !== null && longitude !== null;
@@ -210,7 +241,7 @@ export function JobLocationCard({ job, title = 'Location', styles, colors }) {
           )}
           <Pressable
             style={styles.jobMapOpenBtn}
-            onPress={() => Linking.openURL(`https://maps.google.com/?q=${latitude},${longitude}`)}
+            onPress={() => openMapLocation({ latitude, longitude, label: job?.address || title })}
           >
             <Ionicons name="navigate-outline" size={14} color="#FFFFFF" />
             <Text style={styles.jobMapOpenBtnText}>Open Map</Text>
